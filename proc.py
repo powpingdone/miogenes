@@ -168,43 +168,48 @@ import librosa
 import numpy as np
 from glob import iglob as glob
 from sys import argv
-from os import mkdir, cpu_count
+from os import mkdir
 from os.path import exists
 import pandas
 from tqdm import tqdm
-from multiprocessing import Process, Queue, set_start_method, Value
+from multiprocessing import Pool, set_start_method
+import warnings
 
-set_start_method("spawn")
 
-def proc_audio(q, prog, length):
-    while not q.empty():
-        args = q.get()
-        print(f"{prog.value}/{length} ({prog.value/length}) working with {args['path'].split('/')[-1]}")
+def proc_audio(args):
+    warnings.filterwarnings(
+        "ignore", ".*PySoundFile failed. Trying audioread instead.*"
+    )
 
-        # input
-        wav, _ = librosa.load(args["path"], sr=8000)
-        inc = 0
-        # need 6 seconds of audio, so use 48000 overlapping length samples
-        for x in range(0, len(wav) - 48000, 36000):
-            np.save(
-                f"./tmp/x.{args['id']:06d}.{inc:04d}",
-                np.array(wav[x : x + 48000], dtype=np.float32),
-            )
+    # input
+    wav, _ = librosa.load(args["path"], sr=8000)
+    inc = 0
+    # need 6 seconds of audio, so use 48000 overlapping length samples
+    for x in range(0, len(wav) - 48000, 36000):
+        np.save(
+            f"./tmp/x.{args['id']:06d}.{inc:04d}",
+            np.array(wav[x : x + 48000], dtype=np.float32),
+        )
+        inc += 1
 
-        # output
-        onehot = np.zeros(len(GENRE_TRANSMUTE), dtype=np.float32)
-        for genre in args["genres"]:
+    # output
+    onehot = np.zeros(len(GENRE_TRANSMUTE), dtype=np.float32)
+    for genre in args["genres"]:
+        try:        
             onehot[GENRE_TRANSMUTE[genre]] = 1.0
-        np.save(f"./tmp/y.{args['id']:06d}", onehot)
+        except KeyError:
+            # do nothing
+            onehot = onehot
+    np.save(f"./tmp/y.{args['id']:06d}", onehot)
+    return None
 
-        q.task_done()
-        prog.value += 1
 
 def main():
-    mkdir("./tmp")
+    set_start_method("spawn")
+    if not exists("./tmp"):
+        mkdir("./tmp")
     datasheet = pandas.read_csv(argv[2], usecols=["track_id", "track_genres_all"])
-    q = Queue()
-    prog = Value('i', 0)
+    q = []
 
     print("gathering files")
     length = 0
@@ -215,7 +220,7 @@ def main():
             np.load(f"./tmp/y.{audio_id:06d}.npy")
         except:
             where = np.where(datasheet["track_id"] == audio_id)[0][0]
-            q.put(
+            q.append(
                 {
                     "path": audiofile,
                     "id": audio_id,
@@ -223,33 +228,45 @@ def main():
                 }
             )
             length += 1
-    
+
     print("spinning threads")
-    processes = [Process(target=proc_audio, args=(q,prog,length,)) for _ in range(cpu_count())]
-    [x.start() for x in processes]
     try:
-        [x.join() for x in processes]
+        with Pool() as p:
+            list(tqdm(p.imap(proc_audio, q), total=len(q)))
     except KeyboardInterrupt as e:
         raise e
 
     print("concatenating arr")
     amt = len(list(glob("./tmp/x.*")))
-    X = np.zeros((amt, 48000), dtype=np.float32)
-    np.save("x.npy", X)
+    test_amt = amt // 250
+    train_amt = amt - test_amt
+    X = np.zeros((train_amt, 48000), dtype=np.float32)
+    np.save("x.train.npy", X)
+    X = np.zeros((test_amt, 48000), dtype=np.float32)
+    np.save("x.test.npy", X)
     del X
-    Y = np.zeros((amt, len(GENRE_TRANSMUTE)), dtype=np.float32)
-    np.save("y.npy", y)
+    Y = np.zeros((train_amt, len(GENRE_TRANSMUTE)), dtype=np.float32)
+    np.save("y.train.npy", Y)
+    Y = np.zeros((test_amt, len(GENRE_TRANSMUTE)), dtype=np.float32)
+    np.save("y.test.npy", Y)
     del Y
-    X = np.memmap("x.npy", dtype=np.float32, shape=(amt, 48000))
-    Y = np.memmap("y.npy", dtype=np.float32, shape=(amt, len(GENRE_TRANSMUTE)))
+    X_train = np.memmap("x.train.npy", dtype=np.float32, shape=(amt, 48000))
+    X_test = np.memmap("x.test.npy", dtype=np.float32, shape=(amt, 48000))
+    Y_train = np.memmap("y.train.npy", dtype=np.float32, shape=(amt, len(GENRE_TRANSMUTE)))
+    Y_test = np.memmap("y.test.npy", dtype=np.float32, shape=(amt, len(GENRE_TRANSMUTE)))
     pos = 0
-    for x_slice_file in glob("./tmp/x.*"):
+    for x_slice_file in tqdm(glob("./tmp/x.*"), total=amt):
         x_slice = np.load(x_slice_file)
         y_slice_file = f"./tmp/y.{x_slice_file.split('/')[-1].split('.')[1]}.npy"
         y_slice = np.load(y_slice_file)
-        X[pos] = x_slice
-        Y[pos] = y_slice
+        if pos % 250 == 0:
+            X_test[pos] = x_slice
+            Y_test[pos] = y_slice
+        else:
+            X_train[pos] = x_slice
+            Y_train[pos] = y_slice
         pos += 1
+
 
 if __name__ == "__main__":
     main()
