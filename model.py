@@ -1,8 +1,9 @@
 from tensorflow import keras
 from keras import Sequential, Input
 from keras.layers import Conv1D, MaxPooling1D, LSTM, Dense, Flatten, Softmax, Reshape
+from constants import *
 
-inp_shape = (48000,1,)
+inp_shape = (AUDIO_LEN,1,)
 
 model = Sequential(
     [
@@ -22,7 +23,7 @@ model = Sequential(
         Flatten(),
         Dense(1024),
         Dense(512),
-        Dense(161),
+        Dense(len(GENRE_TRANSMUTE)),
         Softmax()
     ]
 )
