@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# actix will be used for a web server backend 
 babycat = "0.0.13"
 # diesel will be used for db interaction
-# rocket will be used for a web server backend 
 tract = "0.16.3"

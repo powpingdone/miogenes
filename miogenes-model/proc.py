@@ -69,6 +69,8 @@ def concat_data(files, X, Y):
         y_slice = np.load(y_slice_file)
         X[pos] = x_slice
         Y[pos] = y_slice
+    X.flush()
+    Y.flush()
 
 
 def main():
@@ -157,12 +159,12 @@ def main():
             )
             length += 1
 
-    print("proccessing all files")
-    try:
-        with Pool() as p:
-            list(tqdm(p.imap(proc_audio, q), total=len(q)))
-    except KeyboardInterrupt as e:
-        raise e
+    #print("proccessing all files")
+    #try:
+    #    with Pool() as p:
+    #        list(tqdm(p.imap(proc_audio, q), total=len(q)))
+    #except KeyboardInterrupt as e:
+    #    raise e
 
     print("generating memmap'd files")
     train_list = []
@@ -200,6 +202,7 @@ def main():
     concat_data(test_list, X_test, Y_test)
     print("concatenating training arrays")
     concat_data(train_list, X_train, Y_train)
+
 
 
 if __name__ == "__main__":

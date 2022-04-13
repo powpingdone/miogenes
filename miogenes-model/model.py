@@ -18,8 +18,8 @@ model = Sequential(
         MaxPooling1D(4, 2),
         Conv1D(512, 4, 1),
         Conv1D(1024, 4, 1),
-        LSTM(512, return_sequences=True),
-        LSTM(512),
+        LSTM(1024, return_sequences=True),
+        LSTM(1024),
         Flatten(),
         Dense(1024),
         Dense(512),
@@ -31,7 +31,7 @@ model = Sequential(
 model.compile(
     optimizer="adadelta", 
     loss="sparse_categorical_crossentropy",
-    metrics=[keras.metrics.SparseCategoricalCrossentropy()]
+    metrics=[keras.metrics.SparseCategoricalCrossentropy(), "accuracy"]
 )
 
 model.summary()
