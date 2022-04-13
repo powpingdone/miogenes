@@ -6,12 +6,26 @@ from multiprocessing import Pool, set_start_method
 import numpy as np
 from os import mkdir
 from os.path import exists
-from subprocess import run, DEVNULL
+from subprocess import Popen, DEVNULL
 from sys import argv
 from tqdm import tqdm
 import warnings
 
 from constants import *
+
+
+def validate_file(args):
+    # check if audiofile is valid
+    # if this has a invalid returncode, then ffmpeg failed to decode
+    probe = Popen(["ffmpeg", "-i", args["path"], "-f", "null", "-"], stdout=DEVNULL, stderr=DEVNULL)
+    probe.wait()
+    if probe.returncode != 0:
+        print(
+            f"ffmpeg doesn't like ID {args['id']:06d}, "
+            "so it must be invalid. Caching as a bad id."
+        )
+        return {"good": False, "id": args["id"]}
+    return {"good": True, "id": args["id"]}
 
 
 def proc_audio(args):
@@ -22,7 +36,11 @@ def proc_audio(args):
     )
 
     # input
-    wav, _ = librosa.load(args["path"], sr=SAMPLING)
+    try:
+        wav, _ = librosa.load(args["path"], sr=SAMPLING)
+    except Exception as e:
+        print(args["path"])
+        raise e
     inc = 0
     # 4 second steps
     for x in range(0, len(wav) - AUDIO_LEN, 32000):
@@ -45,22 +63,50 @@ def main():
     if not exists("./tmp"):
         mkdir("./tmp")
     datasheet = pandas.read_csv(argv[2], usecols=["track_id", "track_genres_all"])
+
+    print("validating files, if this goes by quickly then it used all cached files")
+    good = {}
+    bad = {}
     q = []
+    if exists("good_ids.txt") and exists("bad_ids.txt"):
+        with open("good_ids.txt") as x:
+            good = {int(r): None for r in x.readlines()}
+        with open("bad_ids.txt") as x:
+            bad = {int(r): None for r in x.readlines()}
+    for audiofile in glob(argv[1] + "/*/*.mp3"):
+        audio_id = int(audiofile.split("/")[-1].split(".")[0])
+        if not (audio_id in good or audio_id in bad):
+            q.append(
+                copy(
+                    {
+                        "path": audiofile,
+                        "id": audio_id,
+                    }
+                )
+            )
+    try:
+        with Pool() as p, open("good_ids.txt", "a+") as good, open(
+            "bad_ids.txt", "a+"
+        ) as bad:
+            for potent in tqdm(p.imap(validate_file, q), total=len(q)):
+                if potent["good"]:
+                    good.write(f'{potent["id"]}\n')
+                else:
+                    bad.write(f'{potent["id"]}\n')
+    except KeyboardInterrupt as e:
+        raise e
 
     print("gathering files")
     length = 0
-    for audiofile in tqdm(glob(argv[1] + "/*/*.mp3")):
+    q = []
+    with open("bad_ids.txt") as x:
+        bad = {int(r): None for r in x.readlines()}
+    for audiofile in tqdm(
+        glob(argv[1] + "/*/*.mp3"), total=len(list(glob(argv[1] + "/*/*.mp3")))
+    ):
         audio_id = int(audiofile.split("/")[-1].split(".")[0])
-        
-        # check if audiofile is valid
-        # if this throws an exception, then ffprobe failed
-        try:
-            run(['ffprobe', audiofile], stdout=DEVNULL, stderr=DEVNULL)
-        except KeyboardInterrupt as e:
-            raise e
-        except:
-            print(f"ffprobe doesn't like ID {audio_id}, skipping.")
-            continue
+        if audio_id in bad:
+            continue  # this isn't a valid file
 
         try:
             # skip stuff already done
@@ -82,7 +128,7 @@ def main():
                     break
             if invalid:
                 print(
-                    f"ID {audio_id} does not have a valid genre, skipping.",
+                    f"ID {audio_id} does not have a valid genre, skipping. ",
                     f"Was given for input \"{datasheet['track_genres_all'][where]}\"",
                 )
                 continue
