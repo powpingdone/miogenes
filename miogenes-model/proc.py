@@ -17,7 +17,11 @@ from constants import *
 def validate_file(args):
     # check if audiofile is valid
     # if this has a invalid returncode, then ffmpeg failed to decode
-    probe = Popen(["ffmpeg", "-i", args["path"], "-f", "null", "-"], stdout=DEVNULL, stderr=DEVNULL)
+    probe = Popen(
+        ["ffmpeg", "-i", args["path"], "-f", "null", "-"],
+        stdout=DEVNULL,
+        stderr=DEVNULL,
+    )
     probe.wait()
     if probe.returncode != 0:
         print(
@@ -56,6 +60,15 @@ def proc_audio(args):
         onehot[genre] = 1.0
     np.save(f"./tmp/y.{args['id']:06d}", onehot)
     return None
+
+
+def concat_data(files, X, Y):
+    for pos, x_slice_file in tqdm(enumerate(files), total=len(files)):
+        x_slice = np.load(x_slice_file)
+        y_slice_file = f"./tmp/y.{x_slice_file.split('/')[-1].split('.')[1]}.npy"
+        y_slice = np.load(y_slice_file)
+        X[pos] = x_slice
+        Y[pos] = y_slice
 
 
 def main():
@@ -151,40 +164,42 @@ def main():
     except KeyboardInterrupt as e:
         raise e
 
-    print("concatenating full dataset")
-    amt = len(list(glob("./tmp/x.*")))
-    test_amt = amt // 250
-    train_amt = amt - test_amt
-    X = np.zeros((train_amt, AUDIO_LEN), dtype=np.float32)
-    np.save("x.train.npy", X)
-    X = np.zeros((test_amt, AUDIO_LEN), dtype=np.float32)
-    np.save("x.test.npy", X)
-    del X
-    Y = np.zeros((train_amt, len(GENRE_TRANSMUTE)), dtype=np.float32)
-    np.save("y.train.npy", Y)
-    Y = np.zeros((test_amt, len(GENRE_TRANSMUTE)), dtype=np.float32)
-    np.save("y.test.npy", Y)
-    del Y
-    X_train = np.memmap("x.train.npy", dtype=np.float32, shape=(amt, AUDIO_LEN))
-    X_test = np.memmap("x.test.npy", dtype=np.float32, shape=(amt, AUDIO_LEN))
+    print("generating memmap'd files")
+    train_list = []
+    test_list = []
+    for count, inp in tqdm(enumerate(glob("./tmp/x.*"))):
+        if count % 100 == 0:  # part of the tests
+            test_list += [inp]
+        else:  # part of the training
+            train_list += [inp]
+    X_train = np.memmap(
+        "x.train.npy",
+        dtype=np.float32,
+        shape=(len(train_list), AUDIO_LEN),
+        mode="w+",
+    )
+    X_test = np.memmap(
+        "x.test.npy",
+        dtype=np.float32,
+        shape=(len(test_list), AUDIO_LEN),
+        mode="w+",
+    )
     Y_train = np.memmap(
-        "y.train.npy", dtype=np.float32, shape=(amt, len(GENRE_TRANSMUTE))
+        "y.train.npy",
+        dtype=np.float32,
+        shape=(len(train_list), len(GENRE_TRANSMUTE)),
+        mode="w+",
     )
     Y_test = np.memmap(
-        "y.test.npy", dtype=np.float32, shape=(amt, len(GENRE_TRANSMUTE))
+        "y.test.npy",
+        dtype=np.float32,
+        shape=(len(test_list), len(GENRE_TRANSMUTE)),
+        mode="w+",
     )
-    pos = 0
-    for x_slice_file in tqdm(glob("./tmp/x.*"), total=amt):
-        x_slice = np.load(x_slice_file)
-        y_slice_file = f"./tmp/y.{x_slice_file.split('/')[-1].split('.')[1]}.npy"
-        y_slice = np.load(y_slice_file)
-        if pos % 250 == 0:
-            X_test[pos] = x_slice
-            Y_test[pos] = y_slice
-        else:
-            X_train[pos] = x_slice
-            Y_train[pos] = y_slice
-        pos += 1
+    print("concatenating test arrays")
+    concat_data(test_list, X_test, Y_test)
+    print("concatenating training arrays")
+    concat_data(train_list, X_train, Y_train)
 
 
 if __name__ == "__main__":
