@@ -30,8 +30,8 @@ model = Sequential(
 
 model.compile(
     optimizer="adadelta", 
-    loss="sparse_categorical_crossentropy",
-    metrics=[keras.metrics.SparseCategoricalCrossentropy(), "accuracy"]
+    loss="categorical_crossentropy",
+    metrics=["accuracy"]
 )
 
 model.summary()

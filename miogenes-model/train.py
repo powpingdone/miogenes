@@ -16,7 +16,7 @@ Y_test = Y_test.reshape((len(Y_test) // len(GENRE_TRANSMUTE), len(GENRE_TRANSMUT
 
 model = load_model("model.tf")
 callback = [
-    ModelCheckpoint("models"),
+    ModelCheckpoint("model_val_acc{val_accuracy:.3f}"),
     TensorBoard(),
     EarlyStopping(patience=3),
 ]
@@ -24,7 +24,7 @@ callback = [
 model.fit(
     X_train,
     Y_train,
-    batch_size=128,
+    batch_size=16,
     epochs=40,
     shuffle=True,
     callbacks=callback,
