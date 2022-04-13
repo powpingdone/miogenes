@@ -1,0 +1,12 @@
+[package]
+name = "miogenes"
+version = "0.0.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+babycat = "0.0.13"
+# diesel will be used for db interaction
+# rocket will be used for a web server backend 
+tract = "0.16.3"
