@@ -42,7 +42,7 @@ x = Conv1D(256, 4, 2)(x)
 x = Dropout(0.1)(x)
 x = BatchNormalization()(x)
 x = Activation('relu')(x)
-x = MaxPooling1D(4, 4)(x)
+x = MaxPooling1D(4, 4, padding='valid')(x)
 # block 6
 x = ZeroPadding1D(2)(x)
 x = Conv1D(512, 4, 2)(x)
@@ -61,16 +61,13 @@ x = Activation('relu')(res)
 x = Dropout(0.1)(x)
 x = LSTM(512, return_sequences=True)(x)
 x = LSTM(512, return_sequences=True)(x)
+x = LSTM(128, return_sequences=True)(x)
 x = Flatten()(x)
 x = Dropout(0.1)(x)
 # block DENSE
 x = Dense(1024)(x)
 x = Dropout(0.2)(x)
 x = Activation('relu')(x)
-x = Dense(1024)(x)
-x = Dropout(0.2)(x)
-res = Add()([Dense(1024)(Flatten()(res)), x])
-x = Activation('relu')(res)
 x = Dense(256)(x)
 x = Activation('relu')(x)
 x = Dropout(0.1)(x)
@@ -79,7 +76,7 @@ out = Dense(GENRE_AMT, activation='sigmoid')(x)
 model = Model(inputs=inp, outputs=out)
 
 model.compile(
-    optimizer="adam",
+    optimizer=keras.optimizers.Adadelta(learning_rate=1),
     loss="binary_crossentropy",
     metrics=["accuracy"]
 )

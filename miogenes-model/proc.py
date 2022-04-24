@@ -47,9 +47,9 @@ def proc_audio(args):
     except Exception as e:
         print(args["path"])
         raise e
+    np.multiply(wav, 256.0)
 
     # write out the temp arrays
-    wav *= 256
     inc = 0
     for x in range(0, len(wav) - AUDIO_LEN, int(SAMPLING * 3.5)):
         np.save(

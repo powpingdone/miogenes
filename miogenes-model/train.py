@@ -32,5 +32,5 @@ model.fit(
     epochs=40,
     shuffle=True,
     callbacks=callback,
-    validation_data=(X_test, Y_test),
+    validation_split=0.3,
 )
