@@ -6,31 +6,30 @@ from glob import glob
 
 from constants import *
 
-X_train = np.memmap("x.train.npy", dtype=np.float32, mode="r")
-X_train = X_train.reshape((len(X_train) // AUDIO_LEN, AUDIO_LEN))
-Y_train = np.memmap("y.train.npy", dtype=np.float32, mode="r")
-Y_train = Y_train.reshape((len(Y_train) // GENRE_AMT, GENRE_AMT))
-X_test = np.memmap("x.test.npy", dtype=np.float32, mode="r")
-X_test = X_test.reshape((len(X_test) // AUDIO_LEN, AUDIO_LEN))
-Y_test = np.memmap("y.test.npy", dtype=np.float32, mode="r")
-Y_test = Y_test.reshape((len(Y_test) // GENRE_AMT, GENRE_AMT))
+train = np.memmap("train.npy", dtype=np.float32, mode="r")
+train = train.reshape((len(train) // AUDIO_LEN, AUDIO_LEN))
+train_out = np.memmap("train.npy", dtype=np.float32, mode="r")
+train_out = train_out.reshape((len(train) // AUDIO_LEN, AUDIO_LEN))
+test = np.memmap("test.npy", dtype=np.float32, mode="r")
+test = test.reshape((len(test) // AUDIO_LEN, AUDIO_LEN))
+test_out = np.memmap("test.npy", dtype=np.float32, mode="r")
+test_out = test_out.reshape((len(test) // AUDIO_LEN, AUDIO_LEN))
 
-choose = glob("model.tf_*")
+choose = glob("model_*")
 choose.sort()
 choose = choose[-1]
-print(f'loading model {choose}')
-model = load_model(choose)
-callback = [
-    ModelCheckpoint("model.tf_{epoch:02d}_{loss:4f}_{accuracy:.3f}"),
-    EarlyStopping(patience=6, min_delta=0.01, monitor="val_accuracy"),
-]
+print(f"loading model {choose}")
+autoenc = load_model(choose)
 
-model.fit(
-    X_train,
-    Y_train,
+autoenc.fit(
+    train,
+    train_out,
     batch_size=64,
     epochs=40,
     shuffle=True,
-    callbacks=callback,
-    validation_split=0.3,
+    validation_data=[test, test_out],
+    callbacks=[
+        ModelCheckpoint("model_{epoch:03d}-{val_accuracy:.2f}.h5"),
+        EarlyStopping(patience=6, min_delta=0.01, monitor="val_accuracy"),
+    ],
 )
