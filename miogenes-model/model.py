@@ -1,49 +1,23 @@
 from tensorflow import keras
 from keras.models import Model
-from keras.layers import (
-    Conv1D,
-    MaxPooling1D,
-    Input,
-    UpSampling1D,
-    BatchNormalization,
-    LeakyReLU,
-)
+from keras.layers import Input, Dense
 
 from constants import *
 
-encinp = Input(
-    (
-        AUDIO_LEN,
-        1,
-    )
-)
-enc = BatchNormalization()(encinp)
-enc = Conv1D(AUDIO_LEN // 512, 64, activation="relu", padding="same")(enc)
-enc = MaxPooling1D(8, 8, padding="same")(enc)
-enc = Conv1D(4096, 16, activation="relu", padding="same")(enc)
-enc = MaxPooling1D(4, 4, padding="same")(enc)
-enc = Conv1D(128, 8, activation="relu", padding="same")(enc)
-enc = MaxPooling1D(4, 4, padding="same")(enc)
+encinp = Input((AUDIO_LEN,))
+enc = Dense(12000, activation='relu')(encinp)
+enc = Dense(4096, activation='relu')(enc)
+enc = Dense(512, activation='relu')(enc)
+enc = Dense(128)(enc)
 
-decinp = Input(
-    (
-        375,
-        128,
-    )
-)
-dec = Conv1D(128, 8, activation="relu", padding="same")(decinp)
-dec = UpSampling1D(4 * 4)(dec)
-dec = Conv1D(4096, 16, activation="relu", padding="same")(dec)
-dec = UpSampling1D(4 * 4)(dec)
-dec = Conv1D(AUDIO_LEN // 512, 64, activation="relu", padding="same")(dec)
-dec = MaxPooling1D(2, 2, padding="same")(dec)
-dec = Conv1D(1, 16, padding="same")(dec)
+decinp = Input((128,))
+dec = Dense(512, activation='relu')(decinp)
+dec = Dense(4096, activation='relu')(dec)
+dec = Dense(12000, activation='relu')(dec)
+dec = Dense(AUDIO_LEN)(dec)
 
 inp = Input(
-    (
-        AUDIO_LEN,
-        1,
-    ),
+    (AUDIO_LEN,),
     name="fullinp",
 )
 encoder = Model(encinp, enc, name="enc")(inp)
@@ -52,8 +26,7 @@ autoenc = Model(inp, decoder)
 
 autoenc.compile(
     optimizer=keras.optimizers.Adadelta(1),
-    loss="binary_crossentropy",
-    metrics=["accuracy"],
+    loss="mean_squared_error",
 )
 autoenc.summary()
 

@@ -47,16 +47,17 @@ def proc_audio(args):
     except Exception as e:
         print(args["path"])
         raise e
-    np.multiply(wav, 256.0)
+    ptp = np.ptp(wav)
 
     # write out the temp arrays
-    inc = 0
-    for x in range(0, len(wav) - AUDIO_LEN, int(SAMPLING * 3.5)):
-        np.save(
-            f"./tmp/{args['id']:06d}.{inc:04d}",
-            np.array(wav[x : x + AUDIO_LEN], dtype=np.float32),
-        )
-        inc += 1
+    if ptp != 0:
+        wav = (wav - np.min(wav)) / ptp
+        inc = 0
+        for x in range(0, len(wav) - AUDIO_LEN, int(SAMPLING * 3.5)):
+            arr = (np.array(wav[x : x + AUDIO_LEN], dtype=np.float32),)
+            if not np.isnan(arr).any():
+                np.save(f"./tmp/{args['id']:06d}.{inc:04d}", arr)
+                inc += 1
 
     return None
 
