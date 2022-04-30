@@ -52,11 +52,18 @@ def proc_audio(args):
     # write out the temp arrays
     if ptp != 0:
         wav = (wav - np.min(wav)) / ptp
+        if np.isnan(wav).any():
+            return None
         inc = 0
-        for x in range(0, len(wav) - AUDIO_LEN, int(SAMPLING * 3.5)):
-            arr = (np.array(wav[x : x + AUDIO_LEN], dtype=np.float32),)
-            if not np.isnan(arr).any():
-                np.save(f"./tmp/{args['id']:06d}.{inc:04d}", arr)
+        sbases = [
+            int(len(wav) * x) for x in [1 / 6, 1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 5 / 6]
+        ]
+        for x in sbases:
+            if x + AUDIO_LEN < len(wav):
+                np.save(
+                    f'./tmp/{args["id"]:06d}.{inc:01d}',
+                    np.array(wav[x : x + AUDIO_LEN], dtype=np.float32),
+                )
                 inc += 1
 
     return None
@@ -83,17 +90,18 @@ def main():
             good = {int(r): None for r in x.readlines()}
         with open("bad_ids.txt") as x:
             bad = {int(r): None for r in x.readlines()}
-    for audiofile in glob(argv[1] + "/*/*.wav"):
-        audio_id = int(audiofile.split("/")[-1].split(".")[0])
-        if not (audio_id in good or audio_id in bad):
-            q.append(
-                copy(
-                    {
-                        "path": audiofile,
-                        "id": audio_id,
-                    }
+    for path in argv[1:]:
+        for audiofile in glob(path + "/*.wav"):
+            audio_id = int(audiofile.split("/")[-1].split(".")[0])
+            if not (audio_id in good or audio_id in bad):
+                q.append(
+                    copy(
+                        {
+                            "path": audiofile,
+                            "id": audio_id,
+                        }
+                    )
                 )
-            )
     try:
         with Pool() as p, open("good_ids.txt", "a+") as good, open(
             "bad_ids.txt", "a+"
@@ -111,22 +119,24 @@ def main():
     q = []
     with open("bad_ids.txt") as x:
         bad = {int(r): None for r in x.readlines()}
-    for audiofile in tqdm(
-        glob(argv[1] + "/*/*.wav"), total=len(list(glob(argv[1] + "/*/*.wav")))
-    ):
-        audio_id = int(audiofile.split("/")[-1].split(".")[0])
-        if audio_id in bad:
-            continue  # this isn't a valid file
+    for path in argv[1:]:
+        print(f"PATH: {path}")
+        for audiofile in tqdm(
+            glob(path + "/*.wav"), total=len(list(glob(path + "/*.wav")))
+        ):
+            audio_id = int(audiofile.split("/")[-1].split(".")[0])
+            if audio_id in bad:
+                continue  # this isn't a valid file
 
-        q.append(
-            copy(
-                {
-                    "path": audiofile,
-                    "id": audio_id,
-                }
+            q.append(
+                copy(
+                    {
+                        "path": audiofile,
+                        "id": audio_id,
+                    }
+                )
             )
-        )
-        length += 1
+            length += 1
 
     print("proccessing all files")
     try:
@@ -138,24 +148,14 @@ def main():
     print("generating memmap'd files")
     files = list(glob("./tmp/*.npy"))
     shuffle(files)
-    train_list = files[: int(len(files) * 0.7)]
-    test_list = files[int(len(files) * 0.7) + 1 :]
-    X_train = np.memmap(
+    X = np.memmap(
         "train.npy",
         dtype=np.float32,
-        shape=(len(train_list), AUDIO_LEN),
+        shape=(len(files), AUDIO_LEN),
         mode="w+",
     )
-    X_test = np.memmap(
-        "test.npy",
-        dtype=np.float32,
-        shape=(len(test_list), AUDIO_LEN),
-        mode="w+",
-    )
-    print("concatenating test arrays")
-    concat_data(test_list, X_test)
-    print("concatenating training arrays")
-    concat_data(train_list, X_train)
+    print("concatenating mega array")
+    concat_data(files, X)
 
 
 if __name__ == "__main__":

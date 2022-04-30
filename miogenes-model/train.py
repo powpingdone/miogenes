@@ -8,8 +8,6 @@ from constants import *
 
 train = np.memmap("train.npy", dtype=np.float32, mode="r")
 train = train.reshape((len(train) // AUDIO_LEN, AUDIO_LEN))
-test = np.memmap("test.npy", dtype=np.float32, mode="r")
-test = test.reshape((len(test) // AUDIO_LEN, AUDIO_LEN))
 
 choose = glob("model_*")
 choose.sort()
@@ -23,9 +21,9 @@ autoenc.fit(
     batch_size=64,
     epochs=40,
     shuffle=True,
-    validation_data=[test, test],
+    validation_split=0.1,
     callbacks=[
-        ModelCheckpoint("model_{epoch:03d}-{val_loss:.2f}"),
+        ModelCheckpoint("model_{epoch:03d}-{val_loss:.5f}"),
         EarlyStopping(patience=6, min_delta=0.01, monitor="val_loss"),
     ],
 )
