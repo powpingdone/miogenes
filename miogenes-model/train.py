@@ -19,7 +19,7 @@ autoenc.fit(
     train,
     train,
     batch_size=64,
-    epochs=40,
+    epochs=10,
     shuffle=True,
     validation_split=0.1,
     callbacks=[
