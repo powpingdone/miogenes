@@ -18,7 +18,7 @@ autoenc = load_model(choose)
 autoenc.fit(
     train,
     train,
-    batch_size=16,
+    batch_size=4,
     epochs=10,
     shuffle=True,
     validation_split=0.1,
