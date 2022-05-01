@@ -17,7 +17,7 @@ def gener_te(arr):
             yield (arr[x], arr[x])
 
 arr = np.memmap("train.npy", dtype=np.float32, mode="r")
-arr = train.reshape((len(arr) // AUDIO_LEN, AUDIO_LEN))
+arr = arr.reshape((len(arr) // AUDIO_LEN, AUDIO_LEN))
 
 choose = glob("model_*")
 choose.sort()
