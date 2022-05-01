@@ -6,8 +6,18 @@ from glob import glob
 
 from constants import *
 
-train = np.memmap("train.npy", dtype=np.float32, mode="r")
-train = train.reshape((len(train) // AUDIO_LEN, AUDIO_LEN))
+def gener_tr(arr):
+    while True:
+        for x in range(0,int(len(arr)*.9)):
+            yield (arr[x], arr[x])
+
+def gener_te(arr):
+    while True:
+        for x in range(int(len(arr)*.9)):
+            yield (arr[x], arr[x])
+
+arr = np.memmap("train.npy", dtype=np.float32, mode="r")
+arr = train.reshape((len(arr) // AUDIO_LEN, AUDIO_LEN))
 
 choose = glob("model_*")
 choose.sort()
@@ -16,12 +26,11 @@ print(f"loading model {choose}")
 autoenc = load_model(choose)
 
 autoenc.fit(
-    train,
-    train,
-    batch_size=1,
+    gener_tr(arr),
+    batch_size=32,
     epochs=10,
     shuffle=True,
-    validation_split=0.1,
+    validation_data=gener_te(arr),
     callbacks=[
         ModelCheckpoint("model_{epoch:03d}-{val_loss:.5f}"),
         EarlyStopping(patience=6, min_delta=0.01, monitor="val_loss"),
