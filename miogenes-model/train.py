@@ -8,13 +8,16 @@ from constants import *
 
 def gener_tr(arr):
     while True:
-        for x in range(0,int(len(arr)*.9)):
-            yield (arr[x], arr[x],)
+        for x in range(0, int(len(arr)*.9), 64):
+            lis = []
+            for pos in range(x, x + 64):
+                lis += [arr[pos]]
+            yield (np.asarray(lis), np.asarray(lis),)
 
 def gener_te(arr):
     while True:
         for x in range(int(len(arr)*.9)):
-            yield (arr[x], arr[x],)
+            yield (np.asarray([arr[x]]), np.asarray([arr[x]]),)
 
 arr = np.memmap("train.npy", dtype=np.float32, mode="r")
 arr = arr.reshape((len(arr) // AUDIO_LEN, AUDIO_LEN))
@@ -25,9 +28,9 @@ choose = choose[-1]
 print(f"loading model {choose}")
 autoenc = load_model(choose)
 
+print(f"len: {len(arr)/64}")
 autoenc.fit(
     gener_tr(arr),
-    batch_size=32,
     epochs=10,
     shuffle=True,
     validation_data=gener_te(arr),
@@ -35,4 +38,5 @@ autoenc.fit(
         ModelCheckpoint("model_{epoch:03d}-{val_loss:.5f}"),
         EarlyStopping(patience=6, min_delta=0.01, monitor="val_loss"),
     ],
+    use_multiprocessing=True,
 )
