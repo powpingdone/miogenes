@@ -9,12 +9,12 @@ from constants import *
 def gener_tr(arr):
     while True:
         for x in range(0,int(len(arr)*.9)):
-            yield (arr[x], arr[x])
+            yield (arr[x], arr[x],)
 
 def gener_te(arr):
     while True:
         for x in range(int(len(arr)*.9)):
-            yield (arr[x], arr[x])
+            yield (arr[x], arr[x],)
 
 arr = np.memmap("train.npy", dtype=np.float32, mode="r")
 arr = arr.reshape((len(arr) // AUDIO_LEN, AUDIO_LEN))
