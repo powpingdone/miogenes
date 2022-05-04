@@ -1,30 +1,21 @@
 from tensorflow import keras
 from keras.models import Model
-from keras.layers import Input, Conv1D, Conv1DTranspose, Dense, Flatten, Reshape
+from keras.layers import Input, Dense
 
 from constants import *
 
-KER = 12
-STRID = 4
+LATENT = 128
 
-encinp = Input((AUDIO_LEN, 1))
-convenc = Conv1D(256, KER, STRID, padding="same", activation="relu")(encinp)
-convenc = Conv1D(32, KER, STRID, padding="same", activation="relu")(convenc)
-convenc = Conv1D(4, KER, STRID, padding="same", activation="relu")(convenc)
-resh = Model(encinp, convenc).output_shape[1:]
-enc = Flatten()(convenc)
+encinp = Input((AUDIO_LEN,))
+enc = Dense(4096, activation="relu")(encinp)
 enc = Dense(256, activation="relu")(enc)
-enc = Dense(128)(enc)
+enc = Dense(LATENT, activation="sigmoid")(enc)
 
 
-decinp = Input((128,))
+decinp = Input((LATENT,))
 dec = Dense(256, activation="relu")(decinp)
-dec = Dense(resh[0] * resh[1], activation="relu")(dec)
-dec = Reshape(resh)(dec)
-convdec = Conv1DTranspose(4, KER, STRID, padding="same", activation="relu")(dec)
-convdec = Conv1DTranspose(32, KER, STRID, padding="same", activation="relu")(convdec)
-convdec = Conv1DTranspose(256, KER, STRID, padding="same", activation="relu")(convdec)
-dec = Conv1DTranspose(1, KER, padding="same")(convdec)
+dec = Dense(4096, activation="relu")(dec)
+dec = Dense(AUDIO_LEN, activation="relu")(dec)
 
 inp = Input(
     (AUDIO_LEN,),

@@ -30,12 +30,11 @@ autoenc = load_model(choose)
 autoenc.fit(
     gener_tr(arr),
     steps_per_epoch=len(arr) // BATCH_SIZE,
-    epochs=10,
+    epochs=40,
     shuffle=True,
     validation_data=(val_arr, val_arr,),
     callbacks=[
         ModelCheckpoint("model_{epoch:03d}-{val_loss:.5f}"),
         EarlyStopping(patience=6, min_delta=0.01, monitor="val_loss"),
     ],
-    use_multiprocessing=True,
 )
