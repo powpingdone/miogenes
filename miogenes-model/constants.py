@@ -1,6 +1,6 @@
 SAMPLING = 8000
-CAPTURE_LEN = 6  # seconds
-AUDIO_LEN = int(SAMPLING * CAPTURE_LEN)
+AUDIO_LEN = 65536
+CAPTURE_LEN = AUDIO_LEN / SAMPLING  # seconds
 
 # genres are not mapped, map them to be correctly represented
 GENRE_TRANSMUTE = {

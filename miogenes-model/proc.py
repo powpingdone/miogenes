@@ -55,13 +55,17 @@ def proc_audio(args):
         if np.isnan(wav).any():
             return None
         inc = 0
-        sbases = [
-            int(len(wav) * x) for x in [1 / 6, 1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 5 / 6]
-        ]
+        if len(wav) / SAMPLING < CAPTURE_LEN:  # too small for use
+            return None
+        elif len(wav) / SAMPLING > 30:  # typical song
+            bases = [0, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 5 / 6]
+        else:  # 30 second sample
+            bases = [0, 1 / 4, 1 / 3, 1 / 2, 2 / 3]
+        sbases = [int(len(wav) * x) for x in bases]
         for x in sbases:
             if x + AUDIO_LEN < len(wav):
                 np.save(
-                    f'./tmp/{args["id"]:06d}.{inc:01d}',
+                    f'./samples/{args["id"]:06d}.{inc:01d}',
                     np.array(wav[x : x + AUDIO_LEN], dtype=np.float32),
                 )
                 inc += 1
@@ -69,17 +73,10 @@ def proc_audio(args):
     return None
 
 
-def concat_data(files, X):
-    for pos, x_slice_file in tqdm(enumerate(files), total=len(files)):
-        x_slice = np.load(x_slice_file)
-        X[pos] = x_slice
-    X.flush()
-
-
 def main():
     set_start_method("spawn")
-    if not exists("./tmp"):
-        mkdir("./tmp")
+    if not exists("./samples"):
+        mkdir("./samples")
 
     print("validating files, if this goes by quickly then it used all cached files")
     good = {}
@@ -91,7 +88,7 @@ def main():
         with open("bad_ids.txt") as x:
             bad = {int(r): None for r in x.readlines()}
     for path in argv[1:]:
-        for audiofile in glob(path + "/*.wav"):
+        for audiofile in glob(path + "/*"):
             audio_id = int(audiofile.split("/")[-1].split(".")[0])
             if not (audio_id in good or audio_id in bad):
                 q.append(
@@ -122,7 +119,7 @@ def main():
     for path in argv[1:]:
         print(f"PATH: {path}")
         for audiofile in tqdm(
-            glob(path + "/*.wav"), total=len(list(glob(path + "/*.wav")))
+            glob(path + "/*"), total=len(list(glob(path + "/*")))
         ):
             audio_id = int(audiofile.split("/")[-1].split(".")[0])
             if audio_id in bad:
@@ -144,18 +141,6 @@ def main():
             list(tqdm(p.imap(proc_audio, q), total=len(q)))
     except KeyboardInterrupt as e:
         raise e
-
-    print("generating memmap'd files")
-    files = list(glob("./tmp/*.npy"))
-    shuffle(files)
-    X = np.memmap(
-        "train.npy",
-        dtype=np.float32,
-        shape=(len(files), AUDIO_LEN),
-        mode="w+",
-    )
-    print("concatenating mega array")
-    concat_data(files, X)
 
 
 if __name__ == "__main__":
