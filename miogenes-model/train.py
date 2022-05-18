@@ -10,7 +10,7 @@ from constants import *
 
 seed(8769321)
 
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 
 def gener_tr(files):
     while True:
@@ -41,8 +41,9 @@ autoenc.fit_generator(
     gener_tr(files),
     steps_per_epoch=len(files) // BATCH_SIZE,
     epochs=40,
+    initial_epoch=int(choose.split("_")[-1].split("-")[0]),
     callbacks=[
-        ModelCheckpoint("model_{epoch:03d}-{loss:.5f}"),
-        EarlyStopping(patience=6, min_delta=0.01, monitor="loss"),
+        ModelCheckpoint("model_{epoch:03d}-{loss:.6f}"),
+        EarlyStopping(patience=3, min_delta=0.01, monitor="loss"),
     ],
 )
