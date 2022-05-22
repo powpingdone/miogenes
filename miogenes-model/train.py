@@ -3,14 +3,12 @@ from keras.models import load_model
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 import numpy as np
 from glob import glob
-from random import shuffle, seed
+from random import shuffle
 from gc import collect
 
 from constants import *
 
-seed(8769321)
-
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 
 def gener_tr(files):
     while True:
