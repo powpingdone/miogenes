@@ -1,4 +1,4 @@
-import keras
+import tensorflow.keras
 from keras.models import load_model
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 import numpy as np
@@ -35,9 +35,9 @@ choose = choose[-1]
 print(f"loading model {choose}")
 autoenc = load_model(choose)
 
-autoenc.fit_generator(
+autoenc.fit(
     gener_tr(files),
-    steps_per_epoch=len(files) // BATCH_SIZE,
+    steps_per_epoch=len(files) // 32 // BATCH_SIZE,
     epochs=40,
     initial_epoch=int(choose.split("_")[-1].split("-")[0]),
     callbacks=[

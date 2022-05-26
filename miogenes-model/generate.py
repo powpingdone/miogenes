@@ -1,5 +1,5 @@
 from constants import *
-from keras.models import load_model
+from tf.keras.models import load_model
 from glob import glob
 from random import shuffle
 import numpy as np
@@ -25,7 +25,7 @@ lis = np.asarray(lis).reshape(USE_FILES, AUDIO_LEN, 1)
 for e, sl in enumerate(lis):
     sf.write(f"x_{e}.wav", (sl.reshape(AUDIO_LEN) * 2) - 1, SAMPLING)
 out = autoenc.predict(lis)
-for e, sl in enumerate(out):
+for e, sl in enumerate(lis):
     sf.write(f"y_{e}.wav", (sl.reshape(AUDIO_LEN) * 2) - 1, SAMPLING)
 
 

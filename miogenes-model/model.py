@@ -1,14 +1,13 @@
-from keras import optimizers
-from plaidml import keras
-import keras.backend as K
+import tensorflow.keras
+from tensorflow.keras.optimizers.experimental import Adadelta
 from keras.models import Model
-from keras.layers import Input, Conv1D as CL, AveragePooling1D as down, UpSampling1D as up, LSTM as LS
+from keras.layers import Input, Conv1D as CL, UpSampling1D as up
 
 from constants import *
 
 FILTERS = 2048
-KERNEL = 512
-INTERNAL_NEURONS = 40
+KERNEL = 128
+INTERNAL_NEURONS = 50
 
 encinp = Input((AUDIO_LEN,1))
 enc = CL(FILTERS, KERNEL, strides=AUDIO_LEN // INTERNAL_NEURONS, padding="same")(encinp)
@@ -34,8 +33,9 @@ decoder = decoder(encoder)
 autoenc = Model(inp, decoder)
 
 autoenc.compile(
-    optimizer=optimizers.Adadelta(1),
+    optimizer=Adadelta(learning_rate=1),
     loss="mean_absolute_error",
+    jit_compile=True,
 )
 autoenc.summary()
 

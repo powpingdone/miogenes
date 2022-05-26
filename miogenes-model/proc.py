@@ -1,12 +1,12 @@
 from copy import deepcopy as copy
 from glob import iglob as glob
 import pandas
-import librosa
 from multiprocessing import Pool, set_start_method
 import numpy as np
 from os import mkdir, remove
 from os.path import exists
 from random import shuffle
+import soundfile as sf
 from subprocess import Popen, DEVNULL
 from sys import argv
 from tqdm import tqdm
@@ -42,12 +42,16 @@ def proc_audio(args):
 
     # input
     # try to load the file
+    wavpath = "/tmp/" + str(args["id"]) + ".wav"
+    conv = Popen(["ffmpeg", "-i", args["path"], '-ac', '1', '-ar', str(SAMPLING), wavpath], stdout=DEVNULL, stderr=DEVNULL)
+    conv.wait()
     try:
-        wav, _ = librosa.load(args["path"], sr=SAMPLING, mono=True, dtype=np.float32)
+        wav, _ = sf.read(wavpath)
     except Exception as e:
         print(args["path"])
         raise e
     ptp = np.ptp(wav)
+    conv = Popen(["rm", wavpath])
 
     # write out the temp arrays
     if ptp != 0:
@@ -69,6 +73,7 @@ def proc_audio(args):
                     np.array(wav[x : x + AUDIO_LEN], dtype=np.float32),
                 )
                 inc += 1
+    conv.wait()
 
     return None
 
