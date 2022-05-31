@@ -1,22 +1,40 @@
+from sys import exit
+from constants import *
+
+SIZE = 5
+
+if AUDIO_LEN % (SIZE ** 3) != 0:
+    print(f"invalid size: {AUDIO_LEN / (SIZE ** 3)}")
+    while AUDIO_LEN % (SIZE ** 3) != 0 and (SIZE ** 3) < AUDIO_LEN:
+        SIZE += 1
+    if (SIZE ** 3) >= AUDIO_LEN:
+        print("cannot find a multiple close")
+    else:
+        print(f"next closest is {SIZE}")
+    
+    exit(1)
+
 import tensorflow.keras
 from tensorflow.keras.optimizers.experimental import Adadelta
 from keras.models import Model
 from keras.layers import Input, Conv1D as CL, UpSampling1D as up
 
-from constants import *
-
-FILTERS = 2048
-KERNEL = 128
-INTERNAL_NEURONS = 50
+STRIDES = AUDIO_LEN // SIZE
 
 encinp = Input((AUDIO_LEN,1))
-enc = CL(FILTERS, KERNEL, strides=AUDIO_LEN // INTERNAL_NEURONS, padding="same")(encinp)
+enc = CL(2048, 16, strides=STRIDES, padding="same")(encinp)
+enc = CL(1024, 64, strides=STRIDES, padding="same")(encinp)
+enc = CL(256, 128, strides=STRIDES, padding="same")(encinp)
 enc = CL(1, 1, padding="same")(enc)
 next_shape = Model(encinp, enc).output_shape[1:]
 
 decinp = Input(next_shape)
-dec = up(AUDIO_LEN // INTERNAL_NEURONS)(decinp)
-dec = CL(FILTERS, KERNEL, padding="same")(dec)
+dec = up(STRIDES)(decinp)
+dec = CL(256, 128, padding="same")(dec)
+dec = up(STRIDES)(dec)
+dec = CL(1024, 64, padding="same")(dec)
+dec = up(STRIDES)(dec)
+dec = CL(2048, 16, padding="same")(dec)
 dec = CL(1,1, padding="same")(dec)
 
 inp = Input(

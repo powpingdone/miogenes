@@ -8,7 +8,7 @@ from gc import collect
 
 from constants import *
 
-BATCH_SIZE = 16
+BATCH_SIZE = 1
 
 def gener_tr(files):
     while True:
@@ -37,7 +37,7 @@ autoenc = load_model(choose)
 
 autoenc.fit(
     gener_tr(files),
-    steps_per_epoch=len(files) // 32 // BATCH_SIZE,
+    steps_per_epoch=len(files) // 16 // BATCH_SIZE,
     epochs=40,
     initial_epoch=int(choose.split("_")[-1].split("-")[0]),
     callbacks=[

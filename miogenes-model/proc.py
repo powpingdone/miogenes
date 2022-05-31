@@ -7,7 +7,7 @@ from os import mkdir, remove
 from os.path import exists
 from random import shuffle
 import soundfile as sf
-from subprocess import Popen, DEVNULL
+from subprocess import Popen, DEVNULL, TimeoutExpired
 from sys import argv
 from tqdm import tqdm
 import warnings
@@ -43,7 +43,7 @@ def proc_audio(args):
     # input
     # try to load the file
     wavpath = "/tmp/" + str(args["id"]) + ".wav"
-    conv = Popen(["ffmpeg", "-i", args["path"], '-ac', '1', '-ar', str(SAMPLING), wavpath], stdout=DEVNULL, stderr=DEVNULL)
+    conv = Popen(["ffmpeg", '-y', "-i", args["path"], '-ac', '1', '-ar', str(SAMPLING), wavpath], stdout=DEVNULL, stderr=DEVNULL)
     conv.wait()
     try:
         wav, _ = sf.read(wavpath)
