@@ -1,6 +1,8 @@
-import tensorflow.keras
-from keras.models import load_model
+import tensorflow.keras as keras
+from keras.layers import Input
+from keras.models import load_model, Model
 from keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras.optimizers import Adadelta
 import numpy as np
 from glob import glob
 from random import shuffle
@@ -29,19 +31,42 @@ files = glob("./samples/*.npy")
 files.sort()
 shuffle(files)
 
-choose = glob("model_*")
-choose.sort()
-choose = choose[-1]
-print(f"loading model {choose}")
-autoenc = load_model(choose)
+chooseenc = glob("model_enc_*")
+chooseenc.sort()
+chooseenc = chooseenc[-1]
+print(f"loading model {chooseenc}")
+encoder = load_model(chooseenc)
+
+choosedec = glob("model_dec_*")
+choosedec.sort()
+choosedec = choosedec[-1]
+print(f"loading model {choosedec}")
+decoder = load_model(choosedec)
+
+inp = Input(
+    (AUDIO_LEN,1),
+    name="fullinp",
+)
+encoder = encoder(inp)
+decoder = decoder(encoder)
+autoenc = Model(inp, decoder)
+autoenc.compile(
+    optimizer=Adadelta(learning_rate=1),
+    loss="mean_absolute_error",
+    jit_compile=True,
+)
+
+class SaveEnc(keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        encoder.save(f"model_enc_{epoch:03d}")
+        decoder.save(f"model_dec_{epoch:03d}")
 
 autoenc.fit(
     gener_tr(files),
     steps_per_epoch=len(files) // 16 // BATCH_SIZE,
     epochs=40,
-    initial_epoch=int(choose.split("_")[-1].split("-")[0]),
+    initial_epoch=int(chooseenc.split("_")[-1].split("-")[0]),
     callbacks=[
-        ModelCheckpoint("model_{epoch:03d}-{loss:.6f}"),
         EarlyStopping(patience=3, min_delta=0.01, monitor="loss"),
     ],
 )
