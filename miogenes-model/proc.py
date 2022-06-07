@@ -1,12 +1,12 @@
 from copy import deepcopy as copy
 from glob import iglob as glob
 import pandas
-import librosa
 from multiprocessing import Pool, set_start_method
 import numpy as np
 from os import mkdir, remove
 from os.path import exists
 from random import shuffle
+import soundfile as sf
 from subprocess import Popen, DEVNULL
 from sys import argv
 from tqdm import tqdm
@@ -34,26 +34,31 @@ def validate_file(args):
 
 
 def proc_audio(args):
-    # we just want the signal dammit, we don't care about the
-    # backend being used to get the signal
-    warnings.filterwarnings(
-        "ignore", ".*PySoundFile failed. Trying audioread instead.*"
-    )
-
     # input
     # try to load the file
+    wavpath = "/tmp/" + str(args["id"]) + ".wav"
+    conv = Popen(["ffmpeg", '-y', "-i", args["path"], '-ac', '1', '-ar', str(SAMPLING), wavpath], stdout=DEVNULL, stderr=DEVNULL)
+    conv.wait()
     try:
-        wav, _ = librosa.load(args["path"], sr=SAMPLING, mono=True, dtype=np.float32)
+        wav, _ = sf.read(wavpath)
     except Exception as e:
         print(args["path"])
         raise e
-    np.multiply(wav, 256.0)
+    conv = Popen(["rm", wavpath])
+
+    # preprocess the wavform
+    ptp = np.ptp(wav)
+    if ptp == 0: 
+        return None
+    wav = (wav - np.min(wav)) / ptp
+    if np.isnan(wav).any():
+        return None
 
     # write out the temp arrays
     inc = 0
     for x in range(0, len(wav) - AUDIO_LEN, int(SAMPLING * 3.5)):
         np.save(
-            f"./tmp/x.{args['id']:06d}.{inc:04d}",
+            f"./x/x.{args['id']:06d}.{inc:04d}",
             np.array(wav[x : x + AUDIO_LEN], dtype=np.float32),
         )
         inc += 1
@@ -62,25 +67,17 @@ def proc_audio(args):
     onehot = np.zeros(GENRE_AMT, dtype=np.float32)
     for genre in args["genres"]:
         onehot[genre] = 1.0
-    np.save(f"./tmp/y.{args['id']:06d}", onehot)
+    np.save(f"./y/y.{args['id']:06d}", onehot)
+    conv.wait()
     return None
-
-
-def concat_data(files, X, Y):
-    for pos, x_slice_file in tqdm(enumerate(files), total=len(files)):
-        x_slice = np.load(x_slice_file)
-        y_slice_file = f"./tmp/y.{x_slice_file.split('/')[-1].split('.')[1]}.npy"
-        y_slice = np.load(y_slice_file)
-        X[pos] = x_slice
-        Y[pos] = y_slice
-    X.flush()
-    Y.flush()
 
 
 def main():
     set_start_method("spawn")
-    if not exists("./tmp"):
-        mkdir("./tmp")
+    if not exists("./x"):
+        mkdir("./x")
+    if not exists("./y"):
+        mkdir("./y")
     datasheet = pandas.read_csv(argv[2], usecols=["track_id", "track_genres_all"])
 
     print("validating files, if this goes by quickly then it used all cached files")
@@ -92,7 +89,7 @@ def main():
             good = {int(r): None for r in x.readlines()}
         with open("bad_ids.txt") as x:
             bad = {int(r): None for r in x.readlines()}
-    for audiofile in glob(argv[1] + "/*/*.wav"):
+    for audiofile in glob(argv[1] + "/*.*"):
         audio_id = int(audiofile.split("/")[-1].split(".")[0])
         if not (audio_id in good or audio_id in bad):
             q.append(
@@ -121,7 +118,7 @@ def main():
     with open("bad_ids.txt") as x:
         bad = {int(r): None for r in x.readlines()}
     for audiofile in tqdm(
-        glob(argv[1] + "/*/*.wav"), total=len(list(glob(argv[1] + "/*/*.wav")))
+        glob(argv[1] + "/*.*"), total=len(list(glob(argv[1] + "/*.*")))
     ):
         audio_id = int(audiofile.split("/")[-1].split(".")[0])
         if audio_id in bad:
@@ -161,47 +158,13 @@ def main():
             )
         )
         length += 1
-
+   
     print("proccessing all files")
     try:
         with Pool() as p:
             list(tqdm(p.imap(proc_audio, q), total=len(q)))
     except KeyboardInterrupt as e:
         raise e
-
-    print("generating memmap'd files")
-    files = list(glob("./tmp/x.*"))
-    shuffle(files)
-    train_list = files[: int(len(files) * 0.7)]
-    test_list = files[int(len(files) * 0.7) + 1 :]
-    X_train = np.memmap(
-        "x.train.npy",
-        dtype=np.float32,
-        shape=(len(train_list), AUDIO_LEN),
-        mode="w+",
-    )
-    X_test = np.memmap(
-        "x.test.npy",
-        dtype=np.float32,
-        shape=(len(test_list), AUDIO_LEN),
-        mode="w+",
-    )
-    Y_train = np.memmap(
-        "y.train.npy",
-        dtype=np.float32,
-        shape=(len(train_list), GENRE_AMT),
-        mode="w+",
-    )
-    Y_test = np.memmap(
-        "y.test.npy",
-        dtype=np.float32,
-        shape=(len(test_list), GENRE_AMT),
-        mode="w+",
-    )
-    print("concatenating test arrays")
-    concat_data(test_list, X_test, Y_test)
-    print("concatenating training arrays")
-    concat_data(train_list, X_train, Y_train)
 
 
 if __name__ == "__main__":

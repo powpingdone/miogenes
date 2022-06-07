@@ -1,5 +1,5 @@
 SAMPLING = 8000
-CAPTURE_LEN = 6  # seconds
+CAPTURE_LEN = 5  # seconds
 AUDIO_LEN = int(SAMPLING * CAPTURE_LEN)
 
 # genres are not mapped, map them to be correctly represented
