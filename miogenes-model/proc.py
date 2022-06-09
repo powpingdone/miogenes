@@ -37,7 +37,11 @@ def proc_audio(args):
     # input
     # try to load the file
     wavpath = "/tmp/" + str(args["id"]) + ".wav"
-    conv = Popen(["ffmpeg", '-y', "-i", args["path"], '-ac', '1', '-ar', str(SAMPLING), wavpath], stdout=DEVNULL, stderr=DEVNULL)
+    conv = Popen(
+        ["ffmpeg", "-y", "-i", args["path"], "-ac", "1", "-ar", str(SAMPLING), wavpath],
+        stdout=DEVNULL,
+        stderr=DEVNULL,
+    )
     conv.wait()
     try:
         wav, _ = sf.read(wavpath)
@@ -48,7 +52,7 @@ def proc_audio(args):
 
     # preprocess the wavform
     ptp = np.ptp(wav)
-    if ptp == 0: 
+    if ptp == 0:
         return None
     wav = (wav - np.min(wav)) / ptp
     if np.isnan(wav).any():
@@ -58,27 +62,18 @@ def proc_audio(args):
     inc = 0
     for x in range(0, len(wav) - AUDIO_LEN, int(SAMPLING * 3.5)):
         np.save(
-            f"./x/x.{args['id']:06d}.{inc:04d}",
+            f"./samples/{args['id']:06d}.{inc:04d}",
             np.array(wav[x : x + AUDIO_LEN], dtype=np.float32),
         )
         inc += 1
-
-    # output
-    onehot = np.zeros(GENRE_AMT, dtype=np.float32)
-    for genre in args["genres"]:
-        onehot[genre] = 1.0
-    np.save(f"./y/y.{args['id']:06d}", onehot)
     conv.wait()
     return None
 
 
 def main():
     set_start_method("spawn")
-    if not exists("./x"):
-        mkdir("./x")
-    if not exists("./y"):
-        mkdir("./y")
-    datasheet = pandas.read_csv(argv[2], usecols=["track_id", "track_genres_all"])
+    if not exists("./samples"):
+        mkdir("./samples")
 
     print("validating files, if this goes by quickly then it used all cached files")
     good = {}
@@ -89,17 +84,18 @@ def main():
             good = {int(r): None for r in x.readlines()}
         with open("bad_ids.txt") as x:
             bad = {int(r): None for r in x.readlines()}
-    for audiofile in glob(argv[1] + "/*.*"):
-        audio_id = int(audiofile.split("/")[-1].split(".")[0])
-        if not (audio_id in good or audio_id in bad):
-            q.append(
-                copy(
-                    {
-                        "path": audiofile,
-                        "id": audio_id,
-                    }
+    for dirpath in argv[1:]:
+        for audiofile in glob(dirpath + "/*.*"):
+            audio_id = int(audiofile.split("/")[-1].split(".")[0])
+            if not (audio_id in good or audio_id in bad):
+                q.append(
+                    copy(
+                        {
+                            "path": audiofile,
+                            "id": audio_id,
+                        }
+                    )
                 )
-            )
     try:
         with Pool() as p, open("good_ids.txt", "a+") as good, open(
             "bad_ids.txt", "a+"
@@ -113,7 +109,6 @@ def main():
         raise e
 
     print("gathering files")
-    length = 0
     q = []
     with open("bad_ids.txt") as x:
         bad = {int(r): None for r in x.readlines()}
@@ -124,41 +119,15 @@ def main():
         if audio_id in bad:
             continue  # this isn't a valid file
 
-        where = np.where(datasheet["track_id"] == audio_id)[0][0]
-        unproc_genres = datasheet["track_genres_all"][where][1:-1].split(", ")
-        genres = []
-        invalid = False
-        # genres doesn't seem to work all that often, lets make sure it works
-        # so that we can skip work if it doesn't work
-        for val in unproc_genres:
-            if val in GENRE_TRANSMUTE:
-                # transmute until valid
-                while isinstance(val, str):
-                    val = GENRE_TRANSMUTE[val]
-                genres.append(copy(val))
-            elif val == "":
-                continue
-            else:
-                invalid = True
-                break
-        if invalid:
-            print(
-                f"ID {audio_id} does not have a valid genre, skipping. ",
-                f"Was given for input \"{datasheet['track_genres_all'][where]}\"",
-            )
-            continue
-
         q.append(
             copy(
                 {
                     "path": audiofile,
                     "id": audio_id,
-                    "genres": genres,
                 }
             )
         )
-        length += 1
-   
+
     print("proccessing all files")
     try:
         with Pool() as p:

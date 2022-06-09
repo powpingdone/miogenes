@@ -1,65 +1,65 @@
 from tensorflow import keras
 from keras import Model, Input
-from keras.layers import Conv1D, MaxPooling1D, LSTM, Dense, Flatten, Reshape, Dropout, Add, Activation, Reshape, ZeroPadding1D, BatchNormalization
+from keras.layers import Dense
+from glob import glob
+from copy import deepcopy as copy
+from keras.models import load_model
 from constants import *
 
-# inspiration taken from deej-ai
 
-inp_shape = (AUDIO_LEN,1,)
+def encoder():
+    inp = Input(AUDIO_LEN)
+    if len(glob("model_enc_*")) != 0:
+        print("loading encoder")
+        choose = glob("model_enc_*")
+        choose.sort()
+        choose = choose[-1]
+        enc = load_model(choose)(inp)
+        return Model(inp, enc)
 
-inp = Input(inp_shape)
-# block 1
-x = Conv1D(32, 64, 4)(inp)
-x = BatchNormalization()(x)
-x = Activation('relu')(x)
-# block 2
-x = Conv1D(64, 32, 4)(x)
-x = Dropout(0.2)(x)
-x = BatchNormalization()(x)
-x = Activation('relu')(x)
-# block 3
-x = Conv1D(128, 16, 4)(x)
-x = Dropout(0.2)(x)
-x = BatchNormalization()(x)
-x = Activation('relu')(x)
-# block 4
-x = Conv1D(256, 8, 2)(x)
-x = Dropout(0.2)(x)
-x = BatchNormalization()(x)
-# block 5
-x = Conv1D(512, 4, 2)(x)
-x = Dropout(0.1)(x)
-x = BatchNormalization()(x)
-x = Activation('relu')(x)
-# block 6
-x = Conv1D(1024, 4, 2)(x)
-x = Dropout(0.1)(x)
-x = BatchNormalization()(x)
-x = Activation('relu')(x)
-# block LSTM
-x = Dropout(0.1)(x)
-x = LSTM(512, return_sequences=True)(x)
-x = LSTM(256, return_sequences=True)(x)
-x = LSTM(256)(x)
-x = Dropout(0.1)(x)
-# block DENSE
-x = Dense(256)(x)
-x = Dropout(0.2)(x)
-x = Activation('relu')(x)
-x = Dense(128)(x)
-x = Activation('relu')(x)
-x = Dropout(0.1)(x)
-out = Dense(GENRE_AMT, activation='sigmoid')(x)
+    print("generating encoder")
+    for x in HIDDEN_LAYERS:
+        if "enc" in vars():
+            enc = Dense(x)(enc)
+        else:
+            enc = Dense(x)(inp)
+    model = Model(inp, enc)
+    model.summary()
+    return model
 
-model = Model(inputs=inp, outputs=out)
 
-model.compile(
-    optimizer=keras.optimizers.Adadelta(learning_rate=1),
-    loss="binary_crossentropy",
-    metrics=["accuracy"],
-    jit_compile=True
-)
+def decoder():
+    inp = Input(HIDDEN_LAYERS[-1])
+    if len(glob("model_dec_*")) != 0:
+        print("loading decoder")
+        choose = glob("model_dec_*")
+        choose.sort()
+        choose = choose[-1]
+        dec = load_model(choose)(inp)
+        return Model(inp, dec)
 
-model.summary()
-model.save("model_000")
+    print("generating decoder")
+    hl_copy = copy(HIDDEN_LAYERS)
+    hl_copy.reverse()
+    for x in hl_copy:
+        if "dec" in vars():
+            dec = Dense(x)(dec)
+        else:
+            dec = Dense(x)(inp)
+    dec = Dense(AUDIO_LEN)(dec)
+    model = Model(inp, dec)
+    model.summary()
+    return model
 
+
+def model_build(enc, dec):
+    inp = Input(AUDIO_LEN)
+    enc = enc(inp)
+    dec = dec(enc)
+    model = Model(inp, dec)
+    model.compile(
+        optimizer=keras.optimizers.Adadelta(1),
+        loss="mean_absolute_error",
+    )
+    model.summary()
+    return model
