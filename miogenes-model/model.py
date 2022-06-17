@@ -18,11 +18,15 @@ def encoder():
         return Model(inp, enc)
 
     print("generating encoder")
-    for x in HIDDEN_LAYERS:
+    for x in HIDDEN_LAYERS[:-1]:
         if "enc" in vars():
-            enc = Dense(x)(enc)
+            enc = Dense(x, activation='elu')(enc)
         else:
-            enc = Dense(x)(inp)
+            enc = Dense(x, activation='elu')(inp)
+    if "enc" in vars():
+        enc = Dense(HIDDEN_LAYERS[-1], activation="linear", name="bnek")(enc)
+    else:
+        enc = Dense(HIDDEN_LAYERS[-1], activation="linear", name="bnek")(inp)
     model = Model(inp, enc)
     model.summary()
     return model
@@ -43,10 +47,10 @@ def decoder():
     hl_copy.reverse()
     for x in hl_copy:
         if "dec" in vars():
-            dec = Dense(x)(dec)
+            dec = Dense(x, activation='elu')(dec)
         else:
-            dec = Dense(x)(inp)
-    dec = Dense(AUDIO_LEN)(dec)
+            dec = Dense(x, activation='elu')(inp)
+    dec = Dense(AUDIO_LEN, activation='sigmoid')(dec)
     model = Model(inp, dec)
     model.summary()
     return model
@@ -59,7 +63,7 @@ def model_build(enc, dec):
     model = Model(inp, dec)
     model.compile(
         optimizer=keras.optimizers.Adadelta(1),
-        loss="mean_absolute_error",
+        loss="mean_absolute_percentage_error",
     )
     model.summary()
     return model

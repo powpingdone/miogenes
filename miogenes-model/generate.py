@@ -26,10 +26,10 @@ enc_show.compile("adam", loss="mean_absolute_error")
 lis = []
 for x in files:
     lis += [np.load(x)]
-lis = np.asarray(lis).reshape(USE_FILES, AUDIO_LEN, 1)
+lis = np.asarray(lis).reshape(USE_FILES, AUDIO_LEN, 1) + 1
 for e, sl in enumerate(lis):
-    sf.write(f"x_{e}.wav", (sl.reshape(AUDIO_LEN) * 2) - 1, SAMPLING)
+    sf.write(f"x_{e}.wav", ((sl.reshape(AUDIO_LEN) - 1) * 2) - 1, SAMPLING)
 out = autoenc.predict(lis, batch_size=1)
 [print(f"y_{e}.wav:\n{x}\n") for e, x in enumerate(enc_show.predict(lis, batch_size=1))]
 for e, sl in enumerate(out):
-    sf.write(f"y_{e}.wav", (sl.reshape(AUDIO_LEN) * 2) - 1, SAMPLING)
+    sf.write(f"y_{e}.wav", ((sl.reshape(AUDIO_LEN) - 1) * 2) - 1, SAMPLING)

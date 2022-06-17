@@ -18,7 +18,7 @@ def gener_tr(files):
             lis = []
             for pos in range(x, x + BATCH_SIZE):
                 lis += [np.load(files[pos])]
-            outx = np.asarray(lis).reshape(BATCH_SIZE, AUDIO_LEN)
+            outx = np.asarray(lis).reshape(BATCH_SIZE, AUDIO_LEN) + 1
             yield (
                 outx,
                 outx,

@@ -1,7 +1,7 @@
 SAMPLING = 8000
 CAPTURE_LEN = 3.75  # seconds
 AUDIO_LEN = int(SAMPLING * CAPTURE_LEN)
-HIDDEN_LAYERS = [4096, 40] # represent the audio in 40 neurons, please
+HIDDEN_LAYERS = [4096, 60]
 
 # genres are not mapped, map them to be correctly represented
 GENRE_TRANSMUTE = {
