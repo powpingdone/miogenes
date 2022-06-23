@@ -1,0 +1,16 @@
+[package]
+name = "scrape"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rspotify = "0.11"
+tokio = {version = "1.19", features = ["full"]}
+futures = "0.3"
+indicatif = "0.16"
+governor = "0.4"
+reqwest = "0.11"
+new_mime_guess = "4.0"
+nonzero_ext = "0.3"
