@@ -198,7 +198,6 @@ async fn playlist_track_scrape(
 }
 
 async fn track_download_and_rename(
-    w: Arc<GOV>,
     bar: ProgressBar,
     cache: String,
     mut rx: Receiver<(PlaylistId, Vec<(TrackId, String)>)>,
@@ -232,7 +231,6 @@ async fn track_download_and_rename(
                 continue;
             }
             bar.set_message(format!("saving track: ({pos}/{full_len})"));
-            wait!(w);
             match client.get(url).send().await {
                 Ok(resp) => {
                     let headers = resp.headers();
@@ -251,7 +249,6 @@ async fn track_download_and_rename(
                     }
                     if let Ok(media_type) = media_type.unwrap().parse::<new_mime_guess::Mime>() {
                         if let Some(suffixarr) = new_mime_guess::get_mime_extensions(&media_type) {
-                            wait!(w);
                             let suffix = suffixarr[0];
                             let bytes = resp.bytes().await;
                             if let Err(err) = bytes {
@@ -347,7 +344,7 @@ async fn write_out_playlist(
 
 #[tokio::main]
 async fn main() {
-    let gov = Arc::new(RateLimiter::direct(Quota::per_second(nonzero!(50_u32))));
+    let gov = Arc::new(RateLimiter::direct(Quota::per_second(nonzero!(10_u32))));
     let mp = MultiProgress::new();
     let (pb0, pb1, pb2, pb3) = (
         mp.add(ProgressBar::new_spinner()),
@@ -365,10 +362,10 @@ async fn main() {
     pb2.set_style(spinner_style.clone());
     pb3.set_style(spinner_style);
 
-    let (tx_ps, rx_ps) = channel(10000);
-    let (tx_track, rx_track) = channel(1000);
-    let (tx_meta, rx_meta) = channel(150);
-    let (tx_res, rx_res) = channel(150);
+    let (tx_ps, rx_ps) = channel(1000000);
+    let (tx_track, rx_track) = channel(1000000);
+    let (tx_meta, rx_meta) = channel(1000000);
+    let (tx_res, rx_res) = channel(1000000);
 
     let tasks = [
         tokio::spawn(playlists_scrape(
@@ -385,7 +382,6 @@ async fn main() {
             tx_meta,
         )),
         tokio::spawn(track_download_and_rename(
-            gov.clone(),
             pb2,
             read_to_string(TRACKCACHE).await.unwrap_or("".to_string()),
             rx_track,
