@@ -365,7 +365,7 @@ async fn main() {
     pb2.set_style(spinner_style.clone());
     pb3.set_style(spinner_style);
 
-    let (tx_ps, rx_ps) = channel(2000);
+    let (tx_ps, rx_ps) = channel(10000);
     let (tx_track, rx_track) = channel(1000);
     let (tx_meta, rx_meta) = channel(150);
     let (tx_res, rx_res) = channel(150);
