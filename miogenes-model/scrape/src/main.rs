@@ -2,7 +2,6 @@ use futures::*;
 use governor::*;
 use indicatif::*;
 use nonzero_ext::*;
-use reqwest::header::*;
 use reqwest::Client;
 use rspotify::clients::BaseClient;
 use rspotify::http::*;
@@ -100,7 +99,10 @@ async fn playlists_scrape(w: Arc<GOV>, bar: ProgressBar, cache: String, tx: Send
                                 }
                             }
                             if plists.insert(plist.id.clone()) {
-                                bar.set_message(format!("scraping \"{term}\": {}", pos+inc as usize));
+                                bar.set_message(format!(
+                                    "scraping \"{term}\": {}",
+                                    pos + inc as usize
+                                ));
                                 tx.send(plist.id.clone()).await.unwrap();
                             }
                         }
@@ -224,73 +226,55 @@ async fn track_download_and_rename(
         .await
         .unwrap();
     bar.set_message("waiting...");
-    'big: while let Some((plid, tracks)) = rx.recv().await {
+    while let Some((plid, tracks)) = rx.recv().await {
+        // filter out tracks already done
+        let tracks = tracks
+            .into_iter()
+            .filter(|(trackid, _)| !track_c.contains(trackid))
+            .collect::<Vec<_>>();
         let full_len = tracks.len();
-        for (pos, (trackid, url)) in tracks.iter().enumerate() {
-            if track_c.contains(trackid) {
-                continue;
-            }
-            bar.set_message(format!("saving track: ({pos}/{full_len})"));
-            match client.get(url).send().await {
-                Ok(resp) => {
-                    let headers = resp.headers();
-                    if None == headers.get(CONTENT_TYPE) {
-                        bar.set_message(format!("ERR: {trackid} does not specify Content-Type"));
-                        tx.send((plid.clone(), Err(()))).await.unwrap();
-                        continue 'big;
-                    }
-                    let media_type = headers.get(CONTENT_TYPE).unwrap().to_str();
-                    if let Err(err) = media_type {
-                        bar.set_message(format!(
-                            "ERR: Content-Type is not UTF-8 compatible for {trackid}: {err}"
-                        ));
-                        tx.send((plid.clone(), Err(()))).await.unwrap();
-                        continue 'big;
-                    }
-                    if let Ok(media_type) = media_type.unwrap().parse::<new_mime_guess::Mime>() {
-                        if let Some(suffixarr) = new_mime_guess::get_mime_extensions(&media_type) {
-                            let suffix = suffixarr[0];
-                            let bytes = resp.bytes().await;
-                            if let Err(err) = bytes {
-                                bar.set_message(format!(
-                                    "ERR: Error fetching bytes {trackid}: {err}"
-                                ));
-                                tx.send((plid.clone(), Err(()))).await.unwrap();
-                                continue 'big;
-                            }
-                            let mut out = File::create(format!("audios/{trackid}.{suffix}"))
-                                .await
-                                .unwrap();
-                            out.write_all(&bytes.unwrap()).await.unwrap();
-                            out.sync_all().await.unwrap();
-                            track_c.insert(trackid.clone());
-                            cache
-                                .write_all((trackid.id().to_string() + "\n").as_bytes())
-                                .await
-                                .unwrap();
-                        } else {
-                            bar.set_message(format!("ERR: No suffix found for {trackid}"));
-                            tx.send((plid.clone(), Err(()))).await.unwrap();
-                            continue 'big;
-                        }
-                    } else {
-                        bar.set_message(format!("ERR: No mimetype found for {trackid}"));
-                        tx.send((plid.clone(), Err(()))).await.unwrap();
-                        continue 'big;
-                    }
+
+        // stream to download files
+        let mut streams = stream::iter(tracks
+            .clone().into_iter().map(|(trackid, url)| {
+                let client = &client;
+                async move {
+                    let resp = client.get(url).send().await?;
+                    let bytes = resp.bytes().await?;
+                    let mut out = File::create(format!("audios/{trackid}.mp3")).await?;
+                    out.write_all(&bytes).await?;
+                    out.sync_all().await?;
+                    Ok::<_, anyhow::Error>(trackid.to_owned())
+                }
+            }))
+            .buffer_unordered(30)
+            .enumerate();
+
+        // update progress bars/err msgs
+        let mut good = true;
+        let mut msg = "downloading...".to_string();
+        while let Some((pos, ret)) = streams.next().await {
+            match ret {
+                Ok(trackid) => {
+                    track_c.insert(trackid.clone());
+                    cache
+                        .write_all((trackid.id().to_string() + "\n").as_bytes())
+                        .await
+                        .unwrap();
                 }
                 Err(err) => {
-                    bar.set_message(format!(
-                        "ERR: (Code: {}, Path: {}), waiting...",
-                        err.status().unwrap(),
-                        err.url().unwrap()
-                    ));
-                    tx.send((plid.clone(), Err(()))).await.unwrap();
-                    continue 'big;
+                    if good {
+                        good = false;
+                        tx.send((plid.clone(), Err(()))).await.unwrap();
+                    }
+                    msg = format!("{err}");
                 }
             }
+            bar.set_message(format!("({}/{}) {}", pos, full_len, msg));
         }
-        tx.send((plid, Ok(()))).await.unwrap();
+        if good {
+            tx.send((plid, Ok(()))).await.unwrap();
+        }
         bar.set_message("waiting...");
     }
     bar.set_message("done");
@@ -321,7 +305,7 @@ async fn write_out_playlist(
         if plid != plid_check {
             panic!("{plid} does not match {plid_check}, SOMEHOW WE DESYNC'D");
         }
-        if let Ok(_) = good {
+        if good.is_ok() && tracks.len() > 8 {
             bar.set_message(format!("writing out {plid}"));
             cache
                 .write_all((plid.clone().id().to_string() + "\n").as_bytes())
@@ -389,6 +373,7 @@ async fn main() {
         )),
         tokio::spawn(write_out_playlist(pb3, rx_meta, rx_res)),
         tokio::task::spawn_blocking(move || mp.join().unwrap()),
+        tokio::spawn(async {println!("yes");})
     ];
     future::join_all(tasks).await;
 }
