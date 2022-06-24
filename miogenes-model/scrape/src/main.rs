@@ -38,9 +38,9 @@ macro_rules! wait {
 }
 
 const PLSCRAPE: &str = "Playlist Scrape ::";
-const TRSCRAPE: &str = "Track Scrape    ::";
+const TRSCRAPE: &str = "Track Collect   ::";
 const TRDOWNLD: &str = "Track Download  ::";
-const PLOUTPUT: &str = "Playlist Dump   ::";
+const PLOUTPUT: &str = "Playlist Record ::";
 
 const PLISTCACHE: &str = "plists.txt";
 const TRACKCACHE: &str = "tracks.txt";
@@ -92,15 +92,16 @@ async fn playlists_scrape(w: Arc<GOV>, bar: ProgressBar, cache: String, tx: Send
             match req {
                 Ok(res) => {
                     if let SearchResult::Playlists(res) = res {
-                        for plist in res.items {
-                            if let Some(name) = plist.owner.display_name {
+                        for (pos, plist) in res.items.iter().enumerate() {
+                            if let Some(name) = plist.owner.display_name.clone() {
                                 if name == "Spotify" {
                                     // skip anything made by spotify
                                     continue;
                                 }
                             }
                             if plists.insert(plist.id.clone()) {
-                                tx.send(plist.id).await.unwrap();
+                                bar.set_message(format!("scraping \"{term}\": {}", pos+inc as usize));
+                                tx.send(plist.id.clone()).await.unwrap();
                             }
                         }
                     }
@@ -225,11 +226,12 @@ async fn track_download_and_rename(
         .unwrap();
     bar.set_message("waiting...");
     'big: while let Some((plid, tracks)) = rx.recv().await {
-        for (trackid, url) in tracks {
-            if track_c.contains(&trackid) {
+        let full_len = tracks.len();
+        for (pos, (trackid, url)) in tracks.iter().enumerate() {
+            if track_c.contains(trackid) {
                 continue;
             }
-            bar.set_message(format!("saving track {trackid}"));
+            bar.set_message(format!("saving track: ({pos}/{full_len})"));
             wait!(w);
             match client.get(url).send().await {
                 Ok(resp) => {
