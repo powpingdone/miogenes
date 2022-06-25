@@ -112,7 +112,8 @@ async fn playlists_scrape(w: Arc<GOV>, bar: ProgressBar, cache: String, tx: Send
                     if inc > 300 {
                         break;
                     }
-                    panic!("ERR: {ret}");
+                    bar.set_message(format!("ERR: {ret}"));
+                    return;
                 }
             }
         }
@@ -228,6 +229,8 @@ async fn track_download_and_rename(
     bar.set_message("waiting...");
     while let Some((plid, tracks)) = rx.recv().await {
         // filter out tracks already done
+        bar.set_message("filtering tracks input...");
+        let true_len = tracks.len();
         let tracks = tracks
             .into_iter()
             .filter(|(trackid, _)| !track_c.contains(trackid))
@@ -235,20 +238,19 @@ async fn track_download_and_rename(
         let full_len = tracks.len();
 
         // stream to download files
-        let mut streams = stream::iter(tracks
-            .clone().into_iter().map(|(trackid, url)| {
-                let client = &client;
-                async move {
-                    let resp = client.get(url).send().await?;
-                    let bytes = resp.bytes().await?;
-                    let mut out = File::create(format!("audios/{trackid}.mp3")).await?;
-                    out.write_all(&bytes).await?;
-                    out.sync_all().await?;
-                    Ok::<_, anyhow::Error>(trackid.to_owned())
-                }
-            }))
-            .buffer_unordered(30)
-            .enumerate();
+        let mut streams = stream::iter(tracks.clone().into_iter().map(|(trackid, url)| {
+            let client = &client;
+            async move {
+                let resp = client.get(url).send().await?;
+                let bytes = resp.bytes().await?;
+                let mut out = File::create(format!("audios/{trackid}.mp3")).await?;
+                out.write_all(&bytes).await?;
+                out.sync_all().await?;
+                Ok::<_, anyhow::Error>(trackid.to_owned())
+            }
+        }))
+        .buffer_unordered(30)
+        .enumerate();
 
         // update progress bars/err msgs
         let mut good = true;
@@ -270,7 +272,7 @@ async fn track_download_and_rename(
                     msg = format!("{err}");
                 }
             }
-            bar.set_message(format!("({}/{}) {}", pos, full_len, msg));
+            bar.set_message(format!("({}/{} out of possible {}) {}", pos, full_len, true_len, msg));
         }
         if good {
             tx.send((plid, Ok(()))).await.unwrap();
@@ -299,29 +301,37 @@ async fn write_out_playlist(
         .unwrap();
     bar.set_prefix(PLOUTPUT);
     bar.set_message("waiting...");
+    let mut cached: usize = 0;
+    let mut total: usize = 0;
     while let (Some((plid, tracks)), Some((plid_check, good))) =
         (rx_pt.recv().await, rx_td.recv().await)
     {
         if plid != plid_check {
-            panic!("{plid} does not match {plid_check}, SOMEHOW WE DESYNC'D");
+            bar.set_message(format!("{plid} does not match {plid_check}, SOMEHOW WE DESYNC'D"));
+            return;
         }
-        if good.is_ok() && tracks.len() > 8 {
-            bar.set_message(format!("writing out {plid}"));
+        if good.is_ok() {
+            bar.set_message(format!("caching {plid}"));
             cache
                 .write_all((plid.clone().id().to_string() + "\n").as_bytes())
                 .await
                 .unwrap();
-            csv.write_all(
-                format!(
-                    "{plid},{}\n",
-                    tracks.iter().map(|x| x.id()).collect::<Vec<_>>().join(",")
+            cached += 1;
+            if tracks.len() > 8 {
+                bar.set_message(format!("writing out {plid}"));
+                csv.write_all(
+                    format!(
+                        "{plid},{}\n",
+                        tracks.iter().map(|x| x.id()).collect::<Vec<_>>().join(",")
+                    )
+                    .as_bytes(),
                 )
-                .as_bytes(),
-            )
-            .await
-            .unwrap();
+                .await
+                .unwrap();
+                total += 1;
+            }
         }
-        bar.set_message("waiting...");
+        bar.set_message(format!("{total} out of possible {cached} playlists written out..."));
     }
     bar.set_message("done");
 }
@@ -340,13 +350,18 @@ async fn main() {
         ProgressStyle::default_spinner(),
         "{prefix:.bold.dim} {spinner} {wide_msg}",
     )
-    .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+    .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+    .on_finish(ProgressFinish::AndLeave);
     pb0.set_style(spinner_style.clone());
     pb1.set_style(spinner_style.clone());
     pb2.set_style(spinner_style.clone());
     pb3.set_style(spinner_style);
+    pb0.enable_steady_tick(2000);
+    pb1.enable_steady_tick(750);
+    pb2.enable_steady_tick(450);
+    pb3.enable_steady_tick(5000);
 
-    let (tx_ps, rx_ps) = channel(1000000);
+    let (tx_ps, rx_ps) = channel(300);
     let (tx_track, rx_track) = channel(1000000);
     let (tx_meta, rx_meta) = channel(1000000);
     let (tx_res, rx_res) = channel(1000000);
@@ -373,7 +388,9 @@ async fn main() {
         )),
         tokio::spawn(write_out_playlist(pb3, rx_meta, rx_res)),
         tokio::task::spawn_blocking(move || mp.join().unwrap()),
-        tokio::spawn(async {println!("yes");})
+        tokio::spawn(async {
+            println!("yes");
+        }),
     ];
     future::join_all(tasks).await;
 }
