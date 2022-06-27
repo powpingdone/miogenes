@@ -48,14 +48,14 @@ const PLAYLISTCSV: &str = "playlists.csv";
 const LIMIT: u32 = u32::MAX;
 const STEP: u32 = 50;
 
-type GOV = RateLimiter<
+type Gov = RateLimiter<
     state::direct::NotKeyed,
     state::InMemoryState,
     clock::DefaultClock,
     middleware::NoOpMiddleware,
 >;
 
-async fn playlists_scrape(w: Arc<GOV>, bar: ProgressBar, cache: String, tx: Sender<PlaylistId>) {
+async fn playlists_scrape(w: Arc<Gov>, bar: ProgressBar, cache: String, tx: Sender<PlaylistId>) {
     bar.set_prefix(PLSCRAPE);
 
     // load cache
@@ -64,10 +64,16 @@ async fn playlists_scrape(w: Arc<GOV>, bar: ProgressBar, cache: String, tx: Send
     let mut contents = Cursor::new(cache);
     let mut buf = String::new();
     while contents.read_line(&mut buf).await.unwrap() != 0 {
-        if let Ok(id) = PlaylistId::from_id(buf.as_str()) {
-            plists.insert(id);
+        match PlaylistId::from_id_or_uri(buf.trim()) {
+            Ok(id) => {plists.insert(id); ()},
+            Err(err) => bar.set_message(format!("Err: {buf} {err}")),
         }
+        buf.clear();
     }
+    bar.set_message(format!("loaded {} playlists from cache", plists.len()));
+    drop(contents);
+    drop(buf);
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
     // scrape playlists
     let client = login!();
@@ -122,7 +128,7 @@ async fn playlists_scrape(w: Arc<GOV>, bar: ProgressBar, cache: String, tx: Send
 }
 
 async fn playlist_track_scrape(
-    w: Arc<GOV>,
+    w: Arc<Gov>,
     bar: ProgressBar,
     mut rx: Receiver<PlaylistId>,
     tx_track: Sender<(PlaylistId, Vec<(TrackId, String)>)>,
@@ -211,12 +217,18 @@ async fn track_download_and_rename(
     bar.set_message("loading cache...");
     let mut track_c: HashSet<TrackId> = HashSet::new();
     let mut contents = Cursor::new(cache);
-    let mut buf = String::new();
+    let mut buf = String::with_capacity(50);
     while contents.read_line(&mut buf).await.unwrap() != 0 {
-        if let Ok(id) = TrackId::from_id(buf.as_str()) {
-            track_c.insert(id);
+        match TrackId::from_id_or_uri(buf.trim()) {
+            Ok(id) => {track_c.insert(id); ()},
+            Err(err) => bar.set_message(format!("Err: {buf} {err}")),
         }
+        buf.clear();
     }
+    bar.set_message(format!("loaded {} tracks from cache", track_c.len()));
+    drop(contents);
+    drop(buf);
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
     // download each file
     let client = Client::new();
@@ -233,7 +245,13 @@ async fn track_download_and_rename(
         let true_len = tracks.len();
         let tracks = tracks
             .into_iter()
-            .filter(|(trackid, _)| !track_c.contains(trackid))
+            .filter_map(|item| {
+                if track_c.contains(&item.0) {
+                    None
+                } else {
+                    Some(item)
+                }
+            })
             .collect::<Vec<_>>();
         let full_len = tracks.len();
 
@@ -260,7 +278,7 @@ async fn track_download_and_rename(
                 Ok(trackid) => {
                     track_c.insert(trackid.clone());
                     cache
-                        .write_all((trackid.id().to_string() + "\n").as_bytes())
+                        .write_all((trackid.uri().to_string() + "\n").as_bytes())
                         .await
                         .unwrap();
                 }
@@ -272,7 +290,10 @@ async fn track_download_and_rename(
                     msg = format!("{err}");
                 }
             }
-            bar.set_message(format!("({}/{} out of possible {}) {}", pos, full_len, true_len, msg));
+            bar.set_message(format!(
+                "({}/{} out of possible {}) {}",
+                pos, full_len, true_len, msg
+            ));
         }
         if good {
             tx.send((plid, Ok(()))).await.unwrap();
@@ -307,13 +328,15 @@ async fn write_out_playlist(
         (rx_pt.recv().await, rx_td.recv().await)
     {
         if plid != plid_check {
-            bar.set_message(format!("{plid} does not match {plid_check}, SOMEHOW WE DESYNC'D"));
+            bar.set_message(format!(
+                "{plid} does not match {plid_check}, SOMEHOW WE DESYNC'D"
+            ));
             return;
         }
         if good.is_ok() {
             bar.set_message(format!("caching {plid}"));
             cache
-                .write_all((plid.clone().id().to_string() + "\n").as_bytes())
+                .write_all((plid.clone().uri().to_string() + "\n").as_bytes())
                 .await
                 .unwrap();
             cached += 1;
@@ -331,7 +354,9 @@ async fn write_out_playlist(
                 total += 1;
             }
         }
-        bar.set_message(format!("{total} out of possible {cached} playlists written out..."));
+        bar.set_message(format!(
+            "{total} out of possible {cached} playlists written out..."
+        ));
     }
     bar.set_message("done");
 }
@@ -388,9 +413,6 @@ async fn main() {
         )),
         tokio::spawn(write_out_playlist(pb3, rx_meta, rx_res)),
         tokio::task::spawn_blocking(move || mp.join().unwrap()),
-        tokio::spawn(async {
-            println!("yes");
-        }),
     ];
     future::join_all(tasks).await;
 }
