@@ -65,7 +65,10 @@ async fn playlists_scrape(w: Arc<Gov>, bar: ProgressBar, cache: String, tx: Send
     let mut buf = String::new();
     while contents.read_line(&mut buf).await.unwrap() != 0 {
         match PlaylistId::from_id_or_uri(buf.trim()) {
-            Ok(id) => {plists.insert(id); ()},
+            Ok(id) => {
+                plists.insert(id);
+                ()
+            }
             Err(err) => bar.set_message(format!("Err: {buf} {err}")),
         }
         buf.clear();
@@ -77,7 +80,7 @@ async fn playlists_scrape(w: Arc<Gov>, bar: ProgressBar, cache: String, tx: Send
 
     // scrape playlists
     let client = login!();
-    for term in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    for term in "0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz"
         .chars()
         .map(|x| x.to_string())
     {
@@ -115,11 +118,14 @@ async fn playlists_scrape(w: Arc<Gov>, bar: ProgressBar, cache: String, tx: Send
                     }
                 }
                 Err(ret) => {
-                    if inc > 300 {
-                        break;
+                    if let ClientError::Http(_) = ret {
+                        if inc > 300 {
+                            break;
+                        }
+                        bar.set_message(format!("ERR: {ret}"));
+                        return;
                     }
                     bar.set_message(format!("ERR: {ret}"));
-                    return;
                 }
             }
         }
@@ -162,13 +168,38 @@ async fn playlist_track_scrape(
             }
             continue 'big;
         }
+
+        // get all tracks
+        bar.set_message(format!("gathering tracks for {plist}"));
         let track_len = plist_page.unwrap().total;
-        for amount in (0..(track_len - (track_len % STEP) + STEP)).step_by(STEP as usize) {
-            bar.set_message(format!("sending tracks for {plist}: {amount}/{track_len}"));
-            wait!(w);
-            let plist_page = client
-                .playlist_items_manual(&plist, None, None, Some(STEP), Some(amount))
-                .await;
+        let stream = (0..track_len - (track_len % STEP) + STEP)
+            .step_by(STEP as usize)
+            .map(|amount| {
+                let client = &client;
+                let w = w.clone();
+                let plist = &plist;
+                async move {
+                    wait!(w);
+                    (
+                        amount,
+                        client
+                            .playlist_items_manual(plist, None, None, Some(STEP), Some(amount))
+                            .await,
+                    )
+                }
+            });
+        let streams = stream.len();
+        let mut pages = stream::iter(stream)
+            .buffer_unordered(streams)
+            .collect::<Vec<_>>()
+            .await;
+        // since i'm forced to do buffer_unordered, sort it afterwards
+        pages.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+        // create the vec of tracks
+        for page in pages.into_iter() {
+            bar.set_message(format!("sending tracks for {plist}"));
+            let plist_page = page.1;
             if let Err(err) = plist_page {
                 if let ClientError::Http(resp) = err {
                     if let HttpError::StatusCode(resp) = *resp {
@@ -191,9 +222,6 @@ async fn playlist_track_scrape(
                     let trackid = track.id.unwrap();
                     tracks_url.push((trackid.clone(), track.preview_url.unwrap()));
                     tracks.push(trackid);
-                } else {
-                    bar.set_message("ERR: Not Track or Does not Exist, waiting...");
-                    continue 'big;
                 }
             }
         }
@@ -220,7 +248,10 @@ async fn track_download_and_rename(
     let mut buf = String::with_capacity(50);
     while contents.read_line(&mut buf).await.unwrap() != 0 {
         match TrackId::from_id_or_uri(buf.trim()) {
-            Ok(id) => {track_c.insert(id); ()},
+            Ok(id) => {
+                track_c.insert(id);
+                ()
+            }
             Err(err) => bar.set_message(format!("Err: {buf} {err}")),
         }
         buf.clear();
@@ -244,6 +275,7 @@ async fn track_download_and_rename(
         bar.set_message("filtering tracks input...");
         let true_len = tracks.len();
         let tracks = tracks
+            .clone()
             .into_iter()
             .filter_map(|item| {
                 if track_c.contains(&item.0) {
@@ -256,7 +288,7 @@ async fn track_download_and_rename(
         let full_len = tracks.len();
 
         // stream to download files
-        let mut streams = stream::iter(tracks.clone().into_iter().map(|(trackid, url)| {
+        let mut streams = stream::iter(tracks.into_iter().map(|(trackid, url)| {
             let client = &client;
             async move {
                 let resp = client.get(url).send().await?;
@@ -363,7 +395,7 @@ async fn write_out_playlist(
 
 #[tokio::main]
 async fn main() {
-    let gov = Arc::new(RateLimiter::direct(Quota::per_second(nonzero!(10_u32))));
+    let gov = Arc::new(RateLimiter::direct(Quota::per_second(nonzero!(8_u32))));
     let mp = MultiProgress::new();
     let (pb0, pb1, pb2, pb3) = (
         mp.add(ProgressBar::new_spinner()),
