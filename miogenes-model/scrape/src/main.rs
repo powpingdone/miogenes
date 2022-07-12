@@ -153,7 +153,7 @@ async fn playlist_track_scrape(
     w: Arc<Gov>,
     bar: ProgressBar,
     mut rx: Receiver<PlaylistId>,
-    tx_meta: Sender<(PlaylistId, Vec<TrackId>)>,
+    tx_meta: UnboundedSender<(PlaylistId, Vec<TrackId>)>,
 ) {
     let client = login!();
     bar.set_prefix(TRSCRAPE);
@@ -241,14 +241,14 @@ async fn playlist_track_scrape(
 
         // send tracks
         bar.set_message("waiting...");
-        tx_meta.send((plist.clone(), tracks)).await.unwrap();
+        tx_meta.send((plist.clone(), tracks)).unwrap();
     }
     bar.set_message("done");
 }
 
 async fn write_out_playlist(
     bar: ProgressBar,
-    mut rx_pt: Receiver<(PlaylistId, Vec<TrackId>)>,
+    mut rx_pt: UnboundedReceiver<(PlaylistId, Vec<TrackId>)>,
 ) {
     let mut csv = OpenOptions::new()
         .append(true)
@@ -322,7 +322,7 @@ async fn main() {
 
     let (tx_ps, rx_ps) = channel(60);
     let (tx_pfil, rx_pfil) = channel(300);
-    let (tx_meta, rx_meta) = channel(1000000);
+    let (tx_meta, rx_meta) = unbounded_channel();
 
     let tasks = [
         tokio::spawn(playlists_scrape(gov.clone(), pb0, tx_ps)),
