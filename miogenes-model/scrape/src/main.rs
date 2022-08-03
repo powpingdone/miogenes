@@ -2,6 +2,7 @@ use futures::*;
 use governor::*;
 use indicatif::*;
 use nonzero_ext::*;
+use rand::seq::SliceRandom;
 use rspotify::clients::BaseClient;
 use rspotify::http::*;
 use rspotify::model::*;
@@ -62,8 +63,13 @@ async fn playlists_scrape(w: Arc<Gov>, bar: ProgressBar, tx: Sender<Page<Simplif
     const TERMSSPC: &str =
         " 0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz";
     let client = login!();
-    for term0 in TERMS.chars().map(|x| x.to_string()) {
-        for term1 in TERMSSPC.chars().map(|x| x.to_string()) {
+    let mut rng = rand::rngs::OsRng;
+    let mut term0arr = TERMS.chars().map(|x| x.to_string()).collect::<Vec<_>>();
+    term0arr.shuffle(&mut rng);
+    for term0 in term0arr {
+        let mut term1arr = TERMSSPC.chars().map(|x| x.to_string()).collect::<Vec<_>>();
+        term1arr.shuffle(&mut rng);
+        for term1 in term1arr {
             for inc in (0..LIMIT).step_by(STEP as usize) {
                 bar.set_message(format!("scraping \"{term0}{term1}\": {inc}"));
                 wait!(w);
@@ -266,9 +272,7 @@ async fn write_out_playlist(
     bar.set_message("waiting...");
     let mut cached: usize = 0;
     let mut total: usize = 0;
-    while let Some((plid, tracks)) =
-        rx_pt.recv().await
-    {
+    while let Some((plid, tracks)) = rx_pt.recv().await {
         bar.set_message(format!("caching {plid}"));
         cache
             .write_all((plid.clone().uri().to_string() + "\n").as_bytes())
@@ -309,16 +313,20 @@ async fn main() {
         ProgressStyle::default_spinner(),
         "{prefix:.bold.dim} {spinner} {wide_msg}",
     )
-    .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
-    .on_finish(ProgressFinish::AndLeave);
+    .unwrap()
+    .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
     pb0.set_style(spinner_style.clone());
     pb1.set_style(spinner_style.clone());
     pb2.set_style(spinner_style.clone());
     pb3.set_style(spinner_style);
-    pb0.enable_steady_tick(2000);
-    pb1.enable_steady_tick(1000);
-    pb2.enable_steady_tick(750);
-    pb3.enable_steady_tick(5000);
+    pb0.enable_steady_tick(Duration::from_millis(2000));
+    pb1.enable_steady_tick(Duration::from_millis(1000));
+    pb2.enable_steady_tick(Duration::from_millis(750));
+    pb3.enable_steady_tick(Duration::from_millis(5000));
+    let pb0 = pb0.with_finish(ProgressFinish::AndLeave);
+    let pb1 = pb1.with_finish(ProgressFinish::AndLeave);
+    let pb2 = pb2.with_finish(ProgressFinish::AndLeave);
+    let pb3 = pb3.with_finish(ProgressFinish::AndLeave);
 
     let (tx_ps, rx_ps) = channel(60);
     let (tx_pfil, rx_pfil) = channel(300);
@@ -334,14 +342,8 @@ async fn main() {
                 tx_pfil,
             )
         }),
-        tokio::spawn(playlist_track_scrape(
-            gov.clone(),
-            pb2,
-            rx_pfil,
-            tx_meta,
-        )),
+        tokio::spawn(playlist_track_scrape(gov.clone(), pb2, rx_pfil, tx_meta)),
         tokio::spawn(write_out_playlist(pb3, rx_meta)),
-        tokio::task::spawn_blocking(move || mp.join().unwrap()),
     ];
     future::join_all(tasks).await;
 }
