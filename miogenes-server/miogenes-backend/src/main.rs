@@ -26,9 +26,14 @@ async fn version() -> impl Responder {
     web::Json(VSTR)
 }
 
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
+#[actix_web::main]
+async fn main() -> anyhow::Result<()> {
+    use migration::{Migrator, MigratorTrait};
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
+    let db = sea_orm::Database::connect("mysql://user:password@127.0.0.1:3306/db").await?;
+    Migrator::up(&db, None).await?;
+
     HttpServer::new(|| {
         App::new()
             .wrap(Logger::default())

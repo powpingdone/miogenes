@@ -1,14 +1,23 @@
 [package]
+edition = "2021"
 name = "miogenes-backend"
 version = "0.1.0"
-edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+entity = {path = "entity"}
+migration = {path = "migration"}
+
 actix-web = "4.1.0"
+anyhow = "1.0.60"
+blurhash = "0.1.1"
 env_logger = "0.9.0"
 konst = "0.2.15"
-serde = { version = "1.0.139", features = ["derive"] }
-serde_with = { version = "1.14.0", features = ["base64"] }
-tokio = { version = "1.19.2", features = ["full"] }
+sea-orm = {version = "0.9.1", features = [
+  "macros",
+  "sqlx-all",
+  "runtime-actix-rustls",
+]}
+serde = {version = "1.0.139", features = ["derive"]}
+tokio = {version = "1.19.2", features = ["full"]}

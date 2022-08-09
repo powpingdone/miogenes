@@ -166,7 +166,7 @@ async fn playlist_track_scrape(
     bar.set_message("waiting...");
     wait!(w);
     'big: while let Some(plist) = rx.recv().await {
-        bar.set_message(format!("sending tracks for {plist}"));
+        bar.set_message(format!("finding amt of tracks for {plist}"));
 
         // gather tracks
         let mut tracks = vec![];
