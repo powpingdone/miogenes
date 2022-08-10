@@ -10,14 +10,10 @@ entity = {path = "entity"}
 migration = {path = "migration"}
 
 actix-web = "4.1.0"
-anyhow = "1.0.60"
+anyhow = { version = "1.0.60", features = ["backtrace"] }
 blurhash = "0.1.1"
 env_logger = "0.9.0"
 konst = "0.2.15"
-sea-orm = {version = "0.9.1", features = [
-  "macros",
-  "sqlx-all",
-  "runtime-actix-rustls",
-]}
+sea-orm = { version = "0.9.1", features = ["macros", "sqlx-all", "runtime-actix-rustls", "sqlx-mysql", "with-uuid"] }
 serde = {version = "1.0.139", features = ["derive"]}
 tokio = {version = "1.19.2", features = ["full"]}

@@ -26,12 +26,14 @@ async fn version() -> impl Responder {
     web::Json(VSTR)
 }
 
-#[actix_web::main]
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
     use migration::{Migrator, MigratorTrait};
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    let db = sea_orm::Database::connect("mysql://user:password@127.0.0.1:3306/db").await?;
+    let db = sea_orm::Database::connect("postgres://user:password@127.0.0.1:5432/db")
+        .await
+        .expect("failed to connect to db: {}");
     Migrator::up(&db, None).await?;
 
     HttpServer::new(|| {
@@ -43,5 +45,6 @@ async fn main() -> anyhow::Result<()> {
     })
     .bind(("127.0.0.1", 8080))?
     .run()
-    .await
+    .await?;
+    Ok(())
 }
