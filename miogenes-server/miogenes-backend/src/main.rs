@@ -1,9 +1,22 @@
 use actix_web::middleware::Logger;
 use actix_web::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_with::base64::{Base64, UrlSafe};
+use serde_with::formats::Unpadded;
+use serde_with::serde_as;
 
 mod heartbeat;
 mod track;
+
+#[serde_as]
+#[derive(Deserialize)]
+pub struct User {
+    #[serde(rename = "u")]
+    username: String,
+    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
+    #[serde(rename = "h")]
+    password: [u8; 32],
+}
 
 #[get("/ver")]
 async fn version() -> impl Responder {
@@ -36,9 +49,10 @@ async fn main() -> anyhow::Result<()> {
         .expect("failed to connect to db: {}");
     Migrator::up(&db, None).await?;
 
-    HttpServer::new(|| {
+    HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
+            .app_data(web::Data::new(db.clone()))
             .service(version)
             .service(heartbeat::heartbeat)
             .service(web::scope("/track").configure(track::routes))

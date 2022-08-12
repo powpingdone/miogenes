@@ -17,3 +17,4 @@ konst = "0.2.15"
 sea-orm = { version = "0.9.1", features = ["macros", "sqlx-all", "runtime-actix-rustls", "sqlx-mysql", "with-uuid"] }
 serde = {version = "1.0.139", features = ["derive"]}
 tokio = {version = "1.19.2", features = ["full"]}
+serde_with = { version = "2.0.0", features = ["base64"] }

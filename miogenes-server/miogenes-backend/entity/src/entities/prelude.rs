@@ -4,3 +4,4 @@ pub use super::album_art_table::Entity as AlbumArtTable;
 pub use super::album_table::Entity as AlbumTable;
 pub use super::artist_table::Entity as ArtistTable;
 pub use super::track_table::Entity as TrackTable;
+pub use super::user_table::Entity as UserTable;
