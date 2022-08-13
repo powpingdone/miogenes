@@ -1,5 +1,9 @@
+use actix_web::http::header::ContentType;
 use actix_web::middleware::Logger;
 use actix_web::*;
+use entity_self::prelude::*;
+use sea_orm::prelude::Uuid;
+use sea_orm::{DatabaseConnection, EntityTrait};
 use serde::{Deserialize, Serialize};
 use serde_with::base64::{Base64, UrlSafe};
 use serde_with::formats::Unpadded;
@@ -12,10 +16,54 @@ mod track;
 #[derive(Deserialize)]
 pub struct User {
     #[serde(rename = "u")]
-    username: String,
+    username: Uuid,
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
     #[serde(rename = "h")]
     password: [u8; 32],
+}
+
+#[derive(Serialize)]
+pub struct MioError<'a> {
+    msg: &'a str,
+}
+
+impl ToString for MioError<'_> {
+    fn to_string(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
+impl User {
+    async fn check(&self, db: &DatabaseConnection) -> Result<Uuid, HttpResponse> {
+        let check = UserTable::find_by_id(self.username).one(db).await;
+        // if db didn't error out
+        if let Ok(check) = check {
+            if let Some(check) = check {
+                // if the sha256 hash matches
+                if check.password == self.password {
+                    Ok(self.username)
+                } else {
+                    Err(HttpResponse::Unauthorized()
+                        .content_type(ContentType::json())
+                        .body(MioError {
+                            msg: "invalid password",
+                        }.to_string()))
+                }
+            } else {
+                Err(HttpResponse::Unauthorized()
+                    .content_type(ContentType::json())
+                    .body(MioError {
+                        msg: "invalid user id",
+                    }.to_string()))
+            }
+        } else {
+            Err(HttpResponse::InternalServerError()
+                .content_type(ContentType::json())
+                .body(MioError {
+                    msg: "database error",
+                }.to_string()))
+        }
+    }
 }
 
 #[get("/ver")]

@@ -15,11 +15,35 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::track_table::Entity")]
     TrackTable,
+    #[sea_orm(has_many = "super::artist_table::Entity")]
+    ArtistTable,
+    #[sea_orm(has_many = "super::album_art_table::Entity")]
+    AlbumArtTable,
+    #[sea_orm(has_many = "super::album_table::Entity")]
+    AlbumTable,
 }
 
 impl Related<super::track_table::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::TrackTable.def()
+    }
+}
+
+impl Related<super::artist_table::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ArtistTable.def()
+    }
+}
+
+impl Related<super::album_art_table::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AlbumArtTable.def()
+    }
+}
+
+impl Related<super::album_table::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AlbumTable.def()
     }
 }
 

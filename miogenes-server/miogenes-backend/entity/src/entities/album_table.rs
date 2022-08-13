@@ -11,6 +11,7 @@ pub struct Model {
     pub name: String,
     pub album_art_id: Option<Uuid>,
     pub artist_id: Option<Uuid>,
+    pub owner: Uuid,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -31,6 +32,14 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     ArtistTable,
+    #[sea_orm(
+        belongs_to = "super::user_table::Entity",
+        from = "Column::Owner",
+        to = "super::user_table::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    UserTable,
     #[sea_orm(has_many = "super::track_table::Entity")]
     TrackTable,
 }
@@ -44,6 +53,12 @@ impl Related<super::album_art_table::Entity> for Entity {
 impl Related<super::artist_table::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ArtistTable.def()
+    }
+}
+
+impl Related<super::user_table::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserTable.def()
     }
 }
 

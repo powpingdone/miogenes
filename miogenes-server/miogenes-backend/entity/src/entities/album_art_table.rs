@@ -9,25 +9,40 @@ pub struct Model {
     pub id: Uuid,
     pub ts: i64,
     pub blur_hash: Vec<u8>,
+    pub owner: Uuid,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::album_table::Entity")]
-    AlbumTable,
+    #[sea_orm(
+        belongs_to = "super::user_table::Entity",
+        from = "Column::Owner",
+        to = "super::user_table::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    UserTable,
     #[sea_orm(has_many = "super::track_table::Entity")]
     TrackTable,
+    #[sea_orm(has_many = "super::album_table::Entity")]
+    AlbumTable,
 }
 
-impl Related<super::album_table::Entity> for Entity {
+impl Related<super::user_table::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::AlbumTable.def()
+        Relation::UserTable.def()
     }
 }
 
 impl Related<super::track_table::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::TrackTable.def()
+    }
+}
+
+impl Related<super::album_table::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AlbumTable.def()
     }
 }
 
