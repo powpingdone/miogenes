@@ -43,7 +43,10 @@ macro_rules! HB_Unwrap {
         let x = $info.await;
         match x {
             Ok(x) => match x {
-                Ok(x) => {x.iter().map(|obj| (obj.id, obj.ts as u64)).collect::<Vec<_>>()},
+                Ok(x) => x
+                    .iter()
+                    .map(|obj| (obj.id, obj.ts as u64))
+                    .collect::<Vec<_>>(),
                 Err(_) => {
                     return HttpResponse::InternalServerError()
                         .content_type(ContentType::json())
@@ -72,16 +75,16 @@ macro_rules! HB_Unwrap {
 /*  The heartbeat function.
 
     This takes an optional timestamp (from the unix epoch) and produces 250
-    Uuids from each table and their respective timestamps. This function's 
+    Uuids from each table and their respective timestamps. This function's
     purpose is to maintain consistency across clients when a simultanious
-    upload/download is happening. In the future, this may also return 
+    upload/download is happening. In the future, this may also return
     playlists and other user generated content.
 */
 #[get("/hb")]
 async fn heartbeat(
     db: web::Data<DatabaseConnection>,
-    tstamp: web::Query<HBQuery>,
     key: web::Query<crate::User>,
+    tstamp: web::Query<HBQuery>,
 ) -> impl Responder {
     // generic setup
     let db = db.into_inner();
