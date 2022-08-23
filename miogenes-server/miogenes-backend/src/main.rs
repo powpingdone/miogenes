@@ -12,6 +12,21 @@ use serde_with::serde_as;
 mod heartbeat;
 mod track;
 
+macro_rules! login_check {
+    ($db:expr, $key:expr) => {{
+        let db = $db.into_inner();
+        let key = $key.into_inner();
+        let userid = key.check(&db).await;
+        if let Err(ret) = userid {
+            return ret;
+        }
+        let userid = userid.unwrap();
+        (db, userid)
+    }};
+}
+
+pub(crate) use login_check;
+
 #[serde_as]
 #[derive(Deserialize)]
 pub struct User {
@@ -45,23 +60,32 @@ impl User {
                 } else {
                     Err(HttpResponse::Unauthorized()
                         .content_type(ContentType::json())
-                        .body(MioError {
-                            msg: "invalid password",
-                        }.to_string()))
+                        .body(
+                            MioError {
+                                msg: "invalid password",
+                            }
+                            .to_string(),
+                        ))
                 }
             } else {
                 Err(HttpResponse::Unauthorized()
                     .content_type(ContentType::json())
-                    .body(MioError {
-                        msg: "invalid user id",
-                    }.to_string()))
+                    .body(
+                        MioError {
+                            msg: "invalid user id",
+                        }
+                        .to_string(),
+                    ))
             }
         } else {
             Err(HttpResponse::InternalServerError()
                 .content_type(ContentType::json())
-                .body(MioError {
-                    msg: "database error",
-                }.to_string()))
+                .body(
+                    MioError {
+                        msg: "database error",
+                    }
+                    .to_string(),
+                ))
         }
     }
 }

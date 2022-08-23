@@ -1,12 +1,14 @@
+use crate::login_check;
 use actix_web::http::header::ContentType;
 use actix_web::*;
 use entity_self::prelude::*;
 use entity_self::*;
 use sea_orm::prelude::Uuid;
 use sea_orm::*;
+use serde::{Serialize, Deserialize};
 use tokio::task::JoinHandle;
 
-#[derive(serde::Serialize)]
+#[derive(Serialize)]
 struct HeartBeat {
     album_art: Vec<(Uuid, u64)>,
     album: Vec<(Uuid, u64)>,
@@ -14,7 +16,7 @@ struct HeartBeat {
     track: Vec<(Uuid, u64)>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 struct HBQuery {
     #[serde(rename = "ts")]
     timestamp: Option<u64>,
@@ -87,13 +89,7 @@ async fn heartbeat(
     tstamp: web::Query<HBQuery>,
 ) -> impl Responder {
     // generic setup
-    let db = db.into_inner();
-    let key = key.into_inner();
-    let userid = key.check(&db).await;
-    if let Err(ret) = userid {
-        return ret;
-    }
-    let userid = userid.unwrap();
+    let (db, userid) = login_check!(db, key);
     let tstamp = tstamp.into_inner().timestamp.unwrap_or(0);
 
     // query database for updates
