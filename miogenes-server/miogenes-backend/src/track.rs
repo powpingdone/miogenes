@@ -1,7 +1,8 @@
 use actix_web::{http::header::ContentType, *};
 use entity_self::{prelude::*, track_table};
 use sea_orm::{prelude::*, *};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use uuid::Uuid;
 
 pub fn routes(cfg: &mut web::ServiceConfig) {
     cfg.service(track_info).service(track_upload);
@@ -33,30 +34,38 @@ async fn track_info(
         .one(db.as_ref())
         .await;
 
-    if let Ok(resp) = resp {
-        if let Some(resp) = resp {
-            HttpResponse::Ok()
-                .content_type(ContentType::json())
-                .body("")
-        } else {
-            HttpResponse::NotFound()
+    match resp {
+        Err(err) => HttpResponse::InternalServerError()
+            .content_type(ContentType::json())
+            .body(
+                crate::MioError {
+                    msg: format!("database error for {}: {err}", track.trackid).as_str(),
+                }
+                .to_string(),
+            ),
+        Ok(resp) => match resp {
+            None => HttpResponse::NotFound()
                 .content_type(ContentType::json())
                 .body(
                     crate::MioError {
                         msg: format!("no track found for {}", track.trackid).as_str(),
                     }
                     .to_string(),
-                )
-        }
-    } else {
-        HttpResponse::InternalServerError()
-            .content_type(ContentType::json())
-            .body(
-                crate::MioError {
-                    msg: format!("database error for {}", track.trackid).as_str(),
-                }
-                .to_string(),
-            )
+                ),
+            Some(content) => match serde_json::to_string(&content) {
+                Ok(json) => HttpResponse::Ok()
+                    .content_type(ContentType::json())
+                    .body(json),
+                Err(err) => HttpResponse::InternalServerError()
+                    .content_type(ContentType::json())
+                    .body(
+                        crate::MioError {
+                            msg: format!("internal serialization error for {}: {err}", track.trackid).as_str(),
+                        }
+                        .to_string(),
+                    ),
+            },
+        },
     }
 }
 
