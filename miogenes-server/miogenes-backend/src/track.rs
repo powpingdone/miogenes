@@ -1,5 +1,6 @@
 use crate::login_check;
 use actix_web::{http::header::ContentType, *};
+use actix_multipart::Multipart;
 use entity_self::{prelude::*, track_table};
 use sea_orm::{prelude::*, *};
 use serde::Deserialize;
@@ -76,6 +77,7 @@ async fn track_info(
 async fn track_upload(
     db: web::Data<DatabaseConnection>,
     key: web::Query<crate::User>,
+    mut payload: Multipart,
 ) -> impl Responder {
     let (db, userid) = login_check!(db, key);
     HttpResponse::Ok().finish()
