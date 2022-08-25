@@ -2,17 +2,23 @@ use actix_web::http::header::ContentType;
 use actix_web::middleware::Logger;
 use actix_web::*;
 use entity_self::prelude::*;
+use once_cell::sync::OnceCell;
 use sea_orm::prelude::Uuid;
 use sea_orm::{DatabaseConnection, EntityTrait};
 use serde::{Deserialize, Serialize};
 use serde_with::base64::{Base64, UrlSafe};
 use serde_with::formats::Unpadded;
 use serde_with::serde_as;
+use std::sync::Arc;
+use tokio::sync::mpsc::unbounded_channel;
 
 mod endpoints;
 use endpoints::*;
 mod subtasks;
 use subtasks::*;
+
+// TODO: use the user supplied dir
+static DATA_DIR: OnceCell<&'static str> = OnceCell::with_value("./files/");
 
 macro_rules! login_check {
     ($db:expr, $key:expr) => {{
@@ -119,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
     // TODO: pick this up from config file
-    let db = web::Data::new(
+    let db = Arc::new(
         sea_orm::Database::connect("postgres://user:password@127.0.0.1:5432/db")
             .await
             .expect("Failed to connect to db: {}"),
@@ -127,14 +133,17 @@ async fn main() -> anyhow::Result<()> {
     Migrator::up(db.as_ref(), None).await?;
 
     // spin subtasks
-    let subtasks = [tokio::spawn(track_upload::track_upload_server(
-        db.clone().into_inner(),
-    ))];
+    let (tr_up_tx, tr_up_rx) = unbounded_channel();
+    let subtasks = [tokio::spawn({
+        let db = db.clone();
+        async move { track_upload::track_upload_server(db, tr_up_rx).await }
+    })];
 
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
             .app_data(db.clone())
+            .app_data(tr_up_tx.clone())
             .service(version)
             .service(heartbeat::heartbeat)
             .service(web::scope("/track").configure(track::routes))
@@ -142,5 +151,12 @@ async fn main() -> anyhow::Result<()> {
     .bind(("127.0.0.1", 8080))?
     .run()
     .await?;
+
+    for subtask in subtasks {
+        subtask.await.unwrap();
+    }
+
     Ok(())
 }
+
+

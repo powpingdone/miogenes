@@ -8,6 +8,7 @@ use serde::Deserialize;
 use std::cell::Cell;
 use tokio::fs::{remove_file, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
+use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 pub fn routes(cfg: &mut web::ServiceConfig) {
@@ -82,12 +83,14 @@ async fn track_upload(
     db: web::Data<DatabaseConnection>,
     key: web::Query<crate::User>,
     mut payload: Multipart,
+    tr_up_tx: web::Data<UnboundedSender<(Uuid, Uuid, String)>>,
 ) -> impl Responder {
-    let (db, userid) = login_check!(db, key);
+    let (_, userid) = login_check!(db, key);
+    let tx = tr_up_tx.into_inner();
 
     // collect file
     while let Some(field) = payload.next().await {
-        if let Err(err) = field {
+        if field.is_err() {
             return HttpResponse::BadRequest()
                 .content_type(ContentType::json())
                 .body(
@@ -99,14 +102,13 @@ async fn track_upload(
         }
         let mut field = field.unwrap();
 
-        // TODO: use the user defined upload dir
         // TODO: store the filename for dumping purposes
         // find a unique id for the track
         let uuid: Cell<Uuid> = Cell::new(Uuid::nil());
         let mut file: File;
         loop {
             uuid.set(Uuid::new_v4());
-            let fname = format!("./files/{}", uuid.get());
+            let fname = format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid.get());
             // check if file is already taken
             let check = OpenOptions::new()
                 .create_new(true)
@@ -128,6 +130,12 @@ async fn track_upload(
             }
         }
 
+        // get original filename
+        let orig_filename = field
+            .content_disposition()
+            .get_filename()
+            .map_or_else(|| uuid.get().to_string(), |ret| ret.to_string());
+
         // download the file
         // TODO: filesize limits
         // TODO: maybe don't panic on filesystem errors(?)
@@ -143,7 +151,7 @@ async fn track_upload(
                         .await
                         .expect("Failed to flush uploaded file: {}");
                     drop(file);
-                    remove_file(format!("./files/{}", uuid.get()))
+                    remove_file(format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid.get()))
                         .await
                         .expect("Failed to delete uploaded file: {}");
 
@@ -160,7 +168,7 @@ async fn track_upload(
         }
 
         // set off tasks to process files
-        // tx.send((uuid, userid)).await.unwrap()
+        tx.send((uuid.get(), userid, orig_filename)).unwrap();
     }
     HttpResponse::Ok().finish()
 }
