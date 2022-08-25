@@ -1,9 +1,12 @@
 use crate::login_check;
-use actix_web::{http::header::ContentType, *};
 use actix_multipart::Multipart;
+use actix_multipart::MultipartError::*;
+use actix_web::{http::header::ContentType, *};
 use entity_self::{prelude::*, track_table};
+use futures::StreamExt;
 use sea_orm::{prelude::*, *};
 use serde::Deserialize;
+use tokio::fs::*;
 use uuid::Uuid;
 
 pub fn routes(cfg: &mut web::ServiceConfig) {
@@ -80,5 +83,19 @@ async fn track_upload(
     mut payload: Multipart,
 ) -> impl Responder {
     let (db, userid) = login_check!(db, key);
+    // collect file
+    while let Some(chunk) = payload.next().await {
+        if let Err(err) = chunk {
+            return HttpResponse::BadRequest()
+                .content_type(ContentType::json())
+                .body(
+                    crate::MioError {
+                        msg: "invalid or corrupt request",
+                    }
+                    .to_string(),
+                );
+        }
+        let mut chunk = chunk.unwrap();
+    }
     HttpResponse::Ok().finish()
 }
