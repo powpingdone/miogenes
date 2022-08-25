@@ -9,8 +9,10 @@ use serde_with::base64::{Base64, UrlSafe};
 use serde_with::formats::Unpadded;
 use serde_with::serde_as;
 
-mod heartbeat;
-mod track;
+mod endpoints;
+use endpoints::*;
+mod subtasks;
+use subtasks::*;
 
 macro_rules! login_check {
     ($db:expr, $key:expr) => {{
@@ -116,15 +118,23 @@ async fn main() -> anyhow::Result<()> {
     use migration::{Migrator, MigratorTrait};
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    let db = sea_orm::Database::connect("postgres://user:password@127.0.0.1:5432/db")
-        .await
-        .expect("failed to connect to db: {}");
-    Migrator::up(&db, None).await?;
+    // TODO: pick this up from config file
+    let db = web::Data::new(
+        sea_orm::Database::connect("postgres://user:password@127.0.0.1:5432/db")
+            .await
+            .expect("Failed to connect to db: {}"),
+    );
+    Migrator::up(db.as_ref(), None).await?;
+
+    // spin subtasks
+    let subtasks = [tokio::spawn(track_upload::track_upload_server(
+        db.clone().into_inner(),
+    ))];
 
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .app_data(web::Data::new(db.clone()))
+            .app_data(db.clone())
             .service(version)
             .service(heartbeat::heartbeat)
             .service(web::scope("/track").configure(track::routes))

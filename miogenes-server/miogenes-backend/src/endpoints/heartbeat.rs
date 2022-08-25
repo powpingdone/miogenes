@@ -5,7 +5,7 @@ use entity_self::prelude::*;
 use entity_self::*;
 use sea_orm::prelude::Uuid;
 use sea_orm::*;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
 #[derive(Serialize)]
