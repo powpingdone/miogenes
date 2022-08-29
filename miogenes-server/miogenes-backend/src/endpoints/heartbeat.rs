@@ -1,11 +1,13 @@
-use crate::login_check;
-use actix_web::http::header::ContentType;
-use actix_web::*;
+use axum::extract::Query;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::*;
 use entity_self::prelude::*;
 use entity_self::*;
 use sea_orm::prelude::Uuid;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 #[derive(Serialize)]
@@ -17,7 +19,7 @@ struct HeartBeat {
 }
 
 #[derive(Deserialize)]
-struct HBQuery {
+pub struct HBQuery {
     #[serde(rename = "ts")]
     timestamp: Option<u64>,
 }
@@ -50,25 +52,21 @@ macro_rules! HB_Unwrap {
                     .map(|obj| (obj.id, obj.ts as u64))
                     .collect::<Vec<_>>(),
                 Err(_) => {
-                    return HttpResponse::InternalServerError()
-                        .content_type(ContentType::json())
-                        .body(
-                            crate::MioError {
-                                msg: "$info task failed to query database",
-                            }
-                            .to_string(),
-                        )
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(crate::MioError {
+                            msg: "$info task failed to query database".to_owned(),
+                        }),
+                       )   )
                 }
             },
             Err(_) => {
-                return HttpResponse::InternalServerError()
-                    .content_type(ContentType::json())
-                    .body(
-                        crate::MioError {
-                            msg: "$info task failed to execute",
-                        }
-                        .to_string(),
-                    )
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(crate::MioError {
+                        msg: "$info task failed to execute".to_owned(),
+                    }),
+                ))
             }
         }
     }};
@@ -82,15 +80,14 @@ macro_rules! HB_Unwrap {
     upload/download is happening. In the future, this may also return
     playlists and other user generated content.
 */
-#[get("/hb")]
-async fn heartbeat(
-    db: web::Data<DatabaseConnection>,
-    key: web::Query<crate::User>,
-    tstamp: web::Query<HBQuery>,
-) -> impl Responder {
+pub async fn heartbeat(
+    state: Extension<Arc<crate::MioState>>,
+    key: Query<crate::User>,
+    tstamp: Query<HBQuery>,
+) -> Result<impl IntoResponse, impl IntoResponse> {
     // generic setup
-    let (db, userid) = login_check!(db, key);
-    let tstamp = tstamp.into_inner().timestamp.unwrap_or(0);
+    let userid = crate::login_check(state.db.clone(), key.0).await?;
+    let tstamp = tstamp.timestamp.unwrap_or(0);
 
     // query database for updates
     struct HBResp {
@@ -101,10 +98,10 @@ async fn heartbeat(
     }
 
     let search_ret = HBResp {
-        album_art: HB_Task!(AlbumArtTable, album_art_table, db, tstamp, userid),
-        album: HB_Task!(AlbumTable, album_table, db, tstamp, userid),
-        artist: HB_Task!(ArtistTable, artist_table, db, tstamp, userid),
-        track: HB_Task!(TrackTable, track_table, db, tstamp, userid),
+        album_art: HB_Task!(AlbumArtTable, album_art_table, state.db, tstamp, userid),
+        album: HB_Task!(AlbumTable, album_table, state.db, tstamp, userid),
+        artist: HB_Task!(ArtistTable, artist_table, state.db, tstamp, userid),
+        track: HB_Task!(TrackTable, track_table, state.db, tstamp, userid),
     };
 
     // put into hb return struct
@@ -115,7 +112,5 @@ async fn heartbeat(
         track: HB_Unwrap!(search_ret.track),
     };
 
-    HttpResponse::Ok()
-        .content_type(ContentType::json())
-        .body(serde_json::to_string(&ret).unwrap())
+    Ok((StatusCode::OK, Json(ret)))
 }

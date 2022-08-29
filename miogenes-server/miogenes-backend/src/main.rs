@@ -1,6 +1,7 @@
-use actix_web::http::header::ContentType;
-use actix_web::middleware::Logger;
-use actix_web::*;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::routing::*;
+use axum::*;
 use entity_self::prelude::*;
 use once_cell::sync::OnceCell;
 use sea_orm::prelude::Uuid;
@@ -10,7 +11,7 @@ use serde_with::base64::{Base64, UrlSafe};
 use serde_with::formats::Unpadded;
 use serde_with::serde_as;
 use std::sync::Arc;
-use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 
 mod endpoints;
 use endpoints::*;
@@ -20,20 +21,19 @@ use subtasks::*;
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&'static str> = OnceCell::with_value("./files/");
 
-macro_rules! login_check {
-    ($db:expr, $key:expr) => {{
-        let db = $db.into_inner();
-        let key = $key.into_inner();
-        let userid = key.check(&db).await;
-        if let Err(ret) = userid {
-            return ret;
-        }
-        let userid = userid.unwrap();
-        (db, userid)
-    }};
+async fn login_check(db: Arc<DatabaseConnection>, key: User) -> Result<Uuid, (StatusCode, Json<MioError>)> {
+    let userid = key.check(&db).await;
+    if let Err(ret) = userid {
+        return Err(ret);
+    }
+    let userid = userid.unwrap();
+    Ok(userid)
 }
 
-pub(crate) use login_check;
+pub struct MioState {
+    db: Arc<DatabaseConnection>,
+    proc_tracks_tx: UnboundedSender<(Uuid, Uuid, String)>,
+}
 
 #[serde_as]
 #[derive(Deserialize)]
@@ -45,19 +45,16 @@ pub struct User {
     password: [u8; 32],
 }
 
-#[derive(Serialize)]
-pub struct MioError<'a> {
-    msg: &'a str,
-}
-
-impl ToString for MioError<'_> {
-    fn to_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
+#[derive(Debug, Serialize)]
+pub struct MioError {
+    msg: String,
 }
 
 impl User {
-    async fn check(&self, db: &DatabaseConnection) -> Result<Uuid, HttpResponse> {
+    async fn check(
+        &self,
+        db: &DatabaseConnection,
+    ) -> Result<Uuid, (StatusCode, axum::Json<MioError>)> {
         let check = UserTable::find_by_id(self.username).one(db).await;
         // if db didn't error out
         if let Ok(check) = check {
@@ -66,40 +63,33 @@ impl User {
                 if check.password == self.password {
                     Ok(self.username)
                 } else {
-                    Err(HttpResponse::Unauthorized()
-                        .content_type(ContentType::json())
-                        .body(
-                            MioError {
-                                msg: "invalid password",
-                            }
-                            .to_string(),
-                        ))
+                    Err((
+                        StatusCode::UNAUTHORIZED,
+                        Json(MioError {
+                            msg: "invalid password".to_owned(),
+                        }),
+                    ))
                 }
             } else {
-                Err(HttpResponse::Unauthorized()
-                    .content_type(ContentType::json())
-                    .body(
-                        MioError {
-                            msg: "invalid user id",
-                        }
-                        .to_string(),
-                    ))
+                Err((
+                    StatusCode::UNAUTHORIZED,
+                    Json(MioError {
+                        msg: "invalid user id".to_owned(),
+                    }),
+                ))
             }
         } else {
-            Err(HttpResponse::InternalServerError()
-                .content_type(ContentType::json())
-                .body(
-                    MioError {
-                        msg: "database error",
-                    }
-                    .to_string(),
-                ))
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(MioError {
+                    msg: "database error".to_owned(),
+                }),
+            ))
         }
     }
 }
 
-#[get("/ver")]
-async fn version() -> impl Responder {
+async fn version() -> impl IntoResponse {
     use konst::primitive::parse_u16;
     use konst::result::unwrap_ctx;
 
@@ -116,7 +106,7 @@ async fn version() -> impl Responder {
         patch: unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_PATCH"))),
     };
 
-    web::Json(VSTR)
+    (StatusCode::OK, Json(VSTR))
 }
 
 #[tokio::main]
@@ -133,13 +123,28 @@ async fn main() -> anyhow::Result<()> {
     Migrator::up(db.as_ref(), None).await?;
 
     // spin subtasks
-    let (tr_up_tx, tr_up_rx) = unbounded_channel();
+    let (proc_tracks_tx, proc_tracks_rx) = unbounded_channel();
     let subtasks = [tokio::spawn({
         let db = db.clone();
-        async move { track_upload::track_upload_server(db, tr_up_rx).await }
+        async move { track_upload::track_upload_server(db, proc_tracks_rx).await }
     })];
 
-    HttpServer::new(move || {
+    let state = Arc::new(MioState {
+        db: db.clone(),
+        proc_tracks_tx,
+    });
+
+    let router = Router::new()
+        .route("/ver", get(version))
+        .route("/hb", get(heartbeat::heartbeat))
+        .nest("/track", track::routes())
+        .layer(Extension(state));
+
+    Server::bind(&"127.0.0.1:8080".parse().unwrap())
+        .serve(router.into_make_service())
+        .await?;
+
+    /*     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
             .app_data(db.clone())
@@ -150,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
     })
     .bind(("127.0.0.1", 8080))?
     .run()
-    .await?;
+    .await?; */
 
     for subtask in subtasks {
         subtask.await.unwrap();
@@ -158,5 +163,3 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-

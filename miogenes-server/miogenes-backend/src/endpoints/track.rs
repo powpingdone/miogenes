@@ -1,18 +1,21 @@
-use crate::login_check;
-use actix_multipart::Multipart;
-use actix_web::{http::header::ContentType, *};
+use axum::extract::Query;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::routing::get;
+use axum::*;
 use entity_self::{prelude::*, track_table};
 use futures::StreamExt;
 use sea_orm::{prelude::*, *};
 use serde::Deserialize;
 use std::cell::Cell;
+use std::sync::Arc;
 use tokio::fs::{remove_file, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
 use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
-pub fn routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(track_info).service(track_upload);
+pub fn routes() -> Router {
+    Router::new().route("/ti", get(track_info))
 }
 
 #[derive(Debug, Deserialize)]
@@ -21,72 +24,56 @@ struct TInfoQuery {
     trackid: Uuid,
 }
 
-#[get("/ti")]
 async fn track_info(
-    db: web::Data<DatabaseConnection>,
-    key: web::Query<crate::User>,
-    track: web::Query<TInfoQuery>,
-) -> impl Responder {
-    let (db, userid) = login_check!(db, key);
-    let track = track.into_inner();
+    state: Extension<Arc<crate::MioState>>,
+    key: Query<crate::User>,
+    track: Query<TInfoQuery>,
+) -> Result<impl IntoResponse, impl IntoResponse> {
+    let userid = crate::login_check(state.db.clone(), key.0).await?;
 
     // contact the database and query it
     let resp = TrackTable::find_by_id(track.trackid)
         .filter(Condition::all().add(track_table::Column::Owner.eq(userid)))
-        .one(db.as_ref())
+        .one(state.db.as_ref())
         .await;
 
     match resp {
         // database fails to talk
-        Err(err) => HttpResponse::InternalServerError()
-            .content_type(ContentType::json())
-            .body(
-                crate::MioError {
-                    msg: format!("database error for {}: {err}", track.trackid).as_str(),
-                }
-                .to_string(),
-            ),
+        Err(err) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(crate::MioError {
+                msg: format!("database error for {}: {err}", track.trackid),
+            }),
+        )),
         Ok(resp) => match resp {
             // track doesn't exist
-            None => HttpResponse::NotFound()
-                .content_type(ContentType::json())
-                .body(
-                    crate::MioError {
-                        msg: format!("no track found for {}", track.trackid).as_str(),
-                    }
-                    .to_string(),
-                ),
+            None => Err((
+                StatusCode::NOT_FOUND,
+                Json(crate::MioError {
+                    msg: format!("no track found for {}", track.trackid),
+                }),
+            )),
             Some(content) => match serde_json::to_string(&content) {
-                Ok(json) => HttpResponse::Ok()
-                    .content_type(ContentType::json())
-                    .body(json),
+                Ok(json) => Ok((StatusCode::OK, Json(json))),
                 // somehow, serialization failed
-                Err(err) => HttpResponse::InternalServerError()
-                    .content_type(ContentType::json())
-                    .body(
-                        crate::MioError {
-                            msg: format!(
-                                "internal serialization error for {}: {err}",
-                                track.trackid
-                            )
-                            .as_str(),
-                        }
-                        .to_string(),
-                    ),
+                Err(err) => Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(crate::MioError {
+                        msg: format!("internal serialization error for {}: {err}", track.trackid),
+                    }),
+                )),
             },
         },
     }
 }
 
-#[put("/tu")]
+/* #[put("/tu")]
 async fn track_upload(
-    db: web::Data<DatabaseConnection>,
-    key: web::Query<crate::User>,
-    mut payload: Multipart,
-    tr_up_tx: web::Data<UnboundedSender<(Uuid, Uuid, String)>>,
+    State(state): State<crate::MioState>,
+    key: Query<crate::User>,
 ) -> impl Responder {
-    let (_, userid) = login_check!(db, key);
-    let tx = tr_up_tx.into_inner();
+    let userid = login_check!(db, key);
+    let tx = state;
 
     // collect file
     while let Some(field) = payload.next().await {
@@ -172,3 +159,4 @@ async fn track_upload(
     }
     HttpResponse::Ok().finish()
 }
+ */
