@@ -15,7 +15,6 @@ blurhash = "0.1.1"
 env_logger = "0.9.0"
 futures = "0.3.23"
 konst = "0.2.15"
-multipart = "0.18.0"
 once_cell = {version = "1.13.1", features = ["parking_lot"]}
 sea-orm = {version = "0.9.1", features = [
   "macros",

@@ -30,6 +30,7 @@ async fn login_check(db: Arc<DatabaseConnection>, key: User) -> Result<Uuid, (St
     Ok(userid)
 }
 
+#[derive(Clone)]
 pub struct MioState {
     db: Arc<DatabaseConnection>,
     proc_tracks_tx: UnboundedSender<(Uuid, Uuid, String)>,
@@ -140,22 +141,9 @@ async fn main() -> anyhow::Result<()> {
         .nest("/track", track::routes())
         .layer(Extension(state));
 
-    Server::bind(&"127.0.0.1:8080".parse().unwrap())
+    Server::bind(&"127.0.0.1:8080".parse().unwrap())    
         .serve(router.into_make_service())
         .await?;
-
-    /*     HttpServer::new(move || {
-        App::new()
-            .wrap(Logger::default())
-            .app_data(db.clone())
-            .app_data(tr_up_tx.clone())
-            .service(version)
-            .service(heartbeat::heartbeat)
-            .service(web::scope("/track").configure(track::routes))
-    })
-    .bind(("127.0.0.1", 8080))?
-    .run()
-    .await?; */
 
     for subtask in subtasks {
         subtask.await.unwrap();

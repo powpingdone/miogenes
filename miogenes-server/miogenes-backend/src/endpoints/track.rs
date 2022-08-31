@@ -1,21 +1,20 @@
-use axum::extract::Query;
+use axum::extract::*;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::get;
-use axum::*;
+use axum::routing::*;
 use entity_self::{prelude::*, track_table};
-use futures::StreamExt;
 use sea_orm::{prelude::*, *};
 use serde::Deserialize;
 use std::cell::Cell;
 use std::sync::Arc;
 use tokio::fs::{remove_file, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
-use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 pub fn routes() -> Router {
-    Router::new().route("/ti", get(track_info))
+    Router::new()
+        .route("/ti", get(track_info))
+        .route("/tu", put(track_upload))
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,25 +66,28 @@ async fn track_info(
     }
 }
 
-/* #[put("/tu")]
 async fn track_upload(
-    State(state): State<crate::MioState>,
-    key: Query<crate::User>,
-) -> impl Responder {
-    let userid = login_check!(db, key);
-    let tx = state;
+    state: Extension<crate::MioState>,
+    Query(key): Query<crate::User>,
+    mut payload: Multipart,
+) -> Result<impl IntoResponse, impl IntoResponse> {
+    let userid = crate::login_check(state.db.clone(), key).await?;
 
     // collect file
-    while let Some(field) = payload.next().await {
+    loop {
+        // get field
+        let field = payload.next_field().await;
         if field.is_err() {
-            return HttpResponse::BadRequest()
-                .content_type(ContentType::json())
-                .body(
-                    crate::MioError {
-                        msg: "invalid or corrupt request",
-                    }
-                    .to_string(),
-                );
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(crate::MioError {
+                    msg: "invalid or corrupt request".to_owned(),
+                }),
+            ));
+        }
+        let field = field.unwrap();
+        if field.is_none() {
+            break;
         }
         let mut field = field.unwrap();
 
@@ -119,19 +121,20 @@ async fn track_upload(
 
         // get original filename
         let orig_filename = field
-            .content_disposition()
-            .get_filename()
+            .file_name()
             .map_or_else(|| uuid.get().to_string(), |ret| ret.to_string());
 
         // download the file
         // TODO: filesize limits
         // TODO: maybe don't panic on filesystem errors(?)
-        while let Some(chunk) = field.next().await {
-            match chunk {
-                Ok(chunk) => file
+        loop {
+            match field.chunk().await {
+                Ok(Some(chunk)) => file
                     .write_all(&chunk)
                     .await
                     .expect("Failed to write to file: {}"),
+                // No more data
+                Ok(None) => break,
                 Err(_) => {
                     // delete failed upload
                     file.flush()
@@ -142,21 +145,21 @@ async fn track_upload(
                         .await
                         .expect("Failed to delete uploaded file: {}");
 
-                    return HttpResponse::BadRequest()
-                        .content_type(ContentType::json())
-                        .body(
-                            crate::MioError {
-                                msg: "invalid or corrupt request or chunk",
-                            }
-                            .to_string(),
-                        );
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(crate::MioError {
+                            msg: "invalid or corrupt request".to_owned(),
+                        }),
+                    ));
                 }
             }
         }
 
         // set off tasks to process files
-        tx.send((uuid.get(), userid, orig_filename)).unwrap();
+        state
+            .proc_tracks_tx
+            .send((uuid.get(), userid, orig_filename))
+            .unwrap();
     }
-    HttpResponse::Ok().finish()
+    return Ok((StatusCode::OK, ()));
 }
- */
