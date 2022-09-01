@@ -28,3 +28,9 @@ serde_json = "1.0.83"
 serde_with = {version = "2.0.0", features = ["base64"]}
 tokio = {version = "1.19.2", features = ["full"]}
 uuid = {version = "1.1.2", features = ["v4", "serde"]}
+sanitize-filename = "0.4.0"
+gstreamer-pbutils = "0.18.7"
+gstreamer = "0.18.8"
+
+[profile.release]
+lto = true

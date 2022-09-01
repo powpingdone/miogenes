@@ -14,6 +14,9 @@ pub struct Model {
     pub album_id: Option<Uuid>,
     pub artist_id: Option<Uuid>,
     pub owner: Uuid,
+    pub orig_fname: String,
+    pub extra_tags: String,
+    pub hash: Vec<u8>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

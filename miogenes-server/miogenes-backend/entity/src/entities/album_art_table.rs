@@ -11,6 +11,7 @@ pub struct Model {
     pub ts: i64,
     pub blur_hash: Vec<u8>,
     pub owner: Uuid,
+    pub hash: Vec<u8>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

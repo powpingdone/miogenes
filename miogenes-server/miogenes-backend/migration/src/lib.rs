@@ -2,6 +2,7 @@ pub use sea_orm_migration::prelude::*;
 
 mod m20220101_000001_create_table;
 mod m20220810_223938_user_table;
+mod m20220901_122621_add_fname_imghash;
 
 pub struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20220101_000001_create_table::Migration),
             Box::new(m20220810_223938_user_table::Migration),
+            Box::new(m20220901_122621_add_fname_imghash::Migration),
         ]
     }
 }

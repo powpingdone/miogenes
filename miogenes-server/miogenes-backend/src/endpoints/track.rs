@@ -120,9 +120,11 @@ async fn track_upload(
         }
 
         // get original filename
-        let orig_filename = field
-            .file_name()
-            .map_or_else(|| uuid.get().to_string(), |ret| ret.to_string());
+        let orig_filename = sanitize_filename::sanitize(
+            field
+                .file_name()
+                .map_or_else(|| uuid.get().to_string(), |ret| ret.to_string()),
+        );
 
         // download the file
         // TODO: filesize limits

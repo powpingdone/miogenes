@@ -114,6 +114,7 @@ async fn version() -> impl IntoResponse {
 async fn main() -> anyhow::Result<()> {
     use migration::{Migrator, MigratorTrait};
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    gstreamer::init()?;
 
     // TODO: pick this up from config file
     let db = Arc::new(
