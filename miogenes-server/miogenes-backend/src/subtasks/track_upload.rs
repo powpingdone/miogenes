@@ -1,3 +1,5 @@
+use gstreamer::glib;
+use gstreamer_pbutils::prelude::*;
 use sea_orm::prelude::*;
 use std::path::Path;
 use std::sync::Arc;
@@ -22,8 +24,8 @@ struct CacheMetadata {
 }
 
 struct Metadata {
-    tags: oneshot::Receiver<TagMetadata>,
-    cache: oneshot::Receiver<CacheMetadata>,
+    tags: oneshot::Receiver<Result<TagMetadata, anyhow::Error>>,
+    cache: oneshot::Receiver<Result<CacheMetadata, anyhow::Error>>,
 }
 
 // TODO: upload process time limits
@@ -64,11 +66,11 @@ pub async fn track_upload_server(
                     let (mdata_tx, mdata_rx) = oneshot_channel();
                     let mdata = tokio::task::spawn_blocking({
                         let orig_filename = orig_filename.clone();
-                        move || get_metadata(orig_filename, mdata_tx)
+                        move || get_metadata(orig_filename.as_str(), mdata_tx)
                     });
                     let (cdata_tx, cdata_rx) = oneshot_channel();
-                    let cache = tokio::task::spawn_blocking(move || {
-                        generate_cache(orig_filename, cdata_tx)
+                    let cache = tokio::task::spawn_blocking({
+                        move || generate_cache(orig_filename.as_str(), cdata_tx)
                     });
 
                     let recvs = Metadata {
@@ -86,9 +88,22 @@ pub async fn track_upload_server(
     gc.await.unwrap();
 }
 
-fn get_metadata(fname: impl AsRef<Path>, metadata_shot: oneshot::Sender<TagMetadata>) {}
+fn get_metadata(fname: impl AsRef<Path>, metadata_shot: oneshot::Sender<Result<TagMetadata, anyhow::Error>>) {
+    metadata_shot.send(get_metadata_inner(fname)).ok().expect("broken oneshot tag sender");
+}
 
-fn generate_cache(fname: impl AsRef<Path>, metadata_shot: oneshot::Sender<CacheMetadata>) {}
+fn get_metadata_inner(fname: impl AsRef<Path>) -> Result<TagMetadata, anyhow::Error> {
+    let discover = gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(5))?;
+    let fname = glib::filename_to_uri(fname, None)?;
+    let data = discover.discover_uri(&fname)?;
+    todo!()
+}
+
+fn generate_cache(
+    fname: &str,
+    metadata_shot: oneshot::Sender<Result<CacheMetadata, anyhow::Error>>,
+) {
+}
 
 async fn insert_into_db(
     db: Arc<DatabaseConnection>,
@@ -96,4 +111,7 @@ async fn insert_into_db(
     userid: Uuid,
     metadata_shot: Metadata,
 ) {
+    // wait for metadata
+    let cache = metadata_shot.cache.await.unwrap();
+    let tags = metadata_shot.tags.await.unwrap();
 }
