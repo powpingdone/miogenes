@@ -97,7 +97,7 @@ async fn track_upload(
         let mut file: File;
         loop {
             uuid.set(Uuid::new_v4());
-            let fname = format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid.get());
+            let fname = format!("{}/track/{}", crate::DATA_DIR.get().unwrap(), uuid.get());
             // check if file is already taken
             let check = OpenOptions::new()
                 .create_new(true)
@@ -143,7 +143,7 @@ async fn track_upload(
                         .await
                         .expect("Failed to flush uploaded file: {}");
                     drop(file);
-                    remove_file(format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid.get()))
+                    remove_file(format!("{}/track/{}", crate::DATA_DIR.get().unwrap(), uuid.get()))
                         .await
                         .expect("Failed to delete uploaded file: {}");
 

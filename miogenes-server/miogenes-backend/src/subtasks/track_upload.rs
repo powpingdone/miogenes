@@ -1,6 +1,5 @@
-use gstreamer::glib;
-use gstreamer_pbutils::prelude::*;
 use sea_orm::prelude::*;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
@@ -10,22 +9,15 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration};
 
 // metadata parsed from the individual file
+#[derive(Debug)]
 struct TagMetadata {
-    artist: String,
-    title: String,
-    album: String,
-    overflow: String,
-}
-
-struct CacheMetadata {
-    blurhash: Vec<u8>,
-    imghash: [u8; 32],
-    audiohash: [u8; 32],
-}
-
-struct Metadata {
-    tags: oneshot::Receiver<Result<TagMetadata, anyhow::Error>>,
-    cache: oneshot::Receiver<Result<CacheMetadata, anyhow::Error>>,
+    artist: Option<String>,
+    title: Option<String>,
+    album: Option<String>,
+    overflow: Option<String>,
+    blurhash: Option<Vec<u8>>,
+    imghash: Option<[u8; 32]>,
+    audiohash: Option<[u8; 32]>,
 }
 
 // TODO: upload process time limits
@@ -63,23 +55,16 @@ pub async fn track_upload_server(
             .send(tokio::spawn({
                 let db = db.clone();
                 async move {
-                    let (mdata_tx, mdata_rx) = oneshot_channel();
                     let mdata = tokio::task::spawn_blocking({
-                        let orig_filename = orig_filename.clone();
-                        move || get_metadata(orig_filename.as_str(), mdata_tx)
-                    });
-                    let (cdata_tx, cdata_rx) = oneshot_channel();
-                    let cache = tokio::task::spawn_blocking({
-                        move || generate_cache(orig_filename.as_str(), cdata_tx)
+                        move || get_metadata(orig_filename.as_str())
                     });
 
-                    let recvs = Metadata {
-                        tags: mdata_rx,
-                        cache: cdata_rx,
-                    };
-                    insert_into_db(db, id, userid, recvs).await;
-                    mdata.await.unwrap();
-                    cache.await.unwrap();
+                    let tags = mdata.await.unwrap();
+                    if let Ok(tags) = tags {
+                        insert_into_db(db, id, userid, tags).await;
+                    } else {
+                        todo!();
+                    }
                 }
             }))
             .unwrap();
@@ -88,30 +73,63 @@ pub async fn track_upload_server(
     gc.await.unwrap();
 }
 
-fn get_metadata(fname: impl AsRef<Path>, metadata_shot: oneshot::Sender<Result<TagMetadata, anyhow::Error>>) {
-    metadata_shot.send(get_metadata_inner(fname)).ok().expect("broken oneshot tag sender");
-}
+fn get_metadata(fname: impl AsRef<Path>) -> Result<TagMetadata, anyhow::Error> {
+    use ffmpeg::codec::Context;
+    use ffmpeg::media::Type;
+    use ffmpeg::format::stream::disposition::Disposition;
 
-fn get_metadata_inner(fname: impl AsRef<Path>) -> Result<TagMetadata, anyhow::Error> {
-    let discover = gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(5))?;
-    let fname = glib::filename_to_uri(fname, None)?;
-    let data = discover.discover_uri(&fname)?;
+    let ffile = ffmpeg::format::input(&fname)?;
+    let mut tags = TagMetadata {
+        artist: None,
+        title: None,
+        album: None,
+        overflow: None,
+        blurhash: None,
+        imghash: None,
+        audiohash: None,
+    };
+
+    // metadata
+    let mdata = ffile.metadata();
+    let mut extra_tags = HashMap::new();
+    for (tag, data) in mdata.iter() {
+        match tag {
+            "title" => tags.title = Some(data.to_owned()),
+            "artist" => tags.artist = Some(data.to_owned()),
+            "album" => tags.album = Some(data.to_owned()),
+            _ => {
+                // TODO: insert does not allow for duplicate keys
+                // should possibly handle that...?
+                // because we're not handling it, change return type to ()
+                let _ = extra_tags.insert(tag, data);
+            }
+        }
+    }
+    tags.overflow = Some(serde_json::to_string(&extra_tags)?);
+    drop(extra_tags);
+
+    // hashes
+    let streams = ffile.streams();
+    for i in streams {
+        let codec_parsed = Context::from_parameters(i.parameters())?;
+        match codec_parsed.medium() {
+            Type::Video /* cover art */ => {
+                if i.disposition() & Disposition::ATTACHED_PIC == Disposition::ATTACHED_PIC {
+                    // writeout the img and do computation
+                    todo!();
+                }
+                
+            }
+            Type::Audio => {
+                // checksum the img
+            },
+            _ => {}, // do nothing
+        }
+    }
+
     todo!()
 }
 
-fn generate_cache(
-    fname: &str,
-    metadata_shot: oneshot::Sender<Result<CacheMetadata, anyhow::Error>>,
-) {
-}
-
-async fn insert_into_db(
-    db: Arc<DatabaseConnection>,
-    id: Uuid,
-    userid: Uuid,
-    metadata_shot: Metadata,
-) {
-    // wait for metadata
-    let cache = metadata_shot.cache.await.unwrap();
-    let tags = metadata_shot.tags.await.unwrap();
+async fn insert_into_db(db: Arc<DatabaseConnection>, id: Uuid, userid: Uuid, tags: TagMetadata) {
+    todo!()
 }
