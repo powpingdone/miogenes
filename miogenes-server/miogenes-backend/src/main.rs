@@ -13,8 +13,6 @@ use serde_with::serde_as;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 
-extern crate ffmpeg_next as ffmpeg;
-
 mod endpoints;
 use endpoints::*;
 mod subtasks;
@@ -23,10 +21,7 @@ use subtasks::*;
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&'static str> = OnceCell::with_value("./files/");
 
-async fn login_check(
-    db: Arc<DatabaseConnection>,
-    key: User,
-) -> Result<Uuid, (StatusCode, Json<MioError>)> {
+async fn login_check(db: Arc<DatabaseConnection>, key: User) -> Result<Uuid, (StatusCode, Json<MioError>)> {
     let userid = key.check(&db).await;
     if let Err(ret) = userid {
         return Err(ret);
@@ -119,19 +114,7 @@ async fn version() -> impl IntoResponse {
 async fn main() -> anyhow::Result<()> {
     use migration::{Migrator, MigratorTrait};
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
-    ffmpeg::init()?;
-
-    // setup dirs
-    for i in ["track", "albumart"] {
-        tokio::fs::create_dir(format!("{}/{i}", DATA_DIR.get().expect("DATA_DIR not set")))
-            .await
-            .or_else(|err| {
-                if err.kind() == std::io::ErrorKind::AlreadyExists {
-                    return Ok(());
-                }
-                Err(err)
-            })?
-    }
+    gstreamer::init()?;
 
     // TODO: pick this up from config file
     let db = Arc::new(
@@ -159,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/track", track::routes())
         .layer(Extension(state));
 
-    Server::bind(&"127.0.0.1:8080".parse().unwrap())
+    Server::bind(&"127.0.0.1:8080".parse().unwrap())    
         .serve(router.into_make_service())
         .await?;
 
