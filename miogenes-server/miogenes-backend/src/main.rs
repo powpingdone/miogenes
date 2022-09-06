@@ -142,6 +142,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/track", track::routes())
         .layer(Extension(state));
 
+    // TODO: bind to user settings
     Server::bind(&"127.0.0.1:8080".parse().unwrap())    
         .serve(router.into_make_service())
         .await?;
