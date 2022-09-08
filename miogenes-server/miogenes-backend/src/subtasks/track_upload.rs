@@ -1,7 +1,11 @@
 use gstreamer::glib;
+use gstreamer::tags::GenericTagIter;
 use gstreamer_pbutils::prelude::*;
 use gstreamer_pbutils::DiscovererResult;
+use image::GenericImageView;
 use sea_orm::prelude::*;
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
@@ -76,8 +80,9 @@ pub async fn track_upload_server(
     gc.await.unwrap();
 }
 
-fn get_metadata(fname: impl AsRef<Path>) -> Result<Metadata, anyhow::Error> {
-    let discover = gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(5))?;
+fn get_metadata(fname: impl AsRef<Path> + Clone) -> Result<Metadata, anyhow::Error> {
+    let discover = gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(10))?;
+    let orig_path = fname.clone();
     let fname = glib::filename_to_uri(fname, None)?;
     let data = discover.discover_uri(&fname)?;
 
@@ -95,13 +100,67 @@ fn get_metadata(fname: impl AsRef<Path>) -> Result<Metadata, anyhow::Error> {
         _other => panic!("unhandled enum: {_other:?}"),
     }
 
-    let mdata: Metadata = Default::default();
+    let mut mdata: Metadata = Default::default();
 
     if let Some(tags) = data.tags() {
-        todo!()
+        let mut set = HashMap::new();
+        for (tag, data) in tags.iter_generic() {
+            match tag {
+                "image" => {
+                    let img = data.map(|x| x.get::<u8>().unwrap()).collect::<Vec<_>>();
+                    let sha = Sha256::digest(&img);
+                    // TODO: why
+                    let mut actual_hash: [u8; 32] = Default::default();
+                    for (hasharr, digested) in actual_hash.iter_mut().zip(sha.iter()) {
+                        *hasharr = *digested;
+                    }
+                    mdata.imghash = Some(actual_hash);
+
+                    let dropped = image::load_from_memory(&img)?;
+                    let (w, h) = dropped.dimensions();
+                    mdata.blurhash = Some(
+                        blurhash::encode(6, 6, w, h, &dropped.to_rgba8().into_vec())
+                            .as_bytes()
+                            .to_vec(),
+                    )
+                }
+
+                "title" => mdata.title = Some(proc_gen_tag_iter(data)),
+                "artist" => mdata.artist = Some(proc_gen_tag_iter(data)),
+                "album" => mdata.album = Some(proc_gen_tag_iter(data)),
+                _ => {
+                    set.insert(tag, proc_gen_tag_iter(data));
+                }
+            }
+        }
+        mdata.overflow = Some(serde_json::to_string(&set)?)
+    }
+    if let None = mdata.title {
+        // we sanitized the filename earlier, so we can unwrap here without a panic
+        mdata.title = Some(
+            orig_path
+                .as_ref()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned(),
+        )
     }
 
     Ok(mdata)
+}
+
+fn proc_gen_tag_iter(data: GenericTagIter) -> String {
+    data.fold("".to_owned(), |accum, x| {
+        if let Ok(x) = x.get::<&str>() {
+            accum + x
+        } else if let Ok(x) = x.serialize() {
+            accum + x.as_str()
+        } else {
+            accum
+        }
+    })
 }
 
 async fn insert_into_db(db: Arc<DatabaseConnection>, id: Uuid, userid: Uuid, metadata: Metadata) {}
