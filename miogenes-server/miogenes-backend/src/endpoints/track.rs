@@ -163,5 +163,5 @@ async fn track_upload(
             .send((uuid.get(), userid, orig_filename))
             .unwrap();
     }
-    return Ok((StatusCode::OK, ()));
+    Ok((StatusCode::OK, ()))
 }
