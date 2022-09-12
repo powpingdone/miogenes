@@ -175,7 +175,11 @@ fn get_metadata(fname: impl AsRef<Path> + Clone) -> Result<Metadata, anyhow::Err
                     const BHASH_W: u32 = 128;
                     const BHASH_H: u32 = 128;
                     let dropped = image::load_from_memory(&img)?;
-                    let shrunk_img = dropped.resize_exact(BHASH_W, BHASH_H, image::imageops::FilterType::Nearest);
+                    let shrunk_img = dropped.resize_exact(
+                        BHASH_W,
+                        BHASH_H,
+                        image::imageops::FilterType::Nearest,
+                    );
                     mdata.blurhash = Some(
                         blurhash::encode(6, 6, BHASH_W, BHASH_H, &shrunk_img.to_rgba8().into_vec())
                             .as_bytes()
