@@ -130,25 +130,26 @@ fn get_metadata(fname: impl AsRef<Path> + Clone) -> Result<Metadata, anyhow::Err
     // tag metadata
     debug!("{fname}: collecting tags");
     let mut mdata: Metadata = Default::default();
-    let tags = data
+    // iterate through all tags
+    let mut set = HashMap::new();
+    for (tag, data) in data
         .container_streams()
         .iter()
-        .fold(vec![], |mut accum, streaminfo| {
+        .map(|streaminfo| {
             let tags = streaminfo.tags();
+            let mut ret = vec![];
             if let Some(tags) = tags {
                 for (tag, value) in tags.iter() {
                     trace!("{fname}: tag proc'd \"{tag}\"");
-                    accum.push((tag.to_owned(), value));
+                    ret.push((tag.to_owned(), value));
                 }
             } else {
                 debug!("{fname}: streaminfo.tags() produced a none");
             };
-            accum
-        });
-    debug!("{fname}: amt of tags {}", tags.len());
-    // iterate through all tags
-    let mut set = HashMap::new();
-    for (tag, data) in tags.into_iter() {
+            ret
+        })
+        .flatten()
+    {
         trace!("{fname}: tag \"{tag}\"");
         match tag.as_str() {
             // TODO: verify this is the right thing
