@@ -4,6 +4,7 @@ use axum::response::IntoResponse;
 use axum::*;
 use entity_self::prelude::*;
 use entity_self::*;
+use log::*;
 use sea_orm::prelude::Uuid;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,7 @@ macro_rules! HB_Task {
     ($up: tt, $down: tt, $db: expr, $t: expr, $u: expr) => {{
         let db = $db.clone();
         tokio::spawn(async move {
+            trace!("/hb spinning task $up for $u");
             $up::find()
                 .filter(
                     Condition::all()
@@ -47,26 +49,32 @@ macro_rules! HB_Unwrap {
         let x = $info.await;
         match x {
             Ok(x) => match x {
-                Ok(x) => x
-                    .iter()
-                    .map(|obj| (obj.id, obj.ts as u64))
-                    .collect::<Vec<_>>(),
-                Err(_) => {
+                Ok(x) => {
+                    let ret = x
+                        .iter()
+                        .map(|obj| (obj.id, obj.ts as u64))
+                        .collect::<Vec<_>>();
+                    trace!("/hb $info collected {} uuids", ret.len());
+                    ret
+                }
+                Err(err) => {
+                    error!("/hb $info task failed to query db: {err}");
                     return Err((
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(crate::MioError {
                             msg: "$info task failed to query database".to_owned(),
                         }),
-                       )   )
+                    ));
                 }
             },
-            Err(_) => {
+            Err(err) => {
+                error!("/hb $info task failed to execute: {err}");
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(crate::MioError {
                         msg: "$info task failed to execute".to_owned(),
                     }),
-                ))
+                ));
             }
         }
     }};
