@@ -83,11 +83,11 @@ async fn track_info(
 }
 
 async fn track_upload(
-    state: Extension<crate::MioState>,
-    Query(key): Query<crate::User>,
+    state: Extension<Arc<crate::MioState>>,
+    //Query(key): Query<crate::User>,
     mut payload: Multipart,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
-    let userid = crate::login_check(state.db.clone(), key).await?;
+    //let userid = crate::login_check(state.db.clone(), key).await?;
     let mut ret_ids: Vec<(Uuid, Uuid, String)> = vec![];
 
     // collect file
@@ -193,7 +193,7 @@ async fn track_upload(
             }
         }
 
-        ret_ids.push((uuid, userid, orig_filename));
+        ret_ids.push((uuid, /* userid */ Uuid::nil(), orig_filename));
     }
 
     #[derive(Serialize)]

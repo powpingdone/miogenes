@@ -1,10 +1,10 @@
 use glib::SendValue;
-use gstreamer::{glib, ElementFactory};
+use gstreamer::glib;
 use gstreamer_app::AppSink;
 use gstreamer_pbutils::prelude::*;
 use gstreamer_pbutils::DiscovererResult;
-use image::GenericImageView;
 use log::*;
+use path_absolutize::Absolutize;
 use sea_orm::prelude::*;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -13,6 +13,8 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::task::JoinHandle;
 use tokio::time::{timeout, Duration};
+
+use crate::DATA_DIR;
 
 // metadata parsed from the individual file
 #[derive(Default)]
@@ -55,10 +57,7 @@ pub async fn track_upload_server(
                         if !queue.is_empty() {
                             trace!("GC activate");
                             let prev_len = queue.len();
-                            queue = queue
-                                .into_iter()
-                                .filter(|task| !task.is_finished())
-                                .collect();
+                            queue.retain(|task| !task.is_finished());
                             trace!("cleaned {}", prev_len - queue.len());
                         }
                     }
@@ -79,7 +78,12 @@ pub async fn track_upload_server(
                     // TODO: possibly log "Starting task..."
                     let mdata = tokio::task::spawn_blocking({
                         let orig_filename = orig_filename.clone();
-                        move || get_metadata(orig_filename.as_str())
+                        move || {
+                            get_metadata(
+                                format!("{}{}", DATA_DIR.get().unwrap(), id).as_str(),
+                                orig_filename.as_str(),
+                            )
+                        }
                     })
                     .await
                     .expect("join failure");
@@ -91,7 +95,10 @@ pub async fn track_upload_server(
                         return;
                     }
 
-                    insert_into_db(db, id, userid, mdata.unwrap()).await;
+                    if let Err(err) = insert_into_db(db, id, userid, mdata.unwrap()).await {
+                        error!("ERROR querying the database for {orig_filename}: {err}");
+                        panic!("querying the database failed");
+                    }
                 }
             }))
             .unwrap();
@@ -100,18 +107,20 @@ pub async fn track_upload_server(
     gc.await.unwrap();
 }
 
-fn get_metadata(fname: impl AsRef<Path> + Clone) -> Result<Metadata, anyhow::Error> {
+fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error> {
     // TODO: make this timeout configurable
     let discover = gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(10))?;
-    let orig_path = fname.clone();
-    let fname = glib::filename_to_uri(fname, None)?;
-    debug!("{fname}: begin discovery");
+    trace!("{orig_path}: creating discoverer");
+    let fname = glib::filename_to_uri(Path::new(fname).absolutize()?, None)?;
+    trace!("{orig_path}: new uri created: '{fname}'");
+    debug!("{orig_path}: begin discovery");
     let data = discover.discover_uri(&fname)?;
     // TODO: implement errors for the rest (possibly, may not be needed)
+    trace!("{orig_path}: result: {:?}", data.result());
     match data.result() {
         DiscovererResult::Ok => (),
         DiscovererResult::MissingPlugins => {
-            anyhow::bail!("Missing plugin needed for file {fname}");
+            anyhow::bail!("Missing plugin needed for file {orig_path}");
         }
         DiscovererResult::Timeout => {
             anyhow::bail!("Timeout reached for processing tags")
@@ -128,49 +137,42 @@ fn get_metadata(fname: impl AsRef<Path> + Clone) -> Result<Metadata, anyhow::Err
     }
 
     // tag metadata
-    debug!("{fname}: collecting tags");
+    debug!("{orig_path}: collecting tags");
     let mut mdata: Metadata = Default::default();
     // iterate through all tags
     let mut set = HashMap::new();
-    for (tag, data) in data
-        .container_streams()
-        .iter()
-        .map(|streaminfo| {
-            let tags = streaminfo.tags();
-            let mut ret = vec![];
-            if let Some(tags) = tags {
-                for (tag, value) in tags.iter() {
-                    trace!("{fname}: tag proc'd \"{tag}\"");
-                    ret.push((tag.to_owned(), value));
-                }
-            } else {
-                debug!("{fname}: streaminfo.tags() produced a none");
-            };
-            ret
-        })
-        .flatten()
-    {
-        trace!("{fname}: tag \"{tag}\"");
+    for (tag, data) in data.audio_streams().iter().flat_map(|streaminfo| {
+        let tags = streaminfo.tags();
+        let mut ret = vec![];
+        if let Some(tags) = tags {
+            for (tag, value) in tags.iter() {
+                trace!("{orig_path}: tag proc'd \"{tag}\"");
+                ret.push((tag.to_owned(), value));
+            }
+        } else {
+            debug!("{orig_path}: streaminfo.tags() produced a none");
+        };
+        ret
+    }) {
+        trace!("{orig_path}: tag \"{tag}\"");
         match tag.as_str() {
             // TODO: verify this is the right thing
             "image" => {
                 let samp = data.get::<gstreamer::Sample>()?;
-                if let Some(bufs) = samp.buffer_list() {
+                if let Some(bufs) = samp.buffer() {
                     let img: Vec<u8> = {
                         let mut imgbuf: Vec<u8> = vec![];
                         for buf in bufs {
-                            imgbuf = buf.iter_memories().fold(imgbuf, |mut accum, mem| {
-                                // TODO: make this error better
-                                let memread =
-                                    mem.map_readable().expect("memory should be readable");
-                                memread.iter().for_each(|x| accum.push(*x));
-                                accum
-                            })
+                            // TODO: make this error better
+                            buf.map_readable()
+                                .expect("memory should be readable: {}")
+                                .iter()
+                                .for_each(|x| imgbuf.push(*x));
                         }
                         imgbuf
                     };
                     mdata.imghash = Some(hash(&img));
-                    trace!("{fname}: imghash: {:?}", mdata.imghash);
+                    trace!("{orig_path}: imghash: {:?}", mdata.imghash);
 
                     const BHASH_W: u32 = 128;
                     const BHASH_H: u32 = 128;
@@ -185,114 +187,115 @@ fn get_metadata(fname: impl AsRef<Path> + Clone) -> Result<Metadata, anyhow::Err
                             .as_bytes()
                             .to_vec(),
                     );
-                    trace!("{fname}: blurhash: {:?}", mdata.blurhash);
+                    trace!(
+                        "{orig_path}: blurhash: {:?}",
+                        String::from_utf8(mdata.blurhash.clone().unwrap())
+                            .unwrap_or_else(|_| "has non utf-8 characters".to_owned())
+                    );
                 } else {
-                    anyhow::bail!("no buffer list found for image");
+                    anyhow::bail!("no buffer found for image");
                 }
             }
 
             "title" => {
                 mdata.title = proc_tag(data);
-                trace!("{fname}: title is |\"{:?}\"|", mdata.title)
+                trace!("{orig_path}: title is {:?}", mdata.title)
             }
             "artist" => {
                 mdata.artist = proc_tag(data);
-                trace!("{fname}: artist is |\"{:?}\"|", mdata.artist)
+                trace!("{orig_path}: artist is {:?}", mdata.artist)
             }
             "album" => {
                 mdata.album = proc_tag(data);
-                trace!("{fname}: album is |\"{:?}\"|", mdata.album)
+                trace!("{orig_path}: album is {:?}", mdata.album)
             }
 
             _ => {
                 let data = proc_tag(data);
                 let ret = set.insert(tag.clone(), data.clone());
-                trace!("{fname}: KV inserted ({tag}, {data:?}), replaced ({tag}, {ret:?})")
+                trace!("{orig_path}: KV inserted ({tag}, {data:?}), replaced ({tag}, {ret:?})")
             }
         }
     }
     mdata.overflow = Some(serde_json::to_string(&set)?);
     if mdata.title.is_none() {
-        // we sanitized the filename earlier, so we can unwrap here without a panic
-        warn!("{fname}: this song has no \"title\" tag, using filename");
-        mdata.title = Some(
-            orig_path
-                .as_ref()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_owned(),
-        )
+        warn!("{orig_path}: this song has no \"title\" tag, using filename");
+        mdata.title = Some(orig_path.to_owned())
     }
     drop(discover);
 
     // audiohash
-    trace!("{fname}: beginning audiohash");
-    let elems = (
-        ElementFactory::make("uridecodebin", Some("input"))?,
-        ElementFactory::make("appsink", Some("sink"))?,
-    );
-    elems.0.set_property_from_str("uri", &fname);
-    let pipeline = gstreamer::Pipeline::new(Some("extractor"));
-    pipeline.add_many(&[&elems.0, &elems.1])?;
-    gstreamer::Element::link_many(&[&elems.0, &elems.1])?;
+    trace!("{orig_path}: beginning audiohash");
+    let pipeline = gstreamer::parse_launch(&format!(
+        "uridecodebin3 uri={fname} ! audioconvert ! appsink name=sink",
+    ))?
+    .downcast::<gstreamer::Pipeline>()
+    .expect("Expected a gst::Pipeline");
 
     // sink extractor
-    let m_loop = glib::MainLoop::new(None, false);
     let (tx, rx) = std::sync::mpsc::channel();
-    let sink = elems
-        .1
+    let sink = pipeline
+        .by_name("sink")
+        .expect("sink element not found")
         .dynamic_cast::<AppSink>()
         .expect("failed dynamic cast to AppSink");
+    sink.set_property("sync", false);
     sink.set_callbacks({
-        let fname = fname.clone();
-        let m_loop = m_loop.clone();
-        let m_loop_fname = fname.clone();
+        let orig_path = orig_path.to_owned();
         gstreamer_app::AppSinkCallbacks::builder()
             .new_sample(move |sink| {
-                trace!("{fname}: sink match from main loop entered");
+                trace!("{orig_path}: sink match from main loop entered");
                 match sink.pull_sample() {
-                    Ok(sample) => match sample.buffer_list() {
+                    Ok(sample) => match sample.buffer() {
                         Some(buflist) => {
-                            trace!("{fname}: found some buffers, sending over");
-                            for buffer in buflist.iter() {
-                                for mem in buffer.iter_memories() {
-                                    mem.map_readable()
-                                        // TODO: make this error better
-                                        .expect("memory should be readable")
-                                        .iter()
-                                        .for_each(|ret| tx.send(*ret).unwrap());
-                                }
-                            }
-                            Ok(gstreamer::FlowSuccess::Ok)
+                            trace!("{orig_path}: found some buffers, sending over");
+                            tx.send(
+                                buflist
+                                    .iter_memories()
+                                    .flat_map(|buf| {
+                                        buf.map_readable()
+                                            .expect("memory should be readable")
+                                            .iter()
+                                            .map(|x| *x)
+                                            .collect::<Vec<_>>()
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                            .unwrap();
+                            Err(gstreamer::FlowError::Eos)
                         }
                         None => {
-                            debug!("{fname}: failed to get buffer list as none was produced");
+                            debug!("{orig_path}: failed to get buffer list as none was produced");
                             Err(gstreamer::FlowError::Error)
                         }
                     },
                     Err(err) => {
-                        debug!("{fname}: failed to grab sample: {err}");
+                        debug!("{orig_path}: failed to grab sample: {err}");
                         Err(gstreamer::FlowError::Error)
                     }
                 }
-            })
-            .eos(move |_| {
-                trace!("{m_loop_fname}: called exit");
-                m_loop.quit();
             })
             .build()
     });
 
     pipeline.set_state(gstreamer::State::Playing)?;
-    debug!("{fname}: entering waveform capture loop");
-    m_loop.run();
-    debug!("{fname}: exiting waveform capture loop");
+    debug!("{orig_path}: entering waveform capture loop");
+    let bus = pipeline.bus().expect("pipeline without a bus");
+    for msg in bus.iter_timed(gstreamer::ClockTime::NONE) {
+        use gstreamer::MessageView;
+        match msg.view() {
+            MessageView::Eos(_) => break,
+            MessageView::Error(err) => anyhow::bail!("failed to execute pipeline: {err:#?}"),
+            _ => (),
+        }
+    }
+    debug!("{orig_path}: exiting waveform capture loop");
     pipeline.set_state(gstreamer::State::Null)?;
-    let waveform = rx.into_iter().collect::<Vec<_>>();
+    trace!("{orig_path}: collecting iter");
+    let waveform = rx.recv().unwrap();
+    trace!("{orig_path}: hashing");
     mdata.audiohash = Some(hash(&waveform));
-    trace!("{fname}: audiohash is {:?}", mdata.audiohash);
+    trace!("{orig_path}: audiohash is {:?}", mdata.audiohash);
 
     Ok(mdata)
 }
@@ -321,4 +324,11 @@ fn proc_tag(data: SendValue) -> Option<String> {
     }
 }
 
-async fn insert_into_db(db: Arc<DatabaseConnection>, id: Uuid, userid: Uuid, metadata: Metadata) {}
+async fn insert_into_db(
+    db: Arc<DatabaseConnection>,
+    id: Uuid,
+    userid: Uuid,
+    metadata: Metadata,
+) -> Result<(), anyhow::Error> {
+    Ok(())
+}
