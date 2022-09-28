@@ -223,6 +223,6 @@ async fn rm_files(paths: Vec<Uuid>) {
         trace!("/track_upload deleting {uuid}");
         remove_file(format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid))
             .await
-            .expect("");
+            .expect("unable to remove file {}");
     }
 }

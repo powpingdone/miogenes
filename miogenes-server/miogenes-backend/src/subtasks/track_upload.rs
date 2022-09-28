@@ -256,7 +256,7 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
                                         buf.map_readable()
                                             .expect("memory should be readable")
                                             .iter()
-                                            .map(|x| *x)
+                                            .copied()
                                             .collect::<Vec<_>>()
                                     })
                                     .collect::<Vec<_>>(),

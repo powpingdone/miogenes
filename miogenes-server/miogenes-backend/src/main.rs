@@ -22,7 +22,7 @@ mod subtasks;
 use subtasks::*;
 
 // TODO: use the user supplied dir
-static DATA_DIR: OnceCell<&'static str> = OnceCell::with_value("./files/");
+static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 
 async fn login_check(
     db: Arc<DatabaseConnection>,
@@ -137,7 +137,7 @@ async fn main() -> anyhow::Result<()> {
     gstreamer::init()?;
 
     // TODO: pick this up from config file
-    static DB_URI: &'static str = "postgres://user:password@127.0.0.1:5432/db";
+    static DB_URI: &str = "postgres://user:password@127.0.0.1:5432/db";
     let db = Arc::new({
         info!("main: connecting to database at {DB_URI}");
         sea_orm::Database::connect(DB_URI)
@@ -169,7 +169,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(axum::middleware::from_fn(log_req));
 
     // TODO: bind to user settings
-    static BINDING: &'static str = "127.0.0.1:8080";
+    static BINDING: &str = "127.0.0.1:8080";
     info!("main: starting server on {BINDING}");
     Server::bind(&BINDING.parse().unwrap())
         .serve(router.into_make_service())
