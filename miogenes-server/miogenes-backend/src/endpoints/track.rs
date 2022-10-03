@@ -2,9 +2,7 @@ use axum::extract::*;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::*;
-use entity_self::{prelude::*, track_table};
 use log::*;
-use sea_orm::{prelude::*, *};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::fs::{remove_file, File, OpenOptions};
@@ -32,10 +30,7 @@ async fn track_info(
 
     // contact the database and query it
     debug!("/track_info {}: querying db", track.trackid);
-    let resp = TrackTable::find_by_id(track.trackid)
-        .filter(Condition::all().add(track_table::Column::Owner.eq(userid)))
-        .one(state.db.as_ref())
-        .await;
+    let resp: Result<Option<Result<(), String>>, String> = Ok(Some(Ok(())));
 
     match resp {
         // database fails to talk
@@ -84,10 +79,10 @@ async fn track_info(
 
 async fn track_upload(
     state: Extension<Arc<crate::MioState>>,
-    //Query(key): Query<crate::User>,
+    Query(key): Query<crate::User>,
     mut payload: Multipart,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
-    //let userid = crate::login_check(state.db.clone(), key).await?;
+    let userid = crate::login_check(state.db.clone(), key).await?;
     let mut ret_ids: Vec<(Uuid, Uuid, String)> = vec![];
 
     // collect file
@@ -226,3 +221,4 @@ async fn rm_files(paths: Vec<Uuid>) {
             .expect("unable to remove file {}");
     }
 }
+

@@ -5,7 +5,6 @@ use gstreamer_pbutils::prelude::*;
 use gstreamer_pbutils::DiscovererResult;
 use log::*;
 use path_absolutize::Absolutize;
-use sea_orm::prelude::*;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::Path;
@@ -13,6 +12,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::task::JoinHandle;
 use tokio::time::{timeout, Duration};
+use uuid::*;
 
 use crate::DATA_DIR;
 
@@ -325,7 +325,7 @@ fn proc_tag(data: SendValue) -> Option<String> {
 }
 
 async fn insert_into_db(
-    db: Arc<DatabaseConnection>,
+    db: (),
     id: Uuid,
     userid: Uuid,
     metadata: Metadata,

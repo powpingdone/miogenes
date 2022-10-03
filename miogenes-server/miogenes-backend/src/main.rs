@@ -3,11 +3,8 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::*;
-use entity_self::prelude::*;
 use log::*;
 use once_cell::sync::OnceCell;
-use sea_orm::prelude::Uuid;
-use sea_orm::{DatabaseConnection, EntityTrait};
 use serde::{Deserialize, Serialize};
 use serde_with::base64::{Base64, UrlSafe};
 use serde_with::formats::Unpadded;
@@ -15,6 +12,7 @@ use serde_with::serde_as;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::Semaphore;
+use uuid::Uuid;
 
 mod endpoints;
 use endpoints::*;
@@ -25,7 +23,7 @@ use subtasks::*;
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 
 async fn login_check(
-    db: Arc<DatabaseConnection>,
+    db: (),
     key: User,
 ) -> Result<Uuid, (StatusCode, Json<MioError>)> {
     // TODO: use axum-login(?)
@@ -44,7 +42,7 @@ async fn login_check(
 
 #[derive(Clone)]
 pub struct MioState {
-    db: Arc<DatabaseConnection>,
+    db: (),
     proc_tracks_tx: UnboundedSender<(Uuid, Uuid, String)>,
     lim: Arc<Semaphore>,
 }
@@ -67,46 +65,10 @@ pub struct MioError {
 impl User {
     async fn check(
         &self,
-        db: &DatabaseConnection,
+        db: &(),
     ) -> Result<Uuid, (StatusCode, axum::Json<MioError>)> {
         trace!("user::check: query DB for user");
-        let check = UserTable::find_by_id(self.username).one(db).await;
-        // if db didn't error out
-        match check {
-            Ok(check) => {
-                // if user actually exists
-                match check {
-                    Some(check) => {
-                        // if the sha256 hash matches
-                        if check.password == self.password {
-                            Ok(self.username)
-                        } else {
-                            Err((
-                                StatusCode::UNAUTHORIZED,
-                                Json(MioError {
-                                    msg: "invalid password".to_owned(),
-                                }),
-                            ))
-                        }
-                    }
-                    None => Err((
-                        StatusCode::UNAUTHORIZED,
-                        Json(MioError {
-                            msg: "invalid user id".to_owned(),
-                        }),
-                    )),
-                }
-            }
-            Err(err) => {
-                error!("user::check database query error: {err}");
-                Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(MioError {
-                        msg: "database error".to_owned(),
-                    }),
-                ))
-            }
-        }
+        Ok(Uuid::nil())
     }
 }
 
@@ -132,20 +94,13 @@ async fn version() -> impl IntoResponse {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    use migration::{Migrator, MigratorTrait};
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     gstreamer::init()?;
 
     // TODO: pick this up from config file
     static DB_URI: &str = "postgres://user:password@127.0.0.1:5432/db";
-    let db = Arc::new({
-        info!("main: connecting to database at {DB_URI}");
-        sea_orm::Database::connect(DB_URI)
-            .await
-            .expect("Failed to connect to db: {}")
-    });
+    let db = ();
     info!("main: performing migrations for DB");
-    Migrator::up(db.as_ref(), None).await?;
 
     // spin subtasks
     trace!("main: spinning subtasks");
@@ -163,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
     trace!("main: building router");
     let router = Router::new()
         .route("/ver", get(version))
-        .route("/hb", get(heartbeat::heartbeat))
+        .route("/search", get(search::search))
         .nest("/track", track::routes())
         .layer(Extension(state))
         .layer(axum::middleware::from_fn(log_req));
