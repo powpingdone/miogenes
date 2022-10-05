@@ -98,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
     gstreamer::init()?;
 
     // TODO: pick this up from config file
-    static DB_URI: &str = "postgres://user:password@127.0.0.1:5432/db";
+    static DB_URI: &str = "";
     let db = ();
     info!("main: performing migrations for DB");
 
