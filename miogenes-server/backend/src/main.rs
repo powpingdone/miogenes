@@ -1,4 +1,5 @@
-use axum::http::{Request, StatusCode};
+use axum::body::{boxed, Body};
+use axum::http::{Request, Response, StatusCode};
 use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::*;
@@ -12,6 +13,8 @@ use serde_with::serde_as;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::Semaphore;
+use tower::util::ServiceExt;
+use tower_http::services::ServeDir;
 use uuid::Uuid;
 
 mod endpoints;
@@ -22,10 +25,7 @@ use subtasks::*;
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 
-async fn login_check(
-    db: (),
-    key: User,
-) -> Result<Uuid, (StatusCode, Json<MioError>)> {
+async fn login_check(db: (), key: User) -> Result<Uuid, (StatusCode, Json<MioError>)> {
     // TODO: use axum-login(?)
     trace!("login_check: login check for {key:?}");
     let userid = key.check(&db).await;
@@ -63,10 +63,7 @@ pub struct MioError {
 }
 
 impl User {
-    async fn check(
-        &self,
-        db: &(),
-    ) -> Result<Uuid, (StatusCode, axum::Json<MioError>)> {
+    async fn check(&self, db: &()) -> Result<Uuid, (StatusCode, axum::Json<MioError>)> {
         trace!("user::check: query DB for user");
         Ok(Uuid::nil())
     }
@@ -112,17 +109,24 @@ async fn main() -> anyhow::Result<()> {
     });
     let subtasks = [tokio::spawn({
         let state = state.clone();
-        async move { track_upload::track_upload_server(state, proc_tracks_rx).await }
+        async move { subtasks::track_upload::track_upload_server(state, proc_tracks_rx).await }
     })];
 
     trace!("main: building router");
+    // TODO: this needs to be not static
+    static STATIC_DIR: &str = "./dist";
     let router = Router::new()
-        .route("/ver", get(version))
-        .route("/search", get(search::search))
-        .nest("/track", track::routes())
-        .layer(Extension(state))
-        .layer(axum::middleware::from_fn(log_req));
-
+        .nest(
+            "/api",
+            Router::new()
+                .route("/ver", get(version))
+                .route("/search", get(search::search))
+                .nest("/track", track_manage::routes())
+                .nest("/query", query::routes())
+                .layer(Extension(state))
+                .layer(axum::middleware::from_fn(log_req)),
+        )
+        .merge(axum_extra::routing::SpaRouter::new("/assets", STATIC_DIR));
     // TODO: bind to user settings
     static BINDING: &str = "127.0.0.1:8080";
     info!("main: starting server on {BINDING}");
@@ -138,6 +142,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+// small logging function that logs the method (eg, GET) and endpoint uri
 async fn log_req<B>(req: Request<B>, next: Next<B>) -> impl IntoResponse {
     info!("{} {}", req.method(), req.uri());
     next.run(req).await

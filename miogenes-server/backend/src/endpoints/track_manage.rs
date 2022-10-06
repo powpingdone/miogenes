@@ -10,71 +10,8 @@ use tokio::io::{AsyncWriteExt, ErrorKind};
 use uuid::Uuid;
 
 pub fn routes() -> Router {
-    Router::new()
-        .route("/ti", get(track_info))
-        .route("/tu", put(track_upload))
-}
-
-#[derive(Debug, Deserialize)]
-struct TInfoQuery {
-    #[serde(rename = "tr")]
-    trackid: Uuid,
-}
-
-async fn track_info(
-    state: Extension<Arc<crate::MioState>>,
-    key: Query<crate::User>,
-    track: Query<TInfoQuery>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
-    let userid = crate::login_check(state.db.clone(), key.0).await?;
-
-    // contact the database and query it
-    debug!("/track_info {}: querying db", track.trackid);
-    let resp: Result<Option<Result<(), String>>, String> = Ok(Some(Ok(())));
-
-    match resp {
-        // database fails to talk
-        Err(err) => {
-            error!(
-                "/track_info database query returned an error {}: {err}",
-                track.trackid
-            );
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(crate::MioError {
-                    msg: format!("database error for {}", track.trackid),
-                }),
-            ))
-        }
-        Ok(resp) => match resp {
-            // track doesn't exist
-            None => {
-                debug!("/track_info {}: track not found", track.trackid);
-                Err((
-                    StatusCode::NOT_FOUND,
-                    Json(crate::MioError {
-                        msg: format!("no track found for {}", track.trackid),
-                    }),
-                ))
-            }
-            Some(content) => match serde_json::to_string(&content) {
-                Ok(json) => {
-                    trace!("/track_info {}: json = {json}", track.trackid);
-                    Ok((StatusCode::OK, Json(json)))
-                }
-                // somehow, serialization failed
-                Err(err) => {
-                    error!("/track_info serialization failure {}: {err}", track.trackid);
-                    Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(crate::MioError {
-                            msg: format!("internal serialization error for {}", track.trackid),
-                        }),
-                    ))
-                }
-            },
-        },
-    }
+    Router::new().route("/tu", put(track_upload))
+    //.route("/td", put(track_delete))
 }
 
 async fn track_upload(
@@ -147,7 +84,7 @@ async fn track_upload(
             },
             |ret| {
                 trace!("used orig filename: {ret}");
-                ret.to_string()
+                ret.to_owned()
             },
         ));
 
@@ -221,4 +158,3 @@ async fn rm_files(paths: Vec<Uuid>) {
             .expect("unable to remove file {}");
     }
 }
-
