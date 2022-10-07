@@ -124,11 +124,11 @@ async fn main() -> anyhow::Result<()> {
                 .nest("/track", track_manage::routes())
                 .nest("/query", query::routes())
                 .layer(Extension(state))
-                .layer(axum::middleware::from_fn(log_req)),
         )
-        .merge(axum_extra::routing::SpaRouter::new("/assets", STATIC_DIR));
+        .merge(axum_extra::routing::SpaRouter::new("/assets", STATIC_DIR))
+        .layer(axum::middleware::from_fn(log_req));
     // TODO: bind to user settings
-    static BINDING: &str = "127.0.0.1:8080";
+    static BINDING: &str = "127.0.0.1:8081";
     info!("main: starting server on {BINDING}");
     Server::bind(&BINDING.parse().unwrap())
         .serve(router.into_make_service())
