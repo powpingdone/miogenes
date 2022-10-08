@@ -6,6 +6,7 @@ use gstreamer_pbutils::DiscovererResult;
 use log::*;
 use path_absolutize::Absolutize;
 use sha2::{Digest, Sha256};
+use surrealdb::Datastore;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -233,6 +234,7 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
     .expect("Expected a gst::Pipeline");
 
     // sink extractor
+    // TODO: either do a shared memory thing or Oneshot it
     let (tx, rx) = std::sync::mpsc::channel();
     let sink = pipeline
         .by_name("sink")
@@ -278,6 +280,7 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
             .build()
     });
 
+    // begin the actual fetching
     pipeline.set_state(gstreamer::State::Playing)?;
     debug!("{orig_path}: entering waveform capture loop");
     let bus = pipeline.bus().expect("pipeline without a bus");
@@ -325,7 +328,7 @@ fn proc_tag(data: SendValue) -> Option<String> {
 }
 
 async fn insert_into_db(
-    db: (),
+    db: Arc<Datastore>,
     id: Uuid,
     userid: Uuid,
     metadata: Metadata,
