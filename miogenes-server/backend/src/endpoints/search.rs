@@ -11,11 +11,10 @@ use uuid::Uuid;
 pub async fn search(
     Extension(state): Extension<Arc<crate::MioState>>,
     ws: WebSocketUpgrade,
-    Query(key): Query<crate::User>,
+    Extension(user): Extension<crate::User>,
 ) -> Result<Response, impl IntoResponse> {
-    let userid = crate::login_check(state.db.clone(), key).await?;
     Ok::<_, (StatusCode, Json<crate::MioError>)>(
-        ws.on_upgrade(move |x| search_inner(x, state, userid)),
+        ws.on_upgrade(move |x| search_inner(x, state, user.userid)),
     )
 }
 

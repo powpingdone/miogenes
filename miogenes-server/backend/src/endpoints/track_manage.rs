@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use log::*;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 use tokio::fs::{remove_file, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
@@ -15,11 +15,11 @@ pub fn routes() -> Router {
 }
 
 async fn track_upload(
-    state: Extension<Arc<crate::MioState>>,
-    Query(key): Query<crate::User>,
+    Extension(state): Extension<Arc<crate::MioState>>,
     mut payload: Multipart,
+    Extension(user): Extension<crate::User>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
-    let userid = crate::login_check(state.db.clone(), key).await?;
+    let userid = user.userid;
     let mut ret_ids: Vec<(Uuid, Uuid, String)> = vec![];
 
     // collect file
@@ -125,7 +125,7 @@ async fn track_upload(
             }
         }
 
-        ret_ids.push((uuid, /* userid */ Uuid::nil(), orig_filename));
+        ret_ids.push((uuid, userid, orig_filename));
     }
 
     #[derive(Serialize)]
@@ -134,7 +134,7 @@ async fn track_upload(
     }
 
     Ok((
-        StatusCode::OK,
+        StatusCode::PROCESSING,
         Json(UploadReturn {
             uuid: ret_ids
                 .into_iter()

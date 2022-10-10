@@ -1,48 +1,33 @@
-use axum::body::{boxed, Body};
-use axum::http::{Request, Response, StatusCode};
+use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::*;
+use axum_login::RequireAuthorizationLayer;
+use axum_login::axum_sessions::SessionLayer;
+use axum_login::axum_sessions::async_session::MemoryStore;
 use gstreamer::glib;
 use log::*;
 use once_cell::sync::OnceCell;
 use path_absolutize::Absolutize;
-use serde::{Deserialize, Serialize};
-use serde_with::base64::{Base64, UrlSafe};
-use serde_with::formats::Unpadded;
-use serde_with::serde_as;
+use serde::Serialize;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use surrealdb::{Datastore, Session};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
-use tokio::sync::Semaphore;
-use tower::util::ServiceExt;
-use tower_http::services::ServeDir;
+use tokio::sync::{Semaphore, RwLock};
 use uuid::Uuid;
 
 mod endpoints;
 use endpoints::*;
 mod subtasks;
 use subtasks::*;
+mod user;
+use user::*;
 
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
-
-async fn login_check(db: Arc<Datastore>, key: User) -> Result<Uuid, (StatusCode, Json<MioError>)> {
-    // TODO: use axum-login(?)
-    trace!("login_check: login check for {key:?}");
-    let userid = key.check(db).await;
-    if userid.is_err() {
-        info!(
-            "login_check: invalid login for {}: {userid:?}",
-            key.username
-        );
-    } else {
-        trace!("login_check: login good for {}", key.username);
-    }
-    userid
-}
 
 #[derive(Clone)]
 pub struct MioState {
@@ -50,28 +35,12 @@ pub struct MioState {
     sess: Session,
     proc_tracks_tx: UnboundedSender<(Uuid, Uuid, String)>,
     lim: Arc<Semaphore>,
-}
-
-#[serde_as]
-#[derive(Deserialize, Debug)]
-pub struct User {
-    #[serde(rename = "u")]
-    username: Uuid,
-    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    #[serde(rename = "h")]
-    password: [u8; 32],
+    users: Arc<RwLock<HashMap<String, User>>>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct MioError {
     msg: String,
-}
-
-impl User {
-    async fn check(&self, db: Arc<Datastore>) -> Result<Uuid, (StatusCode, axum::Json<MioError>)> {
-        trace!("user::check: query DB for user");
-        Ok(Uuid::nil())
-    }
 }
 
 async fn version() -> impl IntoResponse {
@@ -92,6 +61,7 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     gstreamer::init()?;
 
+    // create the main passing state
     trace!("main: creating state");
     let db = Arc::new(
         Datastore::new(&glib::filename_to_uri(
@@ -106,13 +76,27 @@ async fn main() -> anyhow::Result<()> {
         sess: Session::for_kv(),
         proc_tracks_tx,
         lim: Arc::new(Semaphore::const_new(num_cpus::get())),
+        users: Arc::new(RwLock::new(HashMap::default())),
     });
 
+    // create the user state
+    trace!("main: setting up users");
+    let secret: [u8; 64] = rand::random();
+    let session_layer = SessionLayer::new(MemoryStore::new(), &secret).with_secure(false);
+    debug!("main: loading users");
+    let users = state.db.execute("SELECT * FROM user;", &state.sess, None, false).await.unwrap();
+    for user in users {
+        let user = user.result.unwrap();
+        println!("{user:?}");
+        todo!();
+    }
+
+    
     // spin subtasks
     trace!("main: spinning subtasks");
     let subtasks = [tokio::spawn({
         let state = state.clone();
-        async move { subtasks::track_upload::track_upload_server(state, proc_tracks_rx).await }
+        async move { track_upload::track_upload_server(state, proc_tracks_rx).await }
     })];
 
     trace!("main: building router");
@@ -128,8 +112,10 @@ async fn main() -> anyhow::Result<()> {
                 .nest("/query", query::routes())
                 .layer(Extension(state)),
         )
+        .route_layer(RequireAuthorizationLayer::<User>::login())
         .merge(axum_extra::routing::SpaRouter::new("/assets", STATIC_DIR))
-        .layer(axum::middleware::from_fn(log_req));
+        .layer(axum::middleware::from_fn(log_req))
+        .layer(session_layer);
     // TODO: bind to user settings
     static BINDING: &str = "127.0.0.1:8081";
     info!("main: starting server on {BINDING}");
