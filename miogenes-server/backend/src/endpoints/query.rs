@@ -24,7 +24,7 @@ struct TrackInfoQuery {
 
 async fn track_info(
     Extension(state): Extension<Arc<crate::MioState>>,
-    Query(key): Query<crate::User>,
+    Extension(key): Extension<crate::User>,
     Query(track): Query<TrackInfoQuery>,
 ) -> impl IntoResponse {
     todo!()
@@ -38,7 +38,7 @@ struct AlbumInfoQuery {
 
 async fn album_info(
     Extension(state): Extension<Arc<crate::MioState>>,
-    Query(key): Query<crate::User>,
+    Extension(key): Extension<crate::User>,
     Query(album): Query<AlbumInfoQuery>,
 ) -> impl IntoResponse {
     todo!()
@@ -48,7 +48,7 @@ async fn album_info(
 // ex: name, blurhash logo, id
 async fn playlists(
     Extension(state): Extension<Arc<crate::MioState>>,
-    Query(key): Query<crate::User>,
+    Extension(key): Extension<crate::User>,
 ) -> impl IntoResponse {
     todo!()
 }
@@ -65,7 +65,7 @@ struct PlaylistQuery {
 
 async fn playlist_info(
     Extension(state): Extension<Arc<crate::MioState>>,
-    Query(key): Query<crate::User>,
+    Extension(key): Extension<crate::User>,
     Query(plquery): Query<PlaylistQuery>,
 ) -> impl IntoResponse {
     todo!()

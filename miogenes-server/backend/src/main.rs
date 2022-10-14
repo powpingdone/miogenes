@@ -3,9 +3,9 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::*;
-use axum_login::RequireAuthorizationLayer;
-use axum_login::axum_sessions::SessionLayer;
 use axum_login::axum_sessions::async_session::MemoryStore;
+use axum_login::axum_sessions::SessionLayer;
+use axum_login::RequireAuthorizationLayer;
 use gstreamer::glib;
 use log::*;
 use once_cell::sync::OnceCell;
@@ -14,9 +14,10 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+use surrealdb::sql::Idiom;
 use surrealdb::{Datastore, Session};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
-use tokio::sync::{Semaphore, RwLock};
+use tokio::sync::{RwLock, Semaphore};
 use uuid::Uuid;
 
 mod endpoints;
@@ -25,6 +26,8 @@ mod subtasks;
 use subtasks::*;
 mod user;
 use user::*;
+mod migration;
+use migration::migrate;
 
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
@@ -70,12 +73,20 @@ async fn main() -> anyhow::Result<()> {
         )?)
         .await?,
     );
+    migrate(db.clone()).await;
     let (proc_tracks_tx, proc_tracks_rx) = unbounded_channel();
     let state = Arc::new(MioState {
         db: db.clone(),
-        sess: Session::for_kv(),
+        sess: Session::for_db("ns", "db"),
         proc_tracks_tx,
-        lim: Arc::new(Semaphore::const_new(num_cpus::get())),
+        lim: Arc::new(Semaphore::const_new({
+            let cpus = num_cpus::get();
+            if cpus <= 1 {
+                cpus
+            } else {
+                cpus - 1
+            }
+        })),
         users: Arc::new(RwLock::new(HashMap::default())),
     });
 
@@ -84,14 +95,32 @@ async fn main() -> anyhow::Result<()> {
     let secret: [u8; 64] = rand::random();
     let session_layer = SessionLayer::new(MemoryStore::new(), &secret).with_secure(false);
     debug!("main: loading users");
-    let users = state.db.execute("SELECT * FROM user;", &state.sess, None, false).await.unwrap();
-    for user in users {
-        let user = user.result.unwrap();
-        println!("{user:?}");
-        todo!();
-    }
+    state
+        .db
+        .execute(
+            &format!(
+                "CREATE user:`{}` SET username = 'aaaaa', password=[64, 62];",
+                Uuid::nil()
+            ),
+            &state.sess,
+            None,
+            false,
+        )
+        .await
+        .unwrap();
+    let users = &state
+        .db
+        .execute("SELECT * FROM user;", &state.sess, None, false)
+        .await
+        .unwrap()[0];
+    println!("{:?}", users.result.unwrap().pick(Idiom::));
+    todo!();
+    //for user in users.result.unwrap().pick(&Idiom::parse("[*][*]")) {
+    //    let user = user.result.unwrap();
+    //    println!("{user:#?}");
+    //    todo!();
+    //}
 
-    
     // spin subtasks
     trace!("main: spinning subtasks");
     let subtasks = [tokio::spawn({
