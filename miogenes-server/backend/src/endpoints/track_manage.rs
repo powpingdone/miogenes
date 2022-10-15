@@ -17,9 +17,8 @@ pub fn routes() -> Router {
 async fn track_upload(
     Extension(state): Extension<Arc<crate::MioState>>,
     mut payload: Multipart,
-    Extension(user): Extension<crate::User>,
+    Extension(userid): Extension<Uuid>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
-    let userid = user.userid;
     let mut ret_ids: Vec<(Uuid, Uuid, String)> = vec![];
 
     // collect file

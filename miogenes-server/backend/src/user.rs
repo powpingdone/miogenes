@@ -1,4 +1,8 @@
-use axum_login::AuthUser;
+use axum::{Extension, async_trait, Json};
+use axum::extract::{Query, FromRequest, RequestParts};
+use axum::http::{Request, StatusCode};
+use axum::middleware::Next;
+use axum::response::IntoResponse;
 use serde::*;
 use serde_with::base64::{Base64, UrlSafe};
 use serde_with::formats::Unpadded;
@@ -8,24 +12,42 @@ use uuid::Uuid;
 #[serde_as]
 #[derive(Deserialize, Debug, Clone)]
 pub struct User {
-    #[serde(rename = "i")]
-    pub userid: Uuid,
-    #[serde(rename = "u")]
+    #[serde(alias = "i")]
+    pub userid: Option<Uuid>,
+    #[serde(alias = "u")]
     pub username: String,
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    #[serde(rename = "h")]
+    #[serde(alias = "h")]
     pub password: [u8; 32],
 }
 
-impl AuthUser for User {
-    fn get_id(&self) -> String {
-        self.userid.to_string()
-    }
+pub(crate) struct Authenticate;
 
-    fn get_password_hash(&self) -> String {
-        self.password
-            .iter()
-            .map(|x| format!("{x:01x}"))
-            .fold("".to_owned(), |accum, x| accum + &x)
+#[async_trait]
+impl<B> FromRequest<B> for Authenticate where B: Send {
+    type Rejection = (StatusCode, Json<crate::MioError>);
+    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
+        todo!()
     }
+}
+
+pub async fn login(
+    Extension(state): Extension<crate::MioState>,
+    Query(user): Query<User>,
+) -> impl IntoResponse {
+    todo!()
+}
+
+pub async fn refresh_token(
+    Extension(state): Extension<crate::MioState>,
+    Query(token): Query<mio_common::msgstructs::UserToken>
+) -> impl IntoResponse {
+    todo!()
+}
+
+pub async fn logout(
+    Extension(state): Extension<crate::MioState>,
+    Query(token): Query<mio_common::msgstructs::UserToken>,
+) -> impl IntoResponse {
+    todo!()
 }

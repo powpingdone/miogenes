@@ -3,9 +3,6 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::*;
-use axum_login::axum_sessions::async_session::MemoryStore;
-use axum_login::axum_sessions::SessionLayer;
-use axum_login::RequireAuthorizationLayer;
 use gstreamer::glib;
 use log::*;
 use once_cell::sync::OnceCell;
@@ -14,7 +11,6 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use surrealdb::sql::Idiom;
 use surrealdb::{Datastore, Session};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::{RwLock, Semaphore};
@@ -28,6 +24,8 @@ mod user;
 use user::*;
 mod migration;
 use migration::migrate;
+mod db_query;
+use db_query::*;
 
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
@@ -91,15 +89,12 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // create the user state
-    trace!("main: setting up users");
-    let secret: [u8; 64] = rand::random();
-    let session_layer = SessionLayer::new(MemoryStore::new(), &secret).with_secure(false);
     debug!("main: loading users");
     state
         .db
         .execute(
             &format!(
-                "CREATE user:`{}` SET username = 'aaaaa', password=[64, 62];",
+                "CREATE user SET userid='{}', username = 'aaaaa', password='n1ua6XJK7wEOGpC3u4ZJSRLnPpFccfF7SskQHFDcvJI=';",
                 Uuid::nil()
             ),
             &state.sess,
@@ -108,12 +103,10 @@ async fn main() -> anyhow::Result<()> {
         )
         .await
         .unwrap();
-    let users = &state
-        .db
-        .execute("SELECT * FROM user;", &state.sess, None, false)
+    let users = select::<Vec<User>>(state.clone(), "user", None, None)
         .await
-        .unwrap()[0];
-    println!("{:?}", users.result.unwrap().pick(Idiom::));
+        .unwrap();
+    println!("{users:?}");
     todo!();
     //for user in users.result.unwrap().pick(&Idiom::parse("[*][*]")) {
     //    let user = user.result.unwrap();
@@ -141,10 +134,11 @@ async fn main() -> anyhow::Result<()> {
                 .nest("/query", query::routes())
                 .layer(Extension(state)),
         )
-        .route_layer(RequireAuthorizationLayer::<User>::login())
+        .route_layer(middleware::from_extractor::<user::Authenticate>())
         .merge(axum_extra::routing::SpaRouter::new("/assets", STATIC_DIR))
-        .layer(axum::middleware::from_fn(log_req))
-        .layer(session_layer);
+        .route("/login", get(user::login).post(user::refresh_token))
+        .route("/logout", post(user::logout))
+        .layer(axum::middleware::from_fn(log_req));
     // TODO: bind to user settings
     static BINDING: &str = "127.0.0.1:8081";
     info!("main: starting server on {BINDING}");
