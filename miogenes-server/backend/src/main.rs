@@ -7,7 +7,8 @@ use gstreamer::glib;
 use log::*;
 use once_cell::sync::OnceCell;
 use path_absolutize::Absolutize;
-use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -24,8 +25,6 @@ mod user;
 use user::*;
 mod migration;
 use migration::migrate;
-mod db_query;
-use db_query::*;
 
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
@@ -36,12 +35,23 @@ pub struct MioState {
     sess: Session,
     proc_tracks_tx: UnboundedSender<(Uuid, Uuid, String)>,
     lim: Arc<Semaphore>,
-    users: Arc<RwLock<HashMap<String, User>>>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct MioError {
     msg: String,
+}
+
+// terrible hack to serialize structs
+// serialize to_value into serde_json's own value system
+// then from_value the values generated
+pub fn db_deser<T: DeserializeOwned>(mut query: surrealdb::Response) -> anyhow::Result<T> {
+    println!("{:?}", query.result);
+    Ok(serde_json::from_value({
+        let x = serde_json::to_value({ query.result? })?;
+        println!("{x:?}");
+        x
+    })?)
 }
 
 async fn version() -> impl IntoResponse {
@@ -85,7 +95,6 @@ async fn main() -> anyhow::Result<()> {
                 cpus - 1
             }
         })),
-        users: Arc::new(RwLock::new(HashMap::default())),
     });
 
     // create the user state
@@ -93,19 +102,23 @@ async fn main() -> anyhow::Result<()> {
     state
         .db
         .execute(
-            &format!(
-                "CREATE user SET userid='{}', username = 'aaaaa', password='n1ua6XJK7wEOGpC3u4ZJSRLnPpFccfF7SskQHFDcvJI=';",
-                Uuid::nil()
-            ),
+            &format!("CREATE user:`{}` SET username = $username, password='n1ua6XJK7wEOGpC3u4ZJSRLnPpFccfF7SskQHFDcvJI=';", Uuid::new_v4()),
             &state.sess,
-            None,
+            Some([("username".to_owned(), "beppy".into())].into()),
             false,
         )
         .await
         .unwrap();
-    let users = select::<Vec<User>>(state.clone(), "user", None, None)
-        .await
-        .unwrap();
+    let users: Vec<User> = db_deser(
+        state
+            .db
+            .execute("SELECT * FROM user;", &state.sess, None, false)
+            .await
+            .unwrap()
+            .pop()
+            .unwrap(),
+    )
+    .unwrap();
     println!("{users:?}");
     todo!();
     //for user in users.result.unwrap().pick(&Idiom::parse("[*][*]")) {

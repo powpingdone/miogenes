@@ -9,6 +9,7 @@ anyhow = {version = "1.0.60", features = ["backtrace"]}
 axum = {version = "0.5.15", features = ["multipart", "ws"]}
 axum-extra = {version = "0.3.7", features = ["spa"]}
 blurhash = "0.1.1"
+chrono = { version = "0.4.22", features = ["serde"] }
 env_logger = "0.9.0"
 futures = "0.3.23"
 gstreamer = {version = "0.18.8", features = [
