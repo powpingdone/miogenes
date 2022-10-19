@@ -9,13 +9,21 @@ enum Route {
     Home,
     #[at("/ver")]
     Ver,
+    #[at("/login")]
+    Login,
 }
 
 fn switch(routes: &Route) -> Html {
     match routes {
         Route::Home => html! { <h1>{ "Hello Frontend" }</h1> },
         Route::Ver => html! {<Ver/>},
+        Route::Login => html! { <Login/> }
     }
+}
+
+#[function_component(Login)]
+fn login() {
+    html! {}
 }
 
 #[function_component(App)]

@@ -45,10 +45,10 @@ pub struct MioError {
 // terrible hack to serialize structs
 // serialize to_value into serde_json's own value system
 // then from_value the values generated
-pub fn db_deser<T: DeserializeOwned>(mut query: surrealdb::Response) -> anyhow::Result<T> {
+pub fn db_deser<T: DeserializeOwned>(query: surrealdb::Response) -> anyhow::Result<T> {
     println!("{:?}", query.result);
     Ok(serde_json::from_value({
-        let x = serde_json::to_value({ query.result? })?;
+        let x = serde_json::to_value(query.result?)?;
         println!("{x:?}");
         x
     })?)
@@ -99,16 +99,16 @@ async fn main() -> anyhow::Result<()> {
 
     // create the user state
     debug!("main: loading users");
-    state
-        .db
-        .execute(
-            &format!("CREATE user:`{}` SET username = $username, password='n1ua6XJK7wEOGpC3u4ZJSRLnPpFccfF7SskQHFDcvJI=';", Uuid::new_v4()),
-            &state.sess,
-            Some([("username".to_owned(), "beppy".into())].into()),
-            false,
-        )
-        .await
-        .unwrap();
+    //state
+    //    .db
+    //    .execute(
+    //        &format!("CREATE user:`{}` SET username = $username, password='XohImNooBHFR0OVvjcYpJ3NgPQ1qq73WKhHvch0VQtg=';", Uuid::new_v4()),
+    //        &state.sess,
+    //        Some([("username".to_owned(), "beppy".into())].into()),
+    //        false,
+    //    )
+    //    .await
+    //    .unwrap();
     let users: Vec<User> = db_deser(
         state
             .db
@@ -120,12 +120,6 @@ async fn main() -> anyhow::Result<()> {
     )
     .unwrap();
     println!("{users:?}");
-    todo!();
-    //for user in users.result.unwrap().pick(&Idiom::parse("[*][*]")) {
-    //    let user = user.result.unwrap();
-    //    println!("{user:#?}");
-    //    todo!();
-    //}
 
     // spin subtasks
     trace!("main: spinning subtasks");
@@ -145,13 +139,13 @@ async fn main() -> anyhow::Result<()> {
                 .route("/search", get(search::search))
                 .nest("/track", track_manage::routes())
                 .nest("/query", query::routes())
-                .layer(Extension(state)),
         )
         .route_layer(middleware::from_extractor::<user::Authenticate>())
         .merge(axum_extra::routing::SpaRouter::new("/assets", STATIC_DIR))
-        .route("/login", get(user::login).post(user::refresh_token))
-        .route("/logout", post(user::logout))
-        .layer(axum::middleware::from_fn(log_req));
+        .route("/_login", get(user::login).post(user::refresh_token))
+        .route("/_logout", post(user::logout))
+        .layer(axum::middleware::from_fn(log_req))
+        .layer(Extension(state));
     // TODO: bind to user settings
     static BINDING: &str = "127.0.0.1:8081";
     info!("main: starting server on {BINDING}");
