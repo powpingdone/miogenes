@@ -37,6 +37,8 @@ pub struct User {
     pub password: [u8; 32],
 }
 
+static TIMEOUT_TIME: i64 = 3;
+
 pub(crate) struct Authenticate;
 
 #[async_trait]
@@ -103,9 +105,37 @@ pub async fn login(
             }
         }
     };
+
     let new_token = Uuid::new_v4();
     // TODO: let server host specify when logout tokens expire
-    let expiry = chrono::Utc::now() + chrono::Duration::days(3);
+    let expiry = chrono::Utc::now() + chrono::Duration::days(TIMEOUT_TIME);
+    state
+        .db
+        .execute(
+            &format!("CREATE user_token:`{new_token}` SET expires = $expires;"),
+            &state.sess,
+            Some([("expires".to_owned(), expiry.into())].into()),
+            false,
+        )
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    state
+        .db
+        .execute(
+            &format!(
+                "UPDATE {} SET tokens += [user_token:`{new_token}`];",
+                user.id.unwrap()
+            ),
+            &state.sess,
+            None,
+            false,
+        )
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
 
     Ok((StatusCode::OK, Json(UserToken(new_token))))
 }
@@ -114,7 +144,28 @@ pub async fn refresh_token(
     Extension(state): Extension<Arc<crate::MioState>>,
     Query(UserToken(token)): Query<UserToken>,
 ) -> impl IntoResponse {
-    todo!()
+    let ret = state
+        .db
+        .execute(
+            &format!(
+                "UPDATE user_token:`{token}` SET expires = $expires WHERE is_expired = false;"
+            ),
+            &state.sess,
+            Some(
+                [(
+                    "expires".to_owned(),
+                    (chrono::Utc::now() + chrono::Duration::days(TIMEOUT_TIME)).into(),
+                )]
+                .into(),
+            ),
+            false,
+        )
+        .await;
+    if ret.is_err() || ret.unwrap().pop().is_none() {
+        StatusCode::INTERNAL_SERVER_ERROR
+    } else {
+        StatusCode::OK
+    }
 }
 
 pub async fn logout(
