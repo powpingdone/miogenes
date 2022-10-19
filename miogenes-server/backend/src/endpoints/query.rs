@@ -8,6 +8,8 @@ use log::*;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use crate::{MioState, User};
+
 pub fn routes() -> Router {
     Router::new()
         .route("/ti", get(track_info))
@@ -23,8 +25,8 @@ struct TrackInfoQuery {
 }
 
 async fn track_info(
-    Extension(state): Extension<Arc<crate::MioState>>,
-    Extension(key): Extension<crate::User>,
+    Extension(state): Extension<Arc<MioState>>,
+    Extension(key): Extension<User>,
     Query(track): Query<TrackInfoQuery>,
 ) -> impl IntoResponse {
     todo!()
@@ -37,8 +39,8 @@ struct AlbumInfoQuery {
 }
 
 async fn album_info(
-    Extension(state): Extension<Arc<crate::MioState>>,
-    Extension(key): Extension<crate::User>,
+    Extension(state): Extension<Arc<MioState>>,
+    Extension(key): Extension<User>,
     Query(album): Query<AlbumInfoQuery>,
 ) -> impl IntoResponse {
     todo!()
@@ -47,8 +49,8 @@ async fn album_info(
 // return basic info of playlists 
 // ex: name, blurhash logo, id
 async fn playlists(
-    Extension(state): Extension<Arc<crate::MioState>>,
-    Extension(key): Extension<crate::User>,
+    Extension(state): Extension<Arc<MioState>>,
+    Extension(key): Extension<User>,
 ) -> impl IntoResponse {
     todo!()
 }
@@ -64,8 +66,8 @@ struct PlaylistQuery {
 }
 
 async fn playlist_info(
-    Extension(state): Extension<Arc<crate::MioState>>,
-    Extension(key): Extension<crate::User>,
+    Extension(state): Extension<Arc<MioState>>,
+    Extension(key): Extension<User>,
     Query(plquery): Query<PlaylistQuery>,
 ) -> impl IntoResponse {
     todo!()

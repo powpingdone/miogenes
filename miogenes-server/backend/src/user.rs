@@ -13,7 +13,7 @@ use serde_with::formats::Unpadded;
 use serde_with::serde_as;
 use uuid::Uuid;
 
-use crate::{db_deser, MioError};
+use crate::{db_deser, MioError, MioState};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct DBUserToken {
@@ -46,9 +46,58 @@ impl<B> FromRequest<B> for Authenticate
 where
     B: Send,
 {
-    type Rejection = (StatusCode, Json<crate::MioError>);
+    type Rejection = (StatusCode, Json<MioError>);
     async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        todo!()
+        let Extension(state) = req.extract::<Extension<Arc<MioState>>>().await.unwrap();
+        let Query(UserToken(token)) = req.extract::<Query<UserToken>>().await.unwrap();
+        let user: User = match state
+            .db
+            .execute(
+                "SELECT * FROM user WHERE tokens[WHERE id = $token]",
+                &state.sess,
+                Some([("token".to_owned(), token.to_string().into())].into()),
+                false,
+            )
+            .await
+        {
+            Ok(mut query) => {
+                let deser = {
+                    match query.pop().ok_or(anyhow!("db returned no user")) {
+                        Ok(query) => db_deser(query),
+                        Err(err) => Err(err),
+                    }
+                };
+
+                match deser {
+                    Ok(user) => Ok(user),
+                    Err(err) => {
+                        debug!("error authenticating user: {err}");
+                        Err((
+                            StatusCode::NOT_ACCEPTABLE,
+                            Json(MioError {
+                                msg: "invalid token".to_owned(),
+                            }),
+                        ))
+                    }
+                }
+            }
+            Err(err) => {
+                error!("db request error: {err}");
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(MioError {
+                        msg: "internal db error".to_owned(),
+                    }),
+                ))
+            }
+        }?;
+        if let Some(item) = req.extensions_mut().insert(user) {
+            warn!(
+                "warning while injecting user: user of {:?} already existed. replacing.",
+                item.username
+            );
+        }
+        Ok(Authenticate)
     }
 }
 
