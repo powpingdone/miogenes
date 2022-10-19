@@ -53,7 +53,7 @@ where
         let user: User = match state
             .db
             .execute(
-                "SELECT * FROM user WHERE tokens[WHERE id = $token]",
+                "SELECT * FROM user WHERE tokens[WHERE id = $token];",
                 &state.sess,
                 Some([("token".to_owned(), token.to_string().into())].into()),
                 false,
