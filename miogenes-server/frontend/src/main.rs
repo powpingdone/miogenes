@@ -1,90 +1,69 @@
-use gloo_net::http::Request;
-use wasm_bindgen_futures::spawn_local;
-use yew::prelude::*;
-use yew_router::prelude::*;
-
-#[derive(Clone, Routable, PartialEq)]
-enum Route {
-    #[at("/")]
-    Home,
-    #[at("/ver")]
-    Ver,
-    #[at("/login")]
-    Login,
+// DUMMY MAIN, PLEASE IGNORE. RUST-ANALYZER DOES NOT LIKE WASM
+#[cfg(not(target_arch = "wasm32"))]
+fn main() { 
+    let n = eframe::NativeOptions::default();
+    eframe::run_native(
+        "main",
+        n,
+        Box::new(|cc| Box::new(experience::Application::new(cc))),
+    );
 }
 
-fn switch(routes: &Route) -> Html {
-    match routes {
-        Route::Home => html! { <h1>{ "Hello Frontend" }</h1> },
-        Route::Ver => html! {<Ver/>},
-        Route::Login => html! { <Login/> }
-    }
-}
-
-#[function_component(Login)]
-fn login() {
-    html! {}
-}
-
-#[function_component(App)]
-fn app() -> Html {
-    html! {
-        <BrowserRouter>
-            <Switch<Route> render={Switch::render(switch)} />
-        </BrowserRouter>
-    }
-}
-
-#[function_component(Ver)]
-fn ver() -> Html {
-    let data = use_state(|| None);
-
-    {
-        let data = data.clone();
-        use_effect(move || {
-            if data.is_none() {
-                spawn_local(async move {
-                    let resp = Request::get("/api/ver").send().await.unwrap();
-                    let result = {
-                        if !resp.ok() {
-                            Err(format!(
-                                "Error fetching data {} ({})",
-                                resp.status(),
-                                resp.status_text()
-                            ))
-                        } else {
-                            resp.text().await.map_err(|err| err.to_string())
-                        }
-                    };
-                    data.set(Some(result));
-                });
-            }
-
-            || {}
-        });
-    }
-
-    match data.as_ref() {
-        None => {
-            html! {
-                <div>{"No server response"}</div>
-            }
-        }
-        Some(Ok(data)) => {
-            html! {
-                <div>{"Got server response: "}{data}</div>
-            }
-        }
-        Some(Err(err)) => {
-            html! {
-                <div>{"Error requesting data from server: "}{err}</div>
-            }
-        }
-    }
-}
-
+#[cfg(target_arch = "wasm32")]
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
     console_error_panic_hook::set_once();
-    yew::start_app::<App>();
+    let web_options = eframe::WebOptions::default();
+    eframe::start_web(
+        "main",
+        web_options,
+        Box::new(|cc| Box::new(experience::Application::new(cc))),
+    )
+    .expect("failed to start eframe");
+}
+
+mod experience {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Deserialize, Serialize, Default)]
+    pub enum Page {
+        #[default]
+        Page,
+    }
+
+    #[derive(Deserialize, Serialize)]
+    #[serde(default)]
+    pub struct Application {
+        page: Page,
+    }
+
+    impl Default for Application {
+        fn default() -> Self {
+            Self {
+                page: Page::default(),
+            }
+        }
+    }
+
+    impl Application {
+        /// Called once before the first frame.
+        pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+            // This is also where you can customized the look at feel of egui using
+            // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+
+            // Load previous app state (if any).
+            // Note that you must enable the `persistence` feature for this to work.
+            if let Some(storage) = cc.storage {
+                return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+            }
+
+            Default::default()
+        }
+    }
+
+    impl eframe::App for Application {
+        fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+            todo!()
+        }
+    }
 }

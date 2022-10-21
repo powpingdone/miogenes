@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
     migrate(db.clone()).await;
     let (proc_tracks_tx, proc_tracks_rx) = unbounded_channel();
     let state = Arc::new(MioState {
-        db: db.clone(),
+        db: db,
         sess: Session::for_db("ns", "db"),
         proc_tracks_tx,
         lim: Arc::new(Semaphore::const_new({
@@ -138,12 +138,16 @@ async fn main() -> anyhow::Result<()> {
                 .route("/ver", get(version))
                 .route("/search", get(search::search))
                 .nest("/track", track_manage::routes())
-                .nest("/query", query::routes())
+                .nest("/query", query::routes()),
         )
         .route_layer(middleware::from_extractor::<user::Authenticate>())
         .merge(axum_extra::routing::SpaRouter::new("/assets", STATIC_DIR))
-        .route("/_login", get(user::login).post(user::refresh_token))
-        .route("/_logout", post(user::logout))
+        .nest(
+            "/l",
+            Router::new()
+                .route("/login", get(user::login).post(user::refresh_token))
+                .route("/logout", post(user::logout)),
+        )
         .layer(axum::middleware::from_fn(log_req))
         .layer(Extension(state));
     // TODO: bind to user settings
@@ -151,7 +155,8 @@ async fn main() -> anyhow::Result<()> {
     info!("main: starting server on {BINDING}");
     Server::bind(&BINDING.parse().unwrap())
         .serve(router.into_make_service())
-        .await?;
+        .await
+        .expect("server exited improperly: {}");
 
     trace!("main: cleaning up nicely");
     for subtask in subtasks {
