@@ -1,6 +1,7 @@
-use serde::{Deserialize, Serialize};
-
 use crate::rt::RunTime;
+use egui::*;
+use log::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Default)]
 pub enum Page {
@@ -73,9 +74,39 @@ impl Application {
             ref mut pass,
         } = self.page
         {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                ui.add(egui::TextEdit::singleline(user));
-                ui.add(egui::TextEdit::singleline(pass).password(true))
+            CentralPanel::default().show(ctx, |ui| {
+                let mut size = ui.max_rect().size();
+                size.x *= 0.15;
+                size.y *= 0.05;
+                let post = Rect::from_center_size(ui.max_rect().center(), size);
+
+                ui.put(post, |ui: &mut Ui| {
+                    Frame::none()
+                        .stroke(Stroke::new(1.0, Color32::GRAY))
+                        .inner_margin(style::Margin::symmetric(
+                            0.1 * ui.max_rect().size().x,
+                            0.15 * ui.max_rect().size().y,
+                        ))
+                        .show(ui, |ui: &mut Ui| {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 0.125 * ui.max_rect().size().x;
+                                ui.vertical(|ui| {
+                                    ui.label(RichText::new("Miogenes").size(25.0));
+                                });
+                                ui.add(|ui: &mut Ui| {
+                                    ui.vertical(|ui| {
+                                        ui.add(Label::new("Username: ").wrap(false));
+                                        ui.add(TextEdit::singleline(user));
+                                        ui.add(Label::new("Password: ").wrap(false));
+                                        ui.add(TextEdit::singleline(pass).password(true));
+                                    })
+                                    .response
+                                });
+                            })
+                            .response
+                        })
+                        .response
+                })
             });
         } else {
             unreachable!()
