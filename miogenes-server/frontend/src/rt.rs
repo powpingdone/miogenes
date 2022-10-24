@@ -1,4 +1,5 @@
 use js_sys::Promise;
+use log::*;
 use oneshot as osh;
 use osh::TryRecvError::*;
 use wasm_bindgen::JsValue;
@@ -18,7 +19,7 @@ impl RunTime {
     where
         F: IntoFuture + 'static,
         F::Output: Into<Result<(), E>>,
-        E: Into<JsValue>,
+        E: ToString,
     {
         let (tx, rx) = osh::channel();
         self.futures.push((
@@ -27,8 +28,11 @@ impl RunTime {
                 let x = f.await.into();
                 tx.send(()).unwrap();
                 match x {
-                    Ok(_) => Ok(wasm_bindgen::JsValue::NULL),
-                    Err(err) => Err(err.into()),
+                    Ok(_) => Ok(JsValue::NULL),
+                    Err(err) => {
+                        error!("{}", err.to_string());
+                        Ok(JsValue::NULL)
+                    }
                 }
             }),
         ));
