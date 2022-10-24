@@ -35,7 +35,7 @@ try:
             break
         actual_new = getlens()['actual']
         sleep_until = begin + (60.0 * 60.0 * 24.0)
-        print(f"\nfinished epoch, gathered {actual_new - actual_hold} playlists (actual_hold -> actual_new). sleeping until {time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(sleep_until))}\n")
+        print(f"\nfinished epoch, gathered {actual_new - actual_hold} playlists ({actual_hold} -> {actual_new}). sleeping until {time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(sleep_until))}\n")
         time.sleep(sleep_until)
 except KeyboardInterrupt:
     check = check
