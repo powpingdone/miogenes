@@ -40,7 +40,7 @@ try:
         for x in range(60*60*24 + 15*60)
             time.sleep(1)
             choice = spinner[x % len(spinner)]
-            print("\b{choice}", flush=True)
+            print(f"\b{choice}", flush=True)
 except KeyboardInterrupt:
     check = check
 
