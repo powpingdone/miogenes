@@ -34,9 +34,13 @@ try:
             print("runtime less than 15 minutes. something broke")
             break
         actual_new = getlens()['actual']
-        sleep_until = begin + (60.0 * 60.0 * 24.0)
+        sleep_until = begin + (60.0 * 60.0 * 24.0) + (60.0 * 15.0)
         print(f"\nfinished epoch, gathered {actual_new - actual_hold} playlists ({actual_hold} -> {actual_new}). sleeping until {time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(sleep_until))}\n")
-        time.sleep(60*60*24)
+        spinner = ["|", '/', '-', '\\']
+        for x in range(60*60*24 + 15*60)
+            time.sleep(1)
+            choice = spinner[x % len(spinner)]
+            print("\b{choice}", flush=True)
 except KeyboardInterrupt:
     check = check
 
