@@ -5,40 +5,32 @@ version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-anyhow = {version = "1.0.60", features = ["backtrace"]}
-axum = {version = "0.5.15", features = ["multipart", "ws"]}
-axum-extra = {version = "0.3.7", features = ["spa"]}
+anyhow = { version = "1.0.60", features = ["backtrace"] }
+axum = { version = "0.5.15", features = ["multipart", "ws"] }
+axum-extra = { version = "0.3.7", features = ["spa"] }
 blurhash = "0.1.1"
 chrono = { version = "0.4.22", features = ["serde"] }
 env_logger = "0.9.0"
 futures = "0.3.23"
-gstreamer = {version = "0.19.1", features = [
-  "v1_20",
-]}
-gstreamer-app = {version = "0.19.0", features = [
-  "v1_20",
-]}
-gstreamer-audio = {version = "0.19.0", features = [
-  "v1_20",
-]}
-gstreamer-pbutils = {version = "0.19.0", features = [
-  "v1_20",
-]}
+gstreamer = { version = "0.19.1", features = ["v1_20"] }
+gstreamer-app = { version = "0.19.0", features = ["v1_20"] }
+gstreamer-audio = { version = "0.19.0", features = ["v1_20"] }
+gstreamer-pbutils = { version = "0.19.0", features = ["v1_20"] }
 image = "0.24.3"
 konst = "0.2.15"
 log = "0.4.17"
-mio_common = {path = "../common"}
+mio_common = { path = "../common" }
 num_cpus = "1.13.1"
-once_cell = {version = "1.13.1", features = ["parking_lot"]}
+once_cell = { version = "1.13.1", features = ["parking_lot"] }
 path-absolutize = "3.0.13"
 rand = { version = "0.8.5", features = ["log", "min_const_gen"] }
 sanitize-filename = "0.4.0"
-serde = {version = "1.0.139", features = ["derive"]}
+serde = { version = "1.0.139", features = ["derive"] }
 serde_json = "1.0.83"
-serde_with = {version = "2.0.0", features = ["base64"]}
+serde_with = { version = "2.0.0", features = ["base64"] }
 sha2 = "0.10.5"
 surrealdb = { version = "1.0.0-beta.8", features = ["kv-rocksdb"] }
-tokio = {version = "1.19.2", features = ["full"]}
+tokio = { version = "1.19.2", features = ["full"] }
 tower = "0.4.13"
-tower-http = {version = "0.3.4", features = ["full"]}
-uuid = {version = "1.1.2", features = ["v4", "serde"]}
+tower-http = { version = "0.3.4", features = ["full"] }
+uuid = { version = "1.1.2", features = ["v4", "serde"] }
