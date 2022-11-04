@@ -12,36 +12,16 @@ blurhash = "0.1.1"
 chrono = { version = "0.4.22", features = ["serde"] }
 env_logger = "0.9.0"
 futures = "0.3.23"
-gstreamer = {version = "0.18.8", features = [
-  "v1_10",
-  "v1_12",
-  "v1_14",
-  "v1_16",
-  "v1_18",
+gstreamer = {version = "0.19.1", features = [
   "v1_20",
 ]}
-gstreamer-app = {version = "0.18.7", features = [
-  "v1_10",
-  "v1_12",
-  "v1_14",
-  "v1_16",
-  "v1_18",
+gstreamer-app = {version = "0.19.0", features = [
   "v1_20",
 ]}
-gstreamer-audio = {version = "0.18.7", features = [
-  "v1_10",
-  "v1_12",
-  "v1_14",
-  "v1_16",
-  "v1_18",
+gstreamer-audio = {version = "0.19.0", features = [
   "v1_20",
 ]}
-gstreamer-pbutils = {version = "0.18.7", features = [
-  "v1_10",
-  "v1_12",
-  "v1_14",
-  "v1_16",
-  "v1_18",
+gstreamer-pbutils = {version = "0.19.0", features = [
   "v1_20",
 ]}
 image = "0.24.3"
