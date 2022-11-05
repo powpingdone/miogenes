@@ -1,19 +1,22 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::extract::{FromRequest, Query, RequestParts};
+use axum::headers::authorization::{Basic, Bearer};
+use axum::headers::Authorization;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::{async_trait, Extension, Json};
+use axum::{async_trait, Extension, Json, TypedHeader};
+use chrono::Duration;
 use log::*;
 use mio_common::msgstructs::UserToken;
 use serde::*;
-use serde_with::base64::{Base64, UrlSafe};
-use serde_with::formats::Unpadded;
-use serde_with::serde_as;
+use sled::transaction::abort;
 use uuid::Uuid;
 
-use crate::{db_deser, MioError, MioState};
+use crate::db::{Index, Table};
+use crate::{MioError, MioState};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct DBUserToken {
@@ -22,7 +25,6 @@ pub struct DBUserToken {
     pub is_expired: bool,
 }
 
-#[serde_as]
 #[derive(Deserialize, Debug, Clone)]
 pub struct User {
     // internal structs
@@ -30,11 +32,8 @@ pub struct User {
     pub tokens: Option<Vec<DBUserToken>>,
 
     // external structs
-    #[serde(alias = "u")]
     pub username: String,
-    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    #[serde(alias = "h")]
-    pub password: [u8; 32],
+    pub password: String,
 }
 
 static TIMEOUT_TIME: i64 = 3;
@@ -49,13 +48,16 @@ where
     type Rejection = (StatusCode, Json<MioError>);
     async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
         let Extension(state) = req.extract::<Extension<Arc<MioState>>>().await.unwrap();
-        let Query(UserToken(token)) = req.extract::<Query<UserToken>>().await.unwrap();
+        let auth = req
+            .extract::<TypedHeader<Authorization<Bearer>>>()
+            .await
+            .unwrap();
         let user: User = match state
             .db
             .execute(
                 "SELECT * FROM user WHERE tokens[WHERE id = $token];",
                 &state.sess,
-                Some([("token".to_owned(), token.to_string().into())].into()),
+                Some([("token".to_owned(), auth.token().into())].into()),
                 false,
             )
             .await
@@ -103,21 +105,15 @@ where
 
 pub async fn login(
     Extension(state): Extension<Arc<crate::MioState>>,
-    Query(user): Query<User>,
+    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
 ) -> impl IntoResponse {
     let user: User = {
         match state
             .db
             .execute(
-                "SELECT * FROM user WHERE password = $password AND username = $username;",
+                "SELECT * FROM user WHERE username = $username LIMIT 1;",
                 &state.sess,
-                Some(
-                    [
-                        ("username".to_owned(), user.username.into()),
-                        ("password".to_owned(), user.password.to_vec().into()),
-                    ]
-                    .into(),
-                ),
+                Some([("username".to_owned(), auth.username().into())].into()),
                 false,
             )
             .await
@@ -155,30 +151,58 @@ pub async fn login(
         }
     };
 
+    // check hash
+    tokio::task::spawn_blocking({
+        move || {
+            let parsed = PasswordHash::new(&user.password).map_err(|err| {
+                error!("unable to extract phc string: {err}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(MioError {
+                        msg: "internal server error".to_owned(),
+                    }),
+                )
+            })?;
+            Argon2::default()
+                .verify_password(auth.password().to_owned().as_bytes(), &parsed)
+                .map_err(|err| {
+                    debug!("unable to verify password: {err}");
+                    (
+                        StatusCode::UNAUTHORIZED,
+                        Json(MioError {
+                            msg: "invalid username or password".to_owned(),
+                        }),
+                    )
+                })
+        }
+    })
+    .await
+    .map_err(|err| {
+        error!("task failed to start: {err}");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(MioError {
+                msg: "internal server error".to_owned(),
+            }),
+        )
+    })??;
+
+    // gen new token
     let new_token = Uuid::new_v4();
     // TODO: let server host specify when logout tokens expire
     let expiry = chrono::Utc::now() + chrono::Duration::days(TIMEOUT_TIME);
     state
         .db
         .execute(
-            &format!("CREATE user_token:`{new_token}` SET expires = $expires;"),
-            &state.sess,
-            Some([("expires".to_owned(), expiry.into())].into()),
-            false,
-        )
-        .await
-        .unwrap()
-        .pop()
-        .unwrap();
-    state
-        .db
-        .execute(
             &format!(
-                "UPDATE {} SET tokens += [user_token:`{new_token}`];",
+                "BEGIN;
+                CREATE user_token:`{new_token}` SET expires = $expires;
+                UPDATE {} SET tokens += [user_token:`{new_token}`];
+                COMMIT;",
                 user.id.unwrap()
             ),
             &state.sess,
-            None,
+            Some([("expires".to_owned(), expiry.into())].into()),
             false,
         )
         .await
@@ -195,22 +219,32 @@ pub async fn refresh_token(
 ) -> impl IntoResponse {
     let ret = state
         .db
-        .execute(
-            &format!(
-                "UPDATE user_token:`{token}` SET expires = $expires WHERE is_expired = false;"
-            ),
-            &state.sess,
-            Some(
-                [(
-                    "expires".to_owned(),
-                    (chrono::Utc::now() + chrono::Duration::days(TIMEOUT_TIME)).into(),
-                )]
-                .into(),
-            ),
-            false,
-        )
-        .await;
-    if ret.is_err() || ret.unwrap().pop().is_none() {
+        .open_tree(Table::UserToken)
+        .unwrap()
+        .transaction(|tx_db| {
+            let timeup: Result<Index<crate::db::UserToken>, _> = Index::new(token, &{
+                let x = tx_db.get(token)?;
+                if x.is_none() {
+                    abort(anyhow!("no user found"))?;
+                }
+                x.unwrap()
+            }); 
+            if timeup.is_err() {
+                abort(anyhow!("serialization err"))?;
+            }
+            let timeup = timeup.unwrap();
+            
+            if !timeup.inner().is_expired() {
+                timeup
+                    .inner_mut()
+                    .push_forward(Duration::days(TIMEOUT_TIME));
+            }
+            
+            tx_db.insert(token.as_bytes(), timeup.consume().unwrap())?;
+
+            Ok(())
+        });
+    if ret.is_err() {
         StatusCode::INTERNAL_SERVER_ERROR
     } else {
         StatusCode::OK

@@ -3,8 +3,6 @@ use std::sync::Arc;
 use axum::extract::*;
 use axum::response::IntoResponse;
 use axum::routing::*;
-use axum::*;
-use log::*;
 use serde::Deserialize;
 use uuid::Uuid;
 

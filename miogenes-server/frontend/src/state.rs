@@ -173,15 +173,10 @@ async fn get_token(
     user: String,
     pass: String,
 ) -> Result<(), String> {
-    use base64::{CharacterSet, Config};
     use gloo_net::http::Request;
-    use sha2::{Digest, Sha256};
-
-    let hash = Sha256::digest(pass.as_bytes());
-    let b64 = base64::encode_config(hash, Config::new(CharacterSet::UrlSafe, false));
 
     let ret = Request::get("/l/login")
-        .query([("u", user), ("h", b64)])
+        .header("Authorization", &base64::encode(format!("{user}:{pass}")))
         .send()
         .await;
 

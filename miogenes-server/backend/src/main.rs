@@ -3,19 +3,14 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::*;
-use gstreamer::glib;
 use log::*;
 use once_cell::sync::OnceCell;
-use path_absolutize::Absolutize;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::Path;
-use std::sync::Arc;
-use surrealdb::{Datastore, Session};
+use serde::Serialize;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
-use tokio::sync::{RwLock, Semaphore};
+use tokio::sync::Semaphore;
 use uuid::Uuid;
+
+use std::sync::Arc;
 
 mod endpoints;
 use endpoints::*;
@@ -23,16 +18,15 @@ mod subtasks;
 use subtasks::*;
 mod user;
 use user::*;
-mod migration;
-use migration::migrate;
+mod db;
+use db::migrate;
 
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 
 #[derive(Clone)]
 pub struct MioState {
-    db: Arc<Datastore>,
-    sess: Session,
+    db: sled::Db,
     proc_tracks_tx: UnboundedSender<(Uuid, Uuid, String)>,
     lim: Arc<Semaphore>,
 }
@@ -40,18 +34,6 @@ pub struct MioState {
 #[derive(Debug, Serialize)]
 pub struct MioError {
     msg: String,
-}
-
-// terrible hack to serialize structs
-// serialize to_value into serde_json's own value system
-// then from_value the values generated
-pub fn db_deser<T: DeserializeOwned>(query: surrealdb::Response) -> anyhow::Result<T> {
-    println!("{:?}", query.result);
-    Ok(serde_json::from_value({
-        let x = serde_json::to_value(query.result?)?;
-        println!("{x:?}");
-        x
-    })?)
 }
 
 async fn version() -> impl IntoResponse {
@@ -74,18 +56,12 @@ async fn main() -> anyhow::Result<()> {
 
     // create the main passing state
     trace!("main: creating state");
-    let db = Arc::new(
-        Datastore::new(&glib::filename_to_uri(
-            Path::new(&format!("{}/db", DATA_DIR.get().unwrap())).absolutize()?,
-            None,
-        )?)
-        .await?,
-    );
-    migrate(db.clone()).await;
+    let db =
+        sled::open(format!("{}/db", DATA_DIR.get().unwrap())).expect("could not open database: {}");
+    migrate(&db);
     let (proc_tracks_tx, proc_tracks_rx) = unbounded_channel();
     let state = Arc::new(MioState {
-        db: db,
-        sess: Session::for_db("ns", "db"),
+        db,
         proc_tracks_tx,
         lim: Arc::new(Semaphore::const_new({
             let cpus = num_cpus::get();
@@ -96,30 +72,6 @@ async fn main() -> anyhow::Result<()> {
             }
         })),
     });
-
-    // create the user state
-    debug!("main: loading users");
-    //state
-    //    .db
-    //    .execute(
-    //        &format!("CREATE user:`{}` SET username = $username, password='XohImNooBHFR0OVvjcYpJ3NgPQ1qq73WKhHvch0VQtg=';", Uuid::new_v4()),
-    //        &state.sess,
-    //        Some([("username".to_owned(), "beppy".into())].into()),
-    //        false,
-    //    )
-    //    .await
-    //    .unwrap();
-    let users: Vec<User> = db_deser(
-        state
-            .db
-            .execute("SELECT * FROM user;", &state.sess, None, false)
-            .await
-            .unwrap()
-            .pop()
-            .unwrap(),
-    )
-    .unwrap();
-    println!("{users:?}");
 
     // spin subtasks
     trace!("main: spinning subtasks");

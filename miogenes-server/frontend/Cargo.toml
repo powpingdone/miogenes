@@ -4,12 +4,11 @@ name = "mio_frontend"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 console_error_panic_hook = "0.1.7"
 gloo-net = "0.2.4"
 log = "0.4.17"
-mio_common = {path = "../common"}
+mio_common = { path = "../common" }
 wasm-bindgen-futures = "0.4.33"
 wasm-logger = "0.2.0"
 egui = "0.19.0"
@@ -20,7 +19,6 @@ js-sys = "0.3.60"
 wasm_thread = "0.2.0"
 oneshot = "0.1.5"
 wasm-bindgen = "0.2.83"
-sha2 = "0.10.6"
-base64 = "0.13.1"
 anyhow = "1.0.66"
 uuid = "1.2.1"
+base64 = "0.13.1"
