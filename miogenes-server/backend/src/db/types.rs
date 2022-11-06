@@ -1,18 +1,33 @@
-use chrono::{DateTime, Utc, Duration};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use uuid::Uuid;
 
-use super::Table;
+// trait impl for ser/deser
+pub trait DbObject: Sized {
+    type Error;
 
-pub struct Index<T: DbObject + DbTable> {
+    fn in_value(raw: &[u8]) -> Result<Self, Self::Error>;
+    fn out_value(self) -> Result<Vec<u8>, Self::Error>;
+}
+
+// table identifier
+pub trait DbTable {
+    type Ret;
+    const TABLE: Self::Ret;
+    fn table() -> Self::Ret {
+        Self::TABLE
+    }
+}
+
+#[derive(Clone)]
+pub struct Index<T: DbObject + DbTable + Send + Clone> {
     id: Uuid,
-    tbl: Table,
+    tbl: T::Ret,
     inner: T,
 }
 
 impl<T> Index<T>
 where
-    T: DbObject + DbTable,
+    T: DbObject + DbTable + Send + Clone,
 {
     pub fn new(id: Uuid, inner: &[u8]) -> Result<Self, T::Error> {
         Ok(Self {
@@ -22,25 +37,23 @@ where
         })
     }
 
+    pub fn id(&self)-> Uuid {
+        self.id
+    }
+
     pub fn inner(&self) -> &T {
         &self.inner
     }
 
-    pub fn inner_mut(&self) -> &mut T {
+    pub fn inner_mut(&mut self) -> &mut T {
         &mut self.inner
     }
 
-    pub fn consume(self) -> Result<Vec<u8>, T::Error> {
+    pub fn decompose(self) -> Result<Vec<u8>, T::Error> {
         self.inner.out_value()
     }
 }
 
-trait DbObject: Sized {
-    type Error;
-
-    fn in_value(raw: &[u8]) -> Result<Self, Self::Error>;
-    fn out_value(self) -> Result<Vec<u8>, Self::Error>;
-}
 
 impl<T> DbObject for T
 where
@@ -57,47 +70,11 @@ where
     type Error = serde_json::Error;
 }
 
-trait DbTable {
-    const TABLE: Table;
-    fn table() -> Table {
-        Self::TABLE
-    }
-}
 
 impl<T> DbTable for Index<T>
 where
-    T: DbTable + DbObject,
+    T: DbTable + DbObject + Send + Clone,
 {
-    const TABLE: Table = T::TABLE;
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct User {
-    username: String,
-    password: String,
-    login_tokens: Vec<Uuid>,
-}
-
-impl DbTable for User {
-    const TABLE: Table = Table::User;
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct UserToken {
-    expiry: DateTime<Utc>,
-    user: Uuid,
-}
-
-impl UserToken {
-    pub fn push_forward(&mut self, t: Duration) {
-        self.expiry += t;
-    }
-
-    pub fn is_expired(&self) -> bool {
-        self.expiry < Utc::now()
-    }
-}
-
-impl DbTable for UserToken {
-    const TABLE: Table = Table::UserToken;
+    type Ret = T::Ret;
+    const TABLE: T::Ret = T::TABLE;
 }

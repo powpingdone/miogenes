@@ -6,7 +6,8 @@ use axum::routing::*;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{MioState, User};
+use crate::db::{User, Index};
+use crate::MioState;
 
 pub fn routes() -> Router {
     Router::new()
@@ -24,7 +25,7 @@ struct TrackInfoQuery {
 
 async fn track_info(
     Extension(state): Extension<Arc<MioState>>,
-    Extension(key): Extension<User>,
+    Extension(key): Extension<Index<User>>,
     Query(track): Query<TrackInfoQuery>,
 ) -> impl IntoResponse {
     todo!()
@@ -38,17 +39,17 @@ struct AlbumInfoQuery {
 
 async fn album_info(
     Extension(state): Extension<Arc<MioState>>,
-    Extension(key): Extension<User>,
+    Extension(key): Extension<Index<User>>,
     Query(album): Query<AlbumInfoQuery>,
 ) -> impl IntoResponse {
     todo!()
 }
 
-// return basic info of playlists 
+// return basic info of playlists
 // ex: name, blurhash logo, id
 async fn playlists(
     Extension(state): Extension<Arc<MioState>>,
-    Extension(key): Extension<User>,
+    Extension(key): Extension<Index<User>>,
 ) -> impl IntoResponse {
     todo!()
 }
@@ -57,7 +58,7 @@ async fn playlists(
 struct PlaylistQuery {
     id: Uuid,
     // only send metadata, like track length and/or picture
-    // default (false): send all tracks 
+    // default (false): send all tracks
     #[serde(rename = "md")]
     #[serde(default)]
     metadata: bool,
@@ -65,7 +66,7 @@ struct PlaylistQuery {
 
 async fn playlist_info(
     Extension(state): Extension<Arc<MioState>>,
-    Extension(key): Extension<User>,
+    Extension(key): Extension<Index<User>>,
     Query(plquery): Query<PlaylistQuery>,
 ) -> impl IntoResponse {
     todo!()
