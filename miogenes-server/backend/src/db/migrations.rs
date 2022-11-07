@@ -6,7 +6,7 @@ pub fn migrate(db: &sled::Db) {
     // v1 migration 
     if migration.contains_key(b"v1").unwrap() {
         migrate_v1(db);
-        migration.insert(b"v1", b"");
+        migration.insert(b"v1", b"").unwrap().unwrap();
     }
 }
 

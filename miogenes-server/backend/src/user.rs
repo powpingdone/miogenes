@@ -241,8 +241,18 @@ pub async fn login(
         .db
         .open_tree(TopLevel::UserToken)
         .unwrap()
-        .insert(new_token, UserToken::generate(user.id(), expiry));
-
+        .insert(new_token, UserToken::generate(user.id(), expiry))
+        .map_err(|err| {
+            error!("failed to insert new token: {err}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(MioError {
+                    msg: "internal server error".to_owned(),
+                }),
+            )
+        })?;
+    
+    debug!("new token generated for {}: {new_token}, expires {expiry}", user.id());
     Ok((StatusCode::OK, Json(msgstructs::UserToken(new_token))))
 }
 

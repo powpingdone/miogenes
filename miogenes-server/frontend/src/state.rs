@@ -128,7 +128,10 @@ impl Application {
                                         if let Some(ref mut rx) = *login_resp {
                                             use oneshot::TryRecvError;
                                             match rx.try_recv() {
-                                                Ok(Ok(token)) => self.token = Some(token.0),
+                                                Ok(Ok(token)) => {
+                                                    debug!("token recieved: {}", token.0);
+                                                    self.token = Some(token.0)
+                                                },
                                                 Ok(Err(msg)) => {
                                                     *err_msg = Some(msg);
                                                 }
@@ -176,7 +179,10 @@ async fn get_token(
     use gloo_net::http::Request;
 
     let ret = Request::get("/l/login")
-        .header("Authorization", &base64::encode(format!("{user}:{pass}")))
+        .header(
+            "Authorization",
+            &format!("Basic {}", base64::encode(format!("{user}:{pass}"))),
+        )
         .send()
         .await;
 
