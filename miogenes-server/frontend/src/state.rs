@@ -1,5 +1,6 @@
 use crate::rt::RunTime;
 use egui::*;
+use egui_extras::{Size, TableBuilder};
 use log::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -83,88 +84,122 @@ impl Application {
         } = self.page
         {
             CentralPanel::default().show(ctx, |ui| {
-                let mut size = ui.max_rect().size();
-                size.x *= 0.15;
-                size.y *= 0.05;
-                let post = Rect::from_center_size(ui.max_rect().center(), size);
-
-                ui.put(post, |ui: &mut Ui| {
-                    Frame::none()
-                        .stroke(Stroke::new(1.0, Color32::GRAY))
-                        .inner_margin(style::Margin::symmetric(
-                            0.1 * ui.max_rect().size().x,
-                            0.15 * ui.max_rect().size().y,
-                        ))
-                        .show(ui, |ui: &mut Ui| {
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = 0.125 * ui.max_rect().size().x;
-                                ui.vertical(|ui| {
-                                    ui.label(RichText::new("Miogenes").size(25.0));
-                                });
+                TableBuilder::new(ui)
+                    .column(Size::relative(1.0/3.0).at_most(1.0 / 3.0))
+                    .column(Size::remainder().at_least(1.0 / 6.0))
+                    .column(Size::relative(1.0/3.0).at_most(1.0 / 3.0))
+                    .cell_layout(Layout::left_to_right(Align::Center))
+                    .body(|mut body| {
+                        body.row(54.0, |mut row| {
+                            row.col(|_| {});
+                            row.col(|ui| {
                                 ui.add(|ui: &mut Ui| {
-                                    ui.vertical(|ui| {
-                                        ui.add(Label::new("Username: ").wrap(false));
-                                        let resp0 = ui.add(TextEdit::singleline(user));
-                                        ui.add(Label::new("Password: ").wrap(false));
-                                        let resp1 =
-                                            ui.add(TextEdit::singleline(pass).password(true));
-
-                                        // send future on enter
-                                        if login_resp.is_none()
-                                            && (resp0.lost_focus() || resp1.lost_focus())
-                                            && ui.input().key_pressed(Key::Enter)
-                                        {
-                                            *err_msg = None;
-                                            let (tx, rx) = oneshot::channel();
-                                            *login_resp = Some(rx);
-                                            self.rt.push_future(get_token(
-                                                tx,
-                                                user.to_owned(),
-                                                pass.to_owned(),
-                                            ));
-                                        }
-
-                                        // check future
-                                        if let Some(ref mut rx) = *login_resp {
-                                            use oneshot::TryRecvError;
-                                            match rx.try_recv() {
-                                                Ok(Ok(token)) => {
-                                                    debug!("token recieved: {}", token.0);
-                                                    self.token = Some(token.0)
-                                                },
-                                                Ok(Err(msg)) => {
-                                                    *err_msg = Some(msg);
-                                                }
-                                                Err(TryRecvError::Disconnected) => {
-                                                    *err_msg = Some(
-                                                        "broken future/pipe encountered".to_owned(),
-                                                    );
-                                                }
-                                                Err(TryRecvError::Empty) => (), // Do nothing
-                                            }
-                                        }
-
-                                        // if future was a failure, don't poll again
-                                        if err_msg.is_some() {
-                                            *login_resp = None;
-                                        }
-
-                                        ui.label({
-                                            if let Some(ref msg) = *err_msg {
-                                                msg
-                                            } else {
-                                                ""
-                                            }
-                                        });
-                                    })
-                                    .response
+                                    Frame::none()
+                                        .stroke(Stroke::new(1.0, Color32::GRAY))
+                                        .show(ui, |ui: &mut Ui| {
+                                            TableBuilder::new(ui)
+                                                .column(Size::relative(1.0 / 8.0))
+                                                .column(Size::relative(1.0 / 8.0))
+                                                .body(|mut body| {
+                                                    body.row(54.0, |mut row| {
+                                                        row.col(|ui| {
+                                                            ui.label(
+                                                                RichText::new("Miogenes")
+                                                                    .size(25.0),
+                                                            );
+                                                        });
+                                                    })
+                                                });
+                                        })
+                                        .response
                                 });
-                            })
-                            .response
-                        })
-                        .response
-                })
+                            });
+                            row.col(|_| {});
+                        });
+                    });
             });
+
+            //let mut size = ui.max_rect().size();
+            //size.x *= 0.15;
+            //size.y *= 0.05;
+            //let post = Rect::from_center_size(ui.max_rect().center(), size);
+
+            //ui.put(post, |ui: &mut Ui| {
+            //    Frame::none()
+            //        .stroke(Stroke::new(1.0, Color32::GRAY))
+            //        .inner_margin(style::Margin::symmetric(
+            //            0.1 * ui.max_rect().size().x,
+            //            0.15 * ui.max_rect().size().y,
+            //        ))
+            //        .show(ui, |ui: &mut Ui| {
+            //            ui.horizontal(|ui| {
+            //                ui.spacing_mut().item_spacing.x = 0.125 * ui.max_rect().size().x;
+            //                ui.vertical(|ui| {
+            //                    ui.label(RichText::new("Miogenes").size(25.0));
+            //                });
+            //                ui.add(|ui: &mut Ui| {
+            //                    ui.vertical(|ui| {
+            //                        ui.add(Label::new("Username: ").wrap(false));
+            //                        let resp0 = ui.add(TextEdit::singleline(user));
+            //                        ui.add(Label::new("Password: ").wrap(false));
+            //                        let resp1 =
+            //                            ui.add(TextEdit::singleline(pass).password(true));
+
+            //                        // send future on enter
+            //                        if login_resp.is_none()
+            //                            && (resp0.lost_focus() || resp1.lost_focus())
+            //                            && ui.input().key_pressed(Key::Enter)
+            //                        {
+            //                            *err_msg = None;
+            //                            let (tx, rx) = oneshot::channel();
+            //                            *login_resp = Some(rx);
+            //                            self.rt.push_future(get_token(
+            //                                tx,
+            //                                user.to_owned(),
+            //                                pass.to_owned(),
+            //                            ));
+            //                        }
+
+            //                        // check future
+            //                        if let Some(ref mut rx) = *login_resp {
+            //                            use oneshot::TryRecvError;
+            //                            match rx.try_recv() {
+            //                                Ok(Ok(token)) => {
+            //                                    debug!("token recieved: {}", token.0);
+            //                                    self.token = Some(token.0)
+            //                                },
+            //                                Ok(Err(msg)) => {
+            //                                    *err_msg = Some(msg);
+            //                                }
+            //                                Err(TryRecvError::Disconnected) => {
+            //                                    *err_msg = Some(
+            //                                        "broken future/pipe encountered".to_owned(),
+            //                                    );
+            //                                }
+            //                                Err(TryRecvError::Empty) => (), // Do nothing
+            //                            }
+            //                        }
+
+            //                        // if future was a failure, don't poll again
+            //                        if err_msg.is_some() {
+            //                            *login_resp = None;
+            //                        }
+
+            //                        ui.label({
+            //                            if let Some(ref msg) = *err_msg {
+            //                                msg
+            //                            } else {
+            //                                ""
+            //                            }
+            //                        });
+            //                    })
+            //                    .response
+            //                });
+            //            })
+            //            .response
+            //        })
+            //        .response
+            //})
         } else {
             unreachable!()
         }
