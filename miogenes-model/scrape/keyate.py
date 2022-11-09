@@ -1,7 +1,11 @@
-PAIRS = [
-#   adding keys in form of:
-#   ['IDIDIDIDIDIDIDIDIDIDIDIDIDIDIDID', 'SECRETSECRETSECRETSECRETSECRETSE']
-]
+PAIRS = []
+
+with open('keys.txt') as keys:
+    for x in keys.readlines():
+        if len(x) < 5:
+            continue
+        x = x.strip().split(',')
+        PAIRS += [x]
 
 from subprocess import run
 import time
