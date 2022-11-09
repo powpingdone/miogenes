@@ -77,7 +77,8 @@ where
                             )
                         })?;
                         if index.id() == auth {
-                            user = Some(index)
+                            user = Some(index);
+                            break;
                         }
                     }
                 }

@@ -74,7 +74,7 @@ impl UserToken {
     }
 
     pub fn push_forward(&mut self, t: Duration) {
-        self.expiry += t;
+        self.expiry = Utc::now() + t;
     }
 
     pub fn is_expired(&self) -> bool {
