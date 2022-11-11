@@ -1,4 +1,4 @@
-use super::{UserTable, TopLevel};
+use super::{TopLevel, DbTable};
 
 pub fn migrate(db: &sled::Db) {
     let migration = db.open_tree("migration").unwrap();
@@ -11,6 +11,7 @@ pub fn migrate(db: &sled::Db) {
 }
 
 fn migrate_v1(db: &sled::Db) {
-    db.open_tree(TopLevel::User).unwrap();
-    db.open_tree(TopLevel::UserToken).unwrap();
+    db.open_tree(TopLevel::User.table()).unwrap();
+    db.open_tree(TopLevel::UserToken.table()).unwrap();
+    db.open_tree(TopLevel::IndexUsernameToUser.table()).unwrap();
 }

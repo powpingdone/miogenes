@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use argon2::{Argon2, PasswordHash, PasswordVerifier};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::extract::{FromRequest, Query, RequestParts};
 use axum::headers::authorization::{Basic, Bearer};
 use axum::headers::Authorization;
@@ -10,10 +9,12 @@ use axum::response::IntoResponse;
 use axum::{async_trait, Extension, Json, TypedHeader};
 use chrono::Duration;
 use log::*;
-use sled::transaction::abort;
+use rand::rngs::OsRng;
+use sled::transaction::{abort, TransactionError};
+use sled::Transactional;
 use uuid::Uuid;
 
-use crate::db::{self, Index, TopLevel, User, UserToken};
+use crate::db::{self, DbTable, Index, TopLevel, User, UserToken};
 use crate::{MioError, MioState};
 use mio_common::*;
 
@@ -45,48 +46,17 @@ where
             )
         })?;
         let user: Index<UserToken> = {
-            let mut user: Option<Index<UserToken>> = None;
-            for x in state.db.open_tree(TopLevel::UserToken).unwrap().iter() {
-                match x {
-                    Err(err) => {
-                        error!("internal database error: {err}");
-                        return Err((
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(MioError {
-                                msg: "internal server error".to_owned(),
-                            }),
-                        ));
-                    }
-                    Ok((key, value)) => {
-                        let key: Uuid = Uuid::from_slice(&key).map_err(|err| {
-                            error!("failed to serialize uuid: {err}");
-                            (
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(MioError {
-                                    msg: "internal server error".to_owned(),
-                                }),
-                            )
-                        })?;
-                        let index = Index::<UserToken>::new(key, &value).map_err(|err| {
-                            error!("failed to serialize user struct: {err}");
-                            (
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(MioError {
-                                    msg: "internal server error".to_owned(),
-                                }),
-                            )
-                        })?;
-                        if index.id() == auth {
-                            user = Some(index);
-                            break;
-                        }
-                    }
-                }
-            }
+            let user: Option<Index<UserToken>> = state
+                .db
+                .open_tree(TopLevel::UserToken.table())
+                .unwrap()
+                .get(auth.as_bytes())
+                .unwrap()
+                .map(|ret| Index::new(auth, &ret).unwrap());
             if let Some(ret) = user {
                 ret
             } else {
-                debug!("token not found: {}", auth);
+                debug!("USER_INJ token not found: {}", auth);
                 return Err((
                     StatusCode::UNAUTHORIZED,
                     Json(MioError {
@@ -100,33 +70,26 @@ where
             user.inner().user(),
             &state
                 .db
-                .open_tree(TopLevel::User)
+                .open_tree(TopLevel::User.table())
                 .unwrap()
                 .get(user.inner().user())
                 .unwrap()
                 .ok_or_else(|| {
-                    error!("could not find user with token {}", user.inner().user());
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(MioError {
-                            msg: "internal server error".to_owned(),
-                        }),
-                    )
+                    error!(
+                        "USER_INJ could not find user with token {}",
+                        user.inner().user()
+                    );
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json(MioError::i_s_e()))
                 })?,
         )
         .map_err(|err| {
-            error!("failed to serialize user: {err}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(MioError {
-                    msg: "internal server error".to_owned(),
-                }),
-            )
+            error!("USER_INJ failed to serialize user: {err}");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(MioError::i_s_e()))
         })?;
 
         if let Some(item) = req.extensions_mut().insert(user) {
             warn!(
-                "warning while injecting user: user of {:?} already existed. replacing.",
+                "USER_INJ warning while injecting user: user of {:?} already existed. replacing.",
                 item.inner().username()
             );
         }
@@ -140,57 +103,26 @@ pub async fn login(
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
 ) -> impl IntoResponse {
     let user: Index<User> = {
-        let mut user: Option<Index<User>> = None;
-        for x in state.db.open_tree(TopLevel::User).unwrap().iter() {
-            match x {
-                Err(err) => {
-                    error!("internal database error: {err}");
-                    return Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(MioError {
-                            msg: "internal server error".to_owned(),
-                        }),
-                    ));
-                }
-                Ok((key, value)) => {
-                    let key: Uuid = Uuid::from_slice(&key).map_or_else(
-                        |err| {
-                            error!("failed to serialize uuid: {err}");
-                            Err((
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(MioError {
-                                    msg: "internal server error".to_owned(),
-                                }),
-                            ))
-                        },
-                        |val| Ok(val),
-                    )?;
-                    let index = Index::<User>::new(key, &value).map_or_else(
-                        |err| {
-                            error!("failed to serialize user struct: {err}");
-                            Err((
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(MioError {
-                                    msg: "internal server error".to_owned(),
-                                }),
-                            ))
-                        },
-                        |val| Ok(val),
-                    )?;
-                    if index.inner().username() == auth.username() {
-                        user = Some(index);
-                        break;
-                    }
-                }
-            }
-        }
-        if let Some(ret) = user {
-            ret
+        let tree = state
+            .db
+            .open_tree(TopLevel::IndexUsernameToUser.table())
+            .unwrap();
+        let utree = state.db.open_tree(TopLevel::User.table()).unwrap();
+
+        if let Some(uid) = tree.get(auth.username().as_bytes()).unwrap() {
+            Index::new(
+                Uuid::from_slice(&uid).unwrap(),
+                &utree.get(uid).unwrap().unwrap(),
+            )
+            .unwrap()
         } else {
-            debug!("user not found: {}", auth.username());
+            debug!(
+                "GET /l/login failed to find user \"{}\" in index",
+                auth.username()
+            );
             return Err((
                 StatusCode::UNAUTHORIZED,
-                Json(MioError {
+                Json(crate::MioError {
                     msg: "invalid username or password".to_owned(),
                 }),
             ));
@@ -202,18 +134,16 @@ pub async fn login(
     tokio::task::spawn_blocking({
         move || {
             let parsed = PasswordHash::new(&passwd).map_err(|err| {
-                error!("unable to extract phc string: {err}");
+                error!("GET /l/login unable to extract phc string: {err}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(MioError {
-                        msg: "internal server error".to_owned(),
-                    }),
+                    Json(crate::MioError::i_s_e()),
                 )
             })?;
             Argon2::default()
                 .verify_password(auth.password().to_owned().as_bytes(), &parsed)
                 .map_err(|err| {
-                    debug!("unable to verify password: {err}");
+                    debug!("GET /l/login unable to verify password: {err}");
                     (
                         StatusCode::UNAUTHORIZED,
                         Json(MioError {
@@ -225,12 +155,10 @@ pub async fn login(
     })
     .await
     .map_err(|err| {
-        error!("task failed to start: {err}");
+        error!("GET /l/login task failed to start: {err}");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(MioError {
-                msg: "internal server error".to_owned(),
-            }),
+            Json(crate::MioError::i_s_e()),
         )
     })??;
 
@@ -240,20 +168,21 @@ pub async fn login(
     let expiry = chrono::Utc::now() + chrono::Duration::days(TIMEOUT_TIME);
     state
         .db
-        .open_tree(TopLevel::UserToken)
+        .open_tree(TopLevel::UserToken.table())
         .unwrap()
         .insert(new_token, UserToken::generate(user.id(), expiry))
         .map_err(|err| {
-            error!("failed to insert new token: {err}");
+            error!("GET /l/login failed to insert new token: {err}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(MioError {
-                    msg: "internal server error".to_owned(),
-                }),
+                Json(crate::MioError::i_s_e()),
             )
         })?;
-    
-    debug!("new token generated for {}: {new_token}, expires {expiry}", user.id());
+
+    debug!(
+        "GET /l/login new token generated for {}: {new_token}, expires {expiry}",
+        user.id()
+    );
     Ok((StatusCode::OK, Json(msgstructs::UserToken(new_token))))
 }
 
@@ -261,20 +190,28 @@ pub async fn refresh_token(
     Extension(state): Extension<Arc<crate::MioState>>,
     Query(msgstructs::UserToken(token)): Query<msgstructs::UserToken>,
 ) -> impl IntoResponse {
+    #[derive(Debug)]
+    enum ErrorOut {
+        NoUserFound,
+        DeserializationErr,
+        TimeExpired,
+    }
+
     let ret = state
         .db
-        .open_tree(TopLevel::UserToken)
+        .open_tree(TopLevel::UserToken.table())
         .unwrap()
         .transaction(|tx_db| {
             let timeup: Result<Index<db::UserToken>, _> = Index::new(token, &{
                 let x = tx_db.get(token)?;
                 if x.is_none() {
-                    abort(anyhow!("no user found"))?;
+                    abort(ErrorOut::NoUserFound)?;
                 }
                 x.unwrap()
             });
-            if timeup.is_err() {
-                abort(anyhow!("serialization err"))?;
+            if let Err(ref err) = timeup {
+                error!("POST /l/login deserialization error: {err}");
+                abort(ErrorOut::DeserializationErr)?;
             }
             let mut timeup = timeup.unwrap();
 
@@ -282,14 +219,27 @@ pub async fn refresh_token(
                 timeup
                     .inner_mut()
                     .push_forward(Duration::days(TIMEOUT_TIME));
+            } else {
+                abort(ErrorOut::TimeExpired)?;
             }
 
             tx_db.insert(token.as_bytes(), timeup.decompose().unwrap())?;
 
             Ok(())
         });
-    if ret.is_err() {
-        StatusCode::INTERNAL_SERVER_ERROR
+
+    if let Err(err) = ret {
+        debug!("POST /l/login error encountered: {err:?}");
+        match err {
+            sled::transaction::TransactionError::Abort(x) => match x {
+                ErrorOut::NoUserFound => StatusCode::NOT_FOUND,
+                ErrorOut::DeserializationErr => StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorOut::TimeExpired => StatusCode::GONE,
+            },
+            sled::transaction::TransactionError::Storage(err) => {
+                panic!("encountered db problem: {err}")
+            }
+        }
     } else {
         StatusCode::OK
     }
@@ -300,4 +250,83 @@ pub async fn logout(
     Query(msgstructs::UserToken(token)): Query<msgstructs::UserToken>,
 ) -> impl IntoResponse {
     todo!()
+}
+
+pub async fn signup(
+    Extension(state): Extension<Arc<crate::MioState>>,
+    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
+) -> Result<StatusCode, StatusCode> {
+    static HOLD: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+
+    // TODO: user config to disable signing up
+    // argon2 the password
+    let passwd = auth.password().to_owned();
+    let phc_string = tokio::task::spawn_blocking(move || {
+        let salt = argon2::password_hash::SaltString::generate(&mut OsRng);
+        let ret = Argon2::default()
+            .hash_password(passwd.as_bytes(), &salt)
+            .map_err(|err| {
+                error!("POST /l/signup could not generate phc string: {err}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        Ok::<_, StatusCode>(ret.to_string())
+    })
+    .await
+    .map_err(|err| {
+        error!("POST /l/signup argon passwd generation failed: {err}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })??;
+
+    // meanwhile, setup user
+    let lock = HOLD.acquire().await.map_err(|err| {
+        error!("POST /l/signup semaphore failed to acquire: {err}",);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let ret = tokio::task::spawn_blocking(move || {
+        let idxtree = state
+            .db
+            .open_tree(TopLevel::IndexUsernameToUser.table())
+            .unwrap();
+        let usertree = state.db.open_tree(TopLevel::User.table()).unwrap();
+        let uid = (&idxtree, &usertree)
+            .transaction(move |(idxtree, usertree)| {
+                // check if username exists
+                if idxtree.get(auth.username().as_bytes()).unwrap().is_some() {
+                    abort(StatusCode::CONFLICT)?;
+                }
+
+                // setup user
+                let uid = loop {
+                    let uid = Uuid::new_v4();
+                    if !usertree.get(uid.as_bytes()).unwrap().is_none() {
+                        break uid;
+                    }
+                };
+                usertree.insert(
+                    uid.as_bytes(),
+                    User::generate(auth.username().to_owned(), phc_string.clone()),
+                )?;
+                idxtree.insert(auth.username().as_bytes(), uid.as_bytes())?;
+
+                Ok(uid)
+            })
+            .map_err(|err| match err {
+                TransactionError::Abort(err) => err,
+                TransactionError::Storage(err) => panic!("db failure: {err}"),
+            })?;
+        
+
+        debug!("POST /l/signup created user {uid}");
+        Ok(StatusCode::OK)
+    })
+    .await
+    .map_or_else(
+        |err| {
+            error!("POST /l/signup failed to start db task: {err}");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        },
+        |ret| ret,
+    );
+    drop(lock);
+    ret
 }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::extract::ws::WebSocket;
-use axum::extract::{Query, WebSocketUpgrade};
+use axum::extract::WebSocketUpgrade;
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum::{response::IntoResponse, *};

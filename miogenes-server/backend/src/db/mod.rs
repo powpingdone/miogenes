@@ -2,52 +2,76 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum UserTable {
-    Tracks,
-    Album,
-    AlbumArt,
-    Artist,
+    Track(Uuid),
+    Album(Uuid),
+    AlbumArt(Uuid),
+    Artist(Uuid),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TopLevel {
     User,
     UserToken,
+    IndexUsernameToUser,
 }
 
-impl AsRef<[u8]> for UserTable {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            UserTable::Tracks => b"tracks",
-            UserTable::Album => b"album",
-            UserTable::AlbumArt => b"albumart",
-            UserTable::Artist => b"artist",
-        }
+impl DbTable for UserTable {
+    fn table(&self) -> Box<[u8]> {
+        let idx;
+        let x: &[u8] = match self {
+            UserTable::Track(id) => {
+                idx = id;
+                b"tracks"
+            }
+            UserTable::Album(id) => {
+                idx = id;
+                b"album"
+            }
+            UserTable::AlbumArt(id) => {
+                idx = id;
+                b"albumart"
+            }
+            UserTable::Artist(id) => {
+                idx = id;
+                b"artist"
+            }
+        };
+        [x, b"-", idx.to_string().as_bytes()]
+            .concat()
+            .as_slice()
+            .into()
     }
 }
 
-impl AsRef<[u8]> for TopLevel {
-    fn as_ref(&self) -> &[u8] {
+impl DbTable for TopLevel {
+    fn table(&self) -> Box<[u8]> {
         match self {
-            TopLevel::User => b"user",
-            TopLevel::UserToken => b"usertoken",
+            TopLevel::User => b"user".as_slice(),
+            TopLevel::UserToken => b"usertoken".as_slice(),
+            TopLevel::IndexUsernameToUser => b"idxuntou".as_slice(),
         }
+        .into()
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct User {
     username: String,
     password: String,
 }
 
 impl DbTable for User {
-    const TABLE: TopLevel = TopLevel::User;
-    type Ret = TopLevel;
+    fn table(&self) -> Box<[u8]> {
+        TopLevel::User.table()
+    }
 }
 
 impl User {
+    pub fn generate(username: String, password: String) -> Vec<u8> {
+        serde_json::to_vec(&Self { username, password }).unwrap()
+    }
     pub fn username(&self) -> &str {
         &self.username
     }
@@ -57,15 +81,16 @@ impl User {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserToken {
     expiry: DateTime<Utc>,
     user: Uuid,
 }
 
 impl DbTable for UserToken {
-    type Ret = TopLevel;
-    const TABLE: TopLevel = TopLevel::UserToken;
+    fn table(&self) -> Box<[u8]> {
+        TopLevel::UserToken.table()
+    }
 }
 
 impl UserToken {

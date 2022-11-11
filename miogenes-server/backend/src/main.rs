@@ -21,6 +21,8 @@ use user::*;
 mod db;
 use db::migrate;
 
+use crate::db::DbTable;
+
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 
@@ -34,6 +36,14 @@ pub struct MioState {
 #[derive(Debug, Serialize)]
 pub struct MioError {
     msg: String,
+}
+
+impl MioError {
+    fn i_s_e() -> Self {
+        Self {
+            msg: "internal server error".to_owned(),
+        }
+    }
 }
 
 async fn version() -> impl IntoResponse {
@@ -59,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
     let db =
         sled::open(format!("{}/db", DATA_DIR.get().unwrap())).expect("could not open database: {}");
     migrate(&db);
-    db.open_tree(crate::db::TopLevel::User).unwrap().insert(uuid::uuid!("474e9c8a-3cb9-438e-9896-ded5e77fde22").as_bytes(), b"{\"username\":\"beppy\",\"password\":\"$argon2id$v=19$m=16,t=2,p=1$WkYxdjltaHpnMDV6Zng5dQ$BfaUJfTMMsE+hLzWKee6aQ\"}".as_slice()).unwrap();
+    db.open_tree(crate::db::TopLevel::User.table()).unwrap().insert(uuid::uuid!("474e9c8a-3cb9-438e-9896-ded5e77fde22").as_bytes(), b"{\"username\":\"beppy\",\"password\":\"$argon2id$v=19$m=16,t=2,p=1$WkYxdjltaHpnMDV6Zng5dQ$BfaUJfTMMsE+hLzWKee6aQ\"}".as_slice()).unwrap();
     let (proc_tracks_tx, proc_tracks_rx) = unbounded_channel();
     let state = Arc::new(MioState {
         db,
@@ -99,7 +109,8 @@ async fn main() -> anyhow::Result<()> {
             "/l",
             Router::new()
                 .route("/login", get(user::login).post(user::refresh_token))
-                .route("/logout", post(user::logout)),
+                .route("/logout", post(user::logout))
+                .route("/signup", post(user::signup)),
         )
         .layer(axum::middleware::from_fn(log_req))
         .layer(Extension(state));

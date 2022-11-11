@@ -1,6 +1,8 @@
 use serde::{de::DeserializeOwned, Serialize};
 use uuid::Uuid;
 
+use std::fmt::Debug;
+
 // trait impl for ser/deser
 pub trait DbObject: Sized {
     type Error;
@@ -9,30 +11,30 @@ pub trait DbObject: Sized {
     fn out_value(self) -> Result<Vec<u8>, Self::Error>;
 }
 
-// table identifier
+// table to bytes that uniquely identifies it
 pub trait DbTable {
-    type Ret;
-    const TABLE: Self::Ret;
-    fn table() -> Self::Ret {
-        Self::TABLE
-    }
+    fn table(&self) -> Box<[u8]>; 
 }
 
-#[derive(Clone)]
-pub struct Index<T: DbObject + DbTable + Send + Clone> {
+impl<T> Index<T> where T: DbObject + DbTable + Send + Clone + Debug {
+    fn table(&self) -> Box<[u8]> {
+        self.inner.table()
+    }
+} 
+
+#[derive(Clone, Debug)]
+pub struct Index<T: DbObject + DbTable + Send + Clone + Debug> {
     id: Uuid,
-    tbl: T::Ret,
     inner: T,
 }
 
 impl<T> Index<T>
 where
-    T: DbObject + DbTable + Send + Clone,
+    T: DbObject + DbTable + Send + Clone + Debug,
 {
     pub fn new(id: Uuid, inner: &[u8]) -> Result<Self, T::Error> {
         Ok(Self {
             id,
-            tbl: T::table(),
             inner: T::in_value(inner)?,
         })
     }
@@ -68,13 +70,4 @@ where
     }
 
     type Error = serde_json::Error;
-}
-
-
-impl<T> DbTable for Index<T>
-where
-    T: DbTable + DbObject + Send + Clone,
-{
-    type Ret = T::Ret;
-    const TABLE: T::Ret = T::TABLE;
 }

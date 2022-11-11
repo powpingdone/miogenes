@@ -24,3 +24,4 @@ uuid = "1.2.1"
 base64 = "0.13.1"
 egui_extras = { version = "0.19.0", features = ["image"] }
 image = { version = "0.24.4", default-features = false, features = ["webp"] }
+serde_url_params = "0.2.1"

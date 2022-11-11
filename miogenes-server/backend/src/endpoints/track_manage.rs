@@ -3,15 +3,16 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use log::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::fs::{remove_file, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
 use uuid::Uuid;
 
 pub fn routes() -> Router {
-    Router::new().route("/tu", put(track_upload))
-    //.route("/td", put(track_delete))
+    Router::new()
+        .route("/tu", put(track_upload))
+        .route("/td", put(track_delete))
 }
 
 async fn track_upload(
@@ -24,10 +25,10 @@ async fn track_upload(
     // collect file
     loop {
         // get field
-        trace!("/track_upload getting field");
+        trace!("GET /track/tu getting field");
         let field = payload.next_field().await;
         if field.is_err() {
-            info!("/track_upload could not fetch field during request");
+            info!("GET /track/tu could not fetch field during request");
             rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
             return Err((
                 StatusCode::BAD_REQUEST,
@@ -44,7 +45,7 @@ async fn track_upload(
 
         // TODO: store the filename for dumping purposes
         // find a unique id for the track
-        debug!("/track_upload generating UUID");
+        debug!("GET /track/tu generating UUID");
         let mut uuid;
         let mut file: File;
         let mut fname;
@@ -60,17 +61,21 @@ async fn track_upload(
                 .await;
             match check {
                 Ok(x) => {
-                    trace!("/track_upload opened file {fname}");
+                    trace!("GET /track/tu opened file {fname}");
                     file = x;
                     break;
                 }
                 Err(err) => {
                     if err.kind() == ErrorKind::AlreadyExists {
-                        trace!("/track_upload file already exists");
+                        trace!("GET /track/tu file already exists");
                         continue;
                     }
+                    error!("GET /track/tu failed to open file: {err}");
                     rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
-                    panic!("Failed to open file for writing during an upload: {err}");
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(crate::MioError::i_s_e()),
+                    ));
                 }
             }
         }
@@ -78,16 +83,16 @@ async fn track_upload(
         // get original filename
         let orig_filename = sanitize_filename::sanitize(field.file_name().map_or_else(
             || {
-                trace!("generated fname with uuid");
+                trace!("GET /track/tu generated fname with uuid");
                 uuid.to_string()
             },
             |ret| {
-                trace!("used orig filename: {ret}");
+                trace!("GET /track/tu used orig filename: {ret}");
                 ret.to_owned()
             },
         ));
 
-        info!("/track_upload filename and uuid used: \"{fname}\" {uuid}");
+        info!("GET /track/tu filename and uuid used: \"{fname}\" {uuid}");
 
         // download the file
         // TODO: filesize limits
@@ -95,7 +100,7 @@ async fn track_upload(
         loop {
             match field.chunk().await {
                 Ok(Some(chunk)) => {
-                    debug!("/track_upload {uuid}: writing {} bytes", chunk.len());
+                    debug!("GET /track/tu {uuid}: writing {} bytes", chunk.len());
                     file.write_all(&chunk)
                         .await
                         .expect("Failed to write to file: {}");
@@ -104,13 +109,14 @@ async fn track_upload(
                 Ok(None) => break,
                 // TODO: log this error
                 Err(err) => {
-                    // delete failed upload
-                    info!("/track_upload failed upload for {uuid}: {err}");
-                    trace!("/track_upload flushing {uuid}");
+                    // delete failed upload, as well as all other uploads per this req
+                    info!("GET /track/tu failed upload for {uuid}: {err}");
+                    trace!("GET /track/tu flushing {uuid}");
                     file.flush()
                         .await
                         .expect("Failed to flush uploaded file: {}");
                     drop(file);
+                    // push blank id, just to delete uuid
                     ret_ids.push((uuid, Uuid::nil(), "".to_owned()));
                     rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
 
@@ -151,9 +157,22 @@ async fn track_upload(
 // rm's file when track_upload errors out
 async fn rm_files(paths: Vec<Uuid>) {
     for uuid in paths {
-        trace!("/track_upload deleting {uuid}");
+        trace!("RM_FILES deleting {uuid}");
         remove_file(format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid))
             .await
             .expect("unable to remove file {}");
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct DeleteQuery {
+    pub id: Uuid,
+}
+
+async fn track_delete(
+    Extension(state): Extension<Arc<crate::MioState>>,
+    Query(id): Query<DeleteQuery>,
+    Extension(userid): Extension<Uuid>,
+) -> impl IntoResponse {
+    todo!()
 }
