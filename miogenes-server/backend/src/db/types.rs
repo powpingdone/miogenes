@@ -13,14 +13,17 @@ pub trait DbObject: Sized {
 
 // table to bytes that uniquely identifies it
 pub trait DbTable {
-    fn table(&self) -> Box<[u8]>; 
+    fn table(&self) -> Box<[u8]>;
 }
 
-impl<T> Index<T> where T: DbObject + DbTable + Send + Clone + Debug {
+impl<T> Index<T>
+where
+    T: DbObject + DbTable + Send + Clone + Debug,
+{
     fn table(&self) -> Box<[u8]> {
         self.inner.table()
     }
-} 
+}
 
 #[derive(Clone, Debug)]
 pub struct Index<T: DbObject + DbTable + Send + Clone + Debug> {
@@ -39,7 +42,7 @@ where
         })
     }
 
-    pub fn id(&self)-> Uuid {
+    pub fn id(&self) -> Uuid {
         self.id
     }
 
@@ -55,7 +58,6 @@ where
         self.inner.out_value()
     }
 }
-
 
 impl<T> DbObject for T
 where

@@ -1,5 +1,7 @@
-mod state;
+mod render;
 mod rt;
+mod state;
+mod tasks;
 
 // DUMMY MAIN, PLEASE IGNORE. RUST-ANALYZER DOES NOT LIKE WASM
 #[cfg(not(target_arch = "wasm32"))]
@@ -24,4 +26,3 @@ fn main() {
     )
     .expect("failed to start eframe");
 }
-

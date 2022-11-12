@@ -262,6 +262,7 @@ pub async fn signup(
     // argon2 the password
     let passwd = auth.password().to_owned();
     let phc_string = tokio::task::spawn_blocking(move || {
+        debug!("POST /l/signup generating phc string");
         let salt = argon2::password_hash::SaltString::generate(&mut OsRng);
         let ret = Argon2::default()
             .hash_password(passwd.as_bytes(), &salt)
@@ -278,11 +279,13 @@ pub async fn signup(
     })??;
 
     // meanwhile, setup user
+    debug!("POST /l/signup acquire HOLD");
     let lock = HOLD.acquire().await.map_err(|err| {
         error!("POST /l/signup semaphore failed to acquire: {err}",);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let ret = tokio::task::spawn_blocking(move || {
+        debug!("POST /l/signup writing out to db");
         let idxtree = state
             .db
             .open_tree(TopLevel::IndexUsernameToUser.table())
@@ -290,6 +293,7 @@ pub async fn signup(
         let usertree = state.db.open_tree(TopLevel::User.table()).unwrap();
         let uid = (&idxtree, &usertree)
             .transaction(move |(idxtree, usertree)| {
+                debug!("POST /l/signup transaction begin");
                 // check if username exists
                 if idxtree.get(auth.username().as_bytes()).unwrap().is_some() {
                     abort(StatusCode::CONFLICT)?;
@@ -298,7 +302,7 @@ pub async fn signup(
                 // setup user
                 let uid = loop {
                     let uid = Uuid::new_v4();
-                    if !usertree.get(uid.as_bytes()).unwrap().is_none() {
+                    if usertree.get(uid.as_bytes()).unwrap().is_none() {
                         break uid;
                     }
                 };
@@ -314,7 +318,6 @@ pub async fn signup(
                 TransactionError::Abort(err) => err,
                 TransactionError::Storage(err) => panic!("db failure: {err}"),
             })?;
-        
 
         debug!("POST /l/signup created user {uid}");
         Ok(StatusCode::OK)

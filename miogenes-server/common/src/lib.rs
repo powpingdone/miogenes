@@ -1,7 +1,7 @@
 use serde::*;
 
-pub mod retstructs;
 pub mod msgstructs;
+pub mod retstructs;
 
 #[derive(Serialize, Deserialize)]
 pub struct Vers {
