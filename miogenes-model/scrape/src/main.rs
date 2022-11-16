@@ -70,40 +70,43 @@ async fn playlists_scrape(w: Arc<Gov>, bar: ProgressBar, tx: Sender<Page<Simplif
         let mut term1arr = TERMSSPC.chars().map(|x| x.to_string()).collect::<Vec<_>>();
         term1arr.shuffle(&mut rng);
         for term1 in term1arr {
-            for inc in (0..LIMIT).step_by(STEP as usize) {
-                bar.set_message(format!("scraping \"{term0}{term1}\": {inc}"));
-                wait!(w);
-                let req = client
-                    .search(
-                        format!("{term0}{term1}").as_str(),
-                        &SearchType::Playlist,
-                        None,
-                        None,
-                        Some(STEP),
-                        Some(inc),
-                    )
-                    .await;
-                match req {
-                    Ok(res) => {
-                        if let SearchResult::Playlists(res) = res {
-                            tx.send(res).await.unwrap();
+            let mut term2arr = TERMSSPC.chars().map(|x| x.to_string()).collect::<Vec<_>>();
+            term2arr.shuffle(&mut rng);
+            for term2 in term2arr {
+                for inc in (0..LIMIT).step_by(STEP as usize) {
+                    bar.set_message(format!("scraping \"{term0}{term1}{term2}\": {inc}"));
+                    wait!(w);
+                    let req = client
+                        .search(
+                            format!("{term0}{term1}{term2}").as_str(),
+                            &SearchType::Playlist,
+                            None,
+                            None,
+                            Some(STEP),
+                            Some(inc),
+                        )
+                        .await;
+                    match req {
+                        Ok(res) => {
+                            if let SearchResult::Playlists(res) = res {
+                                tx.send(res).await.unwrap();
+                            }
                         }
-                    }
-                    Err(ret) => {
-                        if let ClientError::Http(_) = ret {
-                            if inc > 300 {
-                                break;
+                        Err(ret) => {
+                            if let ClientError::Http(_) = ret {
+                                if inc > 300 {
+                                    break;
+                                }
+                                bar.set_message(format!("ERR: {ret}"));
+                                return;
                             }
                             bar.set_message(format!("ERR: {ret}"));
-                            return;
                         }
-                        bar.set_message(format!("ERR: {ret}"));
                     }
                 }
             }
         }
     }
-    bar.set_message("done");
 }
 
 fn playlist_filter(
@@ -151,8 +154,6 @@ fn playlist_filter(
             bar.set_message(format!("filtered: {procd}"));
         }
     }
-
-    bar.set_message("done");
 }
 
 async fn playlist_track_scrape(
@@ -195,25 +196,27 @@ async fn playlist_track_scrape(
         let stream = (0..track_len - (track_len % STEP) + STEP)
             .step_by(STEP as usize)
             .map(|amount| {
-                let client = &client;
+                let client = client.clone();
                 let w = w.clone();
-                let plist = &plist;
-                async move {
+                let plist = plist.clone();
+                tokio::spawn(async move {
                     wait!(w);
                     (
                         amount,
                         client
-                            .playlist_items_manual(plist, None, None, Some(STEP), Some(amount))
+                            .playlist_items_manual(&plist, None, None, Some(STEP), Some(amount))
                             .await,
                     )
-                }
+                })
             });
         let streams = stream.len();
         let mut pages = stream::iter(stream)
             .buffer_unordered(streams)
+            .map(|x| x.unwrap())
             .collect::<Vec<_>>()
             .await;
         // since i'm forced to do buffer_unordered, sort it afterwards
+        bar.set_message(format!("sorting tracks for {plist}"));
         pages.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
         // create the vec of tracks
@@ -249,7 +252,6 @@ async fn playlist_track_scrape(
         bar.set_message("waiting...");
         tx_meta.send((plist.clone(), tracks)).unwrap();
     }
-    bar.set_message("done");
 }
 
 async fn write_out_playlist(
@@ -296,7 +298,6 @@ async fn write_out_playlist(
             "{total} out of possible {cached} playlists written out..."
         ));
     }
-    bar.set_message("done");
 }
 
 #[tokio::main]

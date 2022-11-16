@@ -10,7 +10,7 @@ rspotify = "0.11"
 tokio = {version = "1.19", features = ["full"]}
 futures = "0.3"
 indicatif = "0.17"
-governor = "0.4"
+governor = "0.5.0"
 reqwest = "0.11"
 nonzero_ext = "0.3"
 anyhow = "1.0"
