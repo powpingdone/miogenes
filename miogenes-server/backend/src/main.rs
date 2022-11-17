@@ -17,7 +17,6 @@ use endpoints::*;
 mod subtasks;
 use subtasks::*;
 mod user;
-use user::*;
 mod db;
 use db::migrate;
 
@@ -31,19 +30,6 @@ pub struct MioState {
     db: sled::Db,
     proc_tracks_tx: UnboundedSender<(Uuid, Uuid, String)>,
     lim: Arc<Semaphore>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct MioError {
-    msg: String,
-}
-
-impl MioError {
-    fn i_s_e() -> Self {
-        Self {
-            msg: "internal server error".to_owned(),
-        }
-    }
 }
 
 async fn version() -> impl IntoResponse {

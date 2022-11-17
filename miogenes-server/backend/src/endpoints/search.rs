@@ -13,7 +13,7 @@ pub async fn search(
     ws: WebSocketUpgrade,
     Extension(userid): Extension<Uuid>,
 ) -> Result<Response, impl IntoResponse> {
-    Ok::<_, (StatusCode, Json<crate::MioError>)>(
+    Ok::<_, StatusCode>(
         ws.on_upgrade(move |x| search_inner(x, state, userid)),
     )
 }

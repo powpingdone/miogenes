@@ -15,7 +15,7 @@ use sled::Transactional;
 use uuid::Uuid;
 
 use crate::db::{self, DbTable, Index, TopLevel, User, UserToken};
-use crate::{MioError, MioState};
+use crate::MioState;
 use mio_common::*;
 
 static TIMEOUT_TIME: i64 = 3;
@@ -27,7 +27,7 @@ impl<B> FromRequest<B> for Authenticate
 where
     B: Send,
 {
-    type Rejection = (StatusCode, Json<MioError>);
+    type Rejection = StatusCode;
     async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
         let Extension(state) = req.extract::<Extension<Arc<MioState>>>().await.unwrap();
         let auth = Uuid::parse_str(
@@ -38,12 +38,8 @@ where
         )
         .map_err(|err| {
             debug!("could not parse token: {err}");
-            (
-                StatusCode::BAD_REQUEST,
-                Json(MioError {
-                    msg: "invalid user token".to_owned(),
-                }),
-            )
+
+            StatusCode::BAD_REQUEST
         })?;
         let user: Index<UserToken> = {
             let user: Option<Index<UserToken>> = state
@@ -57,12 +53,7 @@ where
                 ret
             } else {
                 debug!("USER_INJ token not found: {}", auth);
-                return Err((
-                    StatusCode::UNAUTHORIZED,
-                    Json(MioError {
-                        msg: "invalid token".to_owned(),
-                    }),
-                ));
+                return Err(StatusCode::UNAUTHORIZED);
             }
         };
 
@@ -79,12 +70,12 @@ where
                         "USER_INJ could not find user with token {}",
                         user.inner().user()
                     );
-                    (StatusCode::INTERNAL_SERVER_ERROR, Json(MioError::i_s_e()))
+                    StatusCode::INTERNAL_SERVER_ERROR
                 })?,
         )
         .map_err(|err| {
             error!("USER_INJ failed to serialize user: {err}");
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(MioError::i_s_e()))
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
         if let Some(item) = req.extensions_mut().insert(user) {
@@ -120,12 +111,7 @@ pub async fn login(
                 "GET /l/login failed to find user \"{}\" in index",
                 auth.username()
             );
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(crate::MioError {
-                    msg: "invalid username or password".to_owned(),
-                }),
-            ));
+            return Err(StatusCode::UNAUTHORIZED);
         }
     };
 
@@ -135,31 +121,20 @@ pub async fn login(
         move || {
             let parsed = PasswordHash::new(&passwd).map_err(|err| {
                 error!("GET /l/login unable to extract phc string: {err}");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(crate::MioError::i_s_e()),
-                )
+                StatusCode::INTERNAL_SERVER_ERROR
             })?;
             Argon2::default()
                 .verify_password(auth.password().to_owned().as_bytes(), &parsed)
                 .map_err(|err| {
                     debug!("GET /l/login unable to verify password: {err}");
-                    (
-                        StatusCode::UNAUTHORIZED,
-                        Json(MioError {
-                            msg: "invalid username or password".to_owned(),
-                        }),
-                    )
+                    StatusCode::UNAUTHORIZED
                 })
         }
     })
     .await
     .map_err(|err| {
         error!("GET /l/login task failed to start: {err}");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(crate::MioError::i_s_e()),
-        )
+        StatusCode::INTERNAL_SERVER_ERROR
     })??;
 
     // gen new token
@@ -173,10 +148,7 @@ pub async fn login(
         .insert(new_token, UserToken::generate(user.id(), expiry))
         .map_err(|err| {
             error!("GET /l/login failed to insert new token: {err}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(crate::MioError::i_s_e()),
-            )
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     debug!(

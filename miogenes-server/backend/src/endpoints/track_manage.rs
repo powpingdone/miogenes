@@ -30,12 +30,9 @@ async fn track_upload(
         if field.is_err() {
             info!("GET /track/tu could not fetch field during request");
             rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
-            return Err((
+            return Err(
                 StatusCode::BAD_REQUEST,
-                Json(crate::MioError {
-                    msg: "invalid or corrupt request".to_owned(),
-                }),
-            ));
+            );
         }
         let field = field.unwrap();
         if field.is_none() {
@@ -72,10 +69,7 @@ async fn track_upload(
                     }
                     error!("GET /track/tu failed to open file: {err}");
                     rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
-                    return Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(crate::MioError::i_s_e()),
-                    ));
+                    return Err(StatusCode::INTERNAL_SERVER_ERROR);
                 }
             }
         }
@@ -120,12 +114,7 @@ async fn track_upload(
                     ret_ids.push((uuid, Uuid::nil(), "".to_owned()));
                     rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
 
-                    return Err((
-                        StatusCode::BAD_REQUEST,
-                        Json(crate::MioError {
-                            msg: "invalid or corrupt request".to_owned(),
-                        }),
-                    ));
+                    return Err(StatusCode::BAD_REQUEST);
                 }
             }
         }
