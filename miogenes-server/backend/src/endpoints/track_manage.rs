@@ -3,6 +3,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use log::*;
+use mio_common::msgstructs;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::fs::{remove_file, File, OpenOptions};
@@ -30,9 +31,7 @@ async fn track_upload(
         if field.is_err() {
             info!("GET /track/tu could not fetch field during request");
             rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
-            return Err(
-                StatusCode::BAD_REQUEST,
-            );
+            return Err(StatusCode::BAD_REQUEST);
         }
         let field = field.unwrap();
         if field.is_none() {
@@ -153,14 +152,9 @@ async fn rm_files(paths: Vec<Uuid>) {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct DeleteQuery {
-    pub id: Uuid,
-}
-
 async fn track_delete(
     Extension(state): Extension<Arc<crate::MioState>>,
-    Query(id): Query<DeleteQuery>,
+    Query(id): Query<msgstructs::DeleteQuery>,
     Extension(userid): Extension<Uuid>,
 ) -> impl IntoResponse {
     todo!()

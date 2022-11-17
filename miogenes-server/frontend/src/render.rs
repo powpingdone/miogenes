@@ -5,7 +5,8 @@ use log::*;
 use crate::state::*;
 use crate::tasks;
 
-// debug macro 
+// debug macro
+#[allow(unused_macros)]
 macro_rules! enable_debug {
     () => {
         self.debug.ui(ui);

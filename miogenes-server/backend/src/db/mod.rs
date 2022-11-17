@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
+use mio_common::retstructs;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -109,6 +110,7 @@ pub struct Track {
     artist: Option<Uuid>,
     title: String,
     tags: HashMap<String, String>,
+    sort_name: String,
 }
 
 impl IdTable for Track {
@@ -117,16 +119,43 @@ impl IdTable for Track {
     }
 }
 
+impl WebOut for Track {
+    type WebOut = retstructs::Track;
+    fn web_out(self) -> Self::WebOut {
+        retstructs::Track {
+            title: self.title,
+            album: self.album,
+            cover_art: self.cover_art,
+            artist: self.artist,
+            tags: self.tags,
+            sort_name: self.sort_name,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Album {
     artist: Vec<Uuid>,
     title: String,
-    track: Vec<Uuid>,
+    tracks: Vec<Uuid>,
+    sort_name: String,
 }
 
 impl IdTable for Album {
     fn id_table(&self, id: Uuid) -> Box<[u8]> {
         UserTable::Album(id).table()
+    }
+}
+
+impl WebOut for Album {
+    type WebOut = retstructs::Album;
+    fn web_out(self) -> Self::WebOut {
+        retstructs::Album {
+            artist: self.artist,
+            title: self.title,
+            tracks: self.tracks,
+            sort_name: self.sort_name,
+        }
     }
 }
 
@@ -139,6 +168,57 @@ pub struct Playlist {
 impl IdTable for Playlist {
     fn id_table(&self, id: Uuid) -> Box<[u8]> {
         UserTable::Playlist(id).table()
+    }
+}
+
+impl WebOut for Playlist {
+    type WebOut = retstructs::Playlist;
+    fn web_out(self) -> Self::WebOut {
+        retstructs::Playlist {
+            tracks: self.tracks,
+            name: self.name,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AlbumArt {
+    data: Vec<u8>,
+}
+
+impl IdTable for AlbumArt {
+    fn id_table(&self, id: Uuid) -> Box<[u8]> {
+        UserTable::AlbumArt(id).table()
+    }
+}
+
+impl WebOut for AlbumArt {
+    type WebOut = retstructs::AlbumArt;
+    fn web_out(self) -> Self::WebOut {
+        retstructs::AlbumArt { data: self.data }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Artist {
+    name: String,
+    sort_name: String,
+}
+
+impl IdTable for Artist {
+    fn id_table(&self, id: Uuid) -> Box<[u8]> {
+        UserTable::Artist(id).table()
+    }
+}
+
+impl WebOut for Artist {
+    type WebOut = retstructs::Artist;
+
+    fn web_out(self) -> Self::WebOut {
+        retstructs::Artist {
+            name: self.name,
+            sort_name: self.sort_name,
+        }
     }
 }
 

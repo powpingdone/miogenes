@@ -1,10 +1,11 @@
 use axum::Json;
+use mio_common::retstructs;
 use serde::{de::DeserializeOwned, Serialize};
 use uuid::Uuid;
 
 use std::fmt::Debug;
 
-// trait impl for ser/deser
+// trait impl for db ser/deser
 pub trait DbObject: Sized {
     type Error;
 
@@ -20,6 +21,12 @@ pub trait DbTable {
 // table to bytes that is id'd
 pub trait IdTable {
     fn id_table(&self, id: Uuid) -> Box<[u8]>;
+}
+
+// send out the type
+pub trait WebOut {
+    type WebOut;
+    fn web_out(self) -> Self::WebOut;
 }
 
 impl<T> Index<T>
@@ -44,6 +51,7 @@ where
 pub struct Index<T: DbObject + Send + Clone + Debug> {
     id: Uuid,
     inner: T,
+    #[allow(dead_code)]
     #[serde(skip)]
     owner: Option<Uuid>,
 }
@@ -90,21 +98,21 @@ where
         &mut self.inner
     }
 
-    pub fn inner_owned(self) -> T {
-        self.inner
-    }
-
     pub fn decompose(self) -> Result<Vec<u8>, T::Error> {
         self.inner.out_value()
     }
 }
 
-impl<T> Index<T>
+impl<T, R> WebOut for Index<T>
 where
-    T: DbObject + Send + Clone + Debug + Serialize,
+    T: Send + Debug + Clone + DbObject + WebOut<WebOut = R>,
 {
-    pub fn web_out(self) -> Json<Self> {
-        Json(self)
+    type WebOut = Json<retstructs::Index<R>>;
+    fn web_out(self) -> Self::WebOut {
+        Json(retstructs::Index::<R> {
+            id: self.id,
+            inner: self.inner.web_out(),
+        })
     }
 }
 

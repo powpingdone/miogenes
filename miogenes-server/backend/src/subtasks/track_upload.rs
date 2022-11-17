@@ -12,6 +12,7 @@ use tokio::time::{timeout, Duration};
 use uuid::*;
 
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -24,7 +25,7 @@ struct Metadata {
     title: Option<String>,
     album: Option<String>,
     overflow: Option<String>,
-    blurhash: Option<Vec<u8>>,
+    img: Option<Vec<u8>>,
     imghash: Option<[u8; 32]>,
     audiohash: Option<[u8; 32]>,
 }
@@ -175,24 +176,14 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
                     mdata.imghash = Some(hash(&img));
                     trace!("{orig_path}: imghash: {:?}", mdata.imghash);
 
-                    const BHASH_W: u32 = 128;
-                    const BHASH_H: u32 = 128;
+                    // convert to webp
                     let dropped = image::load_from_memory(&img)?;
-                    let shrunk_img = dropped.resize_exact(
-                        BHASH_W,
-                        BHASH_H,
-                        image::imageops::FilterType::Nearest,
-                    );
-                    mdata.blurhash = Some(
-                        blurhash::encode(6, 6, BHASH_W, BHASH_H, &shrunk_img.to_rgba8().into_vec())
-                            .as_bytes()
-                            .to_vec(),
-                    );
-                    trace!(
-                        "{orig_path}: blurhash: {:?}",
-                        String::from_utf8(mdata.blurhash.clone().unwrap())
-                            .unwrap_or_else(|_| "has non utf-8 characters".to_owned())
-                    );
+                    let conv = dropped
+                        .as_rgb8()
+                        .ok_or(anyhow::anyhow!("failed to convert to rgb8"))?;
+                    let mut hold = Cursor::new(vec![]);
+                    conv.write_to(&mut hold, image::ImageFormat::WebP)?;
+                    mdata.img = Some(hold.into_inner());
                 } else {
                     anyhow::bail!("no buffer found for image");
                 }
@@ -333,5 +324,5 @@ async fn insert_into_db(
     userid: Uuid,
     metadata: Metadata,
 ) -> Result<(), anyhow::Error> {
-    Ok(())
+    todo!();
 }

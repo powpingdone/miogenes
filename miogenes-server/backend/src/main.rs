@@ -5,7 +5,6 @@ use axum::routing::*;
 use axum::*;
 use log::*;
 use once_cell::sync::OnceCell;
-use serde::Serialize;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::Semaphore;
 use uuid::Uuid;

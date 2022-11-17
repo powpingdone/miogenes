@@ -5,17 +5,9 @@ use uuid::Uuid;
 pub struct UserToken(#[serde(rename = "token")] pub Uuid);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TrackInfoQuery(#[serde(rename = "tr")] pub Uuid);
+pub struct IdInfoQuery(#[serde(rename = "id")] pub Uuid);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AlbumInfoQuery(#[serde(rename = "au")] pub Uuid);
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct PlaylistQuery(
-    #[serde(rename = "id")] pub Uuid,
-    // only send metadata, like track length and/or picture
-    // default (false): send all tracks
-    #[serde(rename = "md")]
-    #[serde(default)]
-    pub bool,
-);
+pub struct DeleteQuery {
+    pub id: Uuid,
+}

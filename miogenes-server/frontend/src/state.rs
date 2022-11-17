@@ -1,4 +1,4 @@
-use egui::style::{DebugOptions};
+use egui::style::DebugOptions;
 use oneshot as osh;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

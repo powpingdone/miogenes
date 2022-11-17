@@ -9,7 +9,7 @@ use log::*;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::db::*;
+use crate::db::{WebOut, *};
 use crate::MioState;
 use mio_common::*;
 
@@ -19,6 +19,8 @@ pub fn routes() -> Router {
         .route("/ai", get(album_info))
         .route("/pl", get(playlists))
         .route("/pi", get(playlist_info))
+        .route("/aa", get(album_art))
+        .route("/ar", get(artist))
 }
 
 fn query_db<T>(
@@ -27,9 +29,9 @@ fn query_db<T>(
     tree: Box<[u8]>,
     id: Uuid,
     table_id: Uuid,
-) -> Result<(StatusCode, Json<Index<T>>), StatusCode>
+) -> Result<(StatusCode, Json<retstructs::Index<<T as WebOut>::WebOut>>), StatusCode>
 where
-    T: DbObject + Send + Clone + Debug + Serialize + IdTable,
+    T: WebOut + DbObject + Send + Clone + Debug + Serialize + IdTable,
     <T as DbObject>::Error: Display,
 {
     tokio::task::block_in_place(|| {
@@ -67,7 +69,7 @@ where
 async fn track_info(
     Extension(state): Extension<Arc<MioState>>,
     Extension(key): Extension<Index<User>>,
-    Query(msgstructs::TrackInfoQuery(id)): Query<msgstructs::TrackInfoQuery>,
+    Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
     query_db::<Track>(
         "GET /track/ti",
@@ -81,7 +83,7 @@ async fn track_info(
 async fn album_info(
     Extension(state): Extension<Arc<MioState>>,
     Extension(key): Extension<Index<User>>,
-    Query(msgstructs::AlbumInfoQuery(album)): Query<msgstructs::AlbumInfoQuery>,
+    Query(msgstructs::IdInfoQuery(album)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
     query_db::<Album>(
         "GET /track/ai",
@@ -95,7 +97,7 @@ async fn album_info(
 async fn playlist_info(
     Extension(state): Extension<Arc<MioState>>,
     Extension(key): Extension<Index<User>>,
-    Query(msgstructs::PlaylistQuery(plquery)): Query<msgstructs::PlaylistQuery>,
+    Query(msgstructs::IdInfoQuery(plquery)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
     query_db::<Playlist>(
         "GET /track/pi",
@@ -106,11 +108,64 @@ async fn playlist_info(
     )
 }
 
-// return basic info of playlists
-// ex: name, blurhash logo, id
+async fn album_art(
+    Extension(state): Extension<Arc<MioState>>,
+    Extension(key): Extension<Index<User>>,
+    Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
+) -> impl IntoResponse {
+    query_db::<AlbumArt>(
+        "GET /track/pi",
+        state,
+        UserTable::Playlist(key.id()).table(),
+        id,
+        key.id(),
+    )
+}
+
+async fn artist(
+    Extension(state): Extension<Arc<MioState>>,
+    Extension(key): Extension<Index<User>>,
+    Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
+) -> impl IntoResponse {
+    query_db::<Artist>(
+        "GET /track/ar",
+        state,
+        UserTable::Artist(key.id()).table(),
+        id,
+        key.id(),
+    )
+}
+
+// return all playlists
 async fn playlists(
     Extension(state): Extension<Arc<MioState>>,
     Extension(key): Extension<Index<User>>,
 ) -> impl IntoResponse {
-    todo!()
+    Ok::<_, StatusCode>((
+        StatusCode::OK,
+        Json(retstructs::Playlists {
+            lists: {
+                let mut x = vec![];
+                for poss in state
+                    .db
+                    .open_tree(UserTable::Playlist(key.id()).table())
+                    .map_err(|err| {
+                        error!("/track/pl could not open table {err}");
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })?
+                    .iter()
+                {
+                    let (key, _) = poss.map_err(|err| {
+                        error!("/track/pl failed to serialize uuid {err}");
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })?;
+                    x.push(Uuid::from_slice(&key).map_err(|err| {
+                        error!("/track/pl failed to serialize uuid {err}");
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })?);
+                }
+                x
+            },
+        }),
+    ))
 }
