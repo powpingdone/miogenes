@@ -1,3 +1,4 @@
+use axum::Json;
 use serde::{de::DeserializeOwned, Serialize};
 use uuid::Uuid;
 
@@ -16,6 +17,11 @@ pub trait DbTable {
     fn table(&self) -> Box<[u8]>;
 }
 
+// table to bytes that is id'd
+pub trait IdTable {
+    fn id_table(&self, id: Uuid) -> Box<[u8]>;
+}
+
 impl<T> Index<T>
 where
     T: DbObject + DbTable + Send + Clone + Debug,
@@ -25,10 +31,21 @@ where
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Index<T: DbObject + DbTable + Send + Clone + Debug> {
+impl<T> Index<T>
+where
+    T: DbObject + IdTable + Send + Clone + Debug,
+{
+    fn id_table(&self) -> Box<[u8]> {
+        self.inner.id_table(self.owner.unwrap())
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct Index<T: DbObject + Send + Clone + Debug> {
     id: Uuid,
     inner: T,
+    #[serde(skip)]
+    owner: Option<Uuid>,
 }
 
 impl<T> Index<T>
@@ -39,9 +56,28 @@ where
         Ok(Self {
             id,
             inner: T::in_value(inner)?,
+            owner: None,
         })
     }
+}
 
+impl<T> Index<T>
+where
+    T: DbObject + IdTable + Send + Clone + Debug,
+{
+    pub fn new_owned(id: Uuid, table_id: Uuid, inner: &[u8]) -> Result<Self, T::Error> {
+        Ok(Self {
+            id,
+            inner: T::in_value(inner)?,
+            owner: Some(table_id),
+        })
+    }
+}
+
+impl<T> Index<T>
+where
+    T: DbObject + Send + Clone + Debug,
+{
     pub fn id(&self) -> Uuid {
         self.id
     }
@@ -54,8 +90,21 @@ where
         &mut self.inner
     }
 
+    pub fn inner_owned(self) -> T {
+        self.inner
+    }
+
     pub fn decompose(self) -> Result<Vec<u8>, T::Error> {
         self.inner.out_value()
+    }
+}
+
+impl<T> Index<T>
+where
+    T: DbObject + Send + Clone + Debug + Serialize,
+{
+    pub fn web_out(self) -> Json<Self> {
+        Json(self)
     }
 }
 

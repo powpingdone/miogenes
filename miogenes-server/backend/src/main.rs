@@ -16,8 +16,8 @@ mod endpoints;
 use endpoints::*;
 mod subtasks;
 use subtasks::*;
-mod user;
 mod db;
+mod user;
 use db::migrate;
 
 use crate::db::DbTable;
@@ -52,10 +52,9 @@ async fn main() -> anyhow::Result<()> {
 
     // create the main passing state
     trace!("main: creating state");
-    let db =
-        sled::open(format!("{}/db", DATA_DIR.get().unwrap())).expect("could not open database: {}");
+    let db = sled::open(format!("{}/db", DATA_DIR.get().unwrap()))?;
     migrate(&db);
-    db.open_tree(crate::db::TopLevel::User.table()).unwrap().insert(uuid::uuid!("474e9c8a-3cb9-438e-9896-ded5e77fde22").as_bytes(), b"{\"username\":\"beppy\",\"password\":\"$argon2id$v=19$m=16,t=2,p=1$WkYxdjltaHpnMDV6Zng5dQ$BfaUJfTMMsE+hLzWKee6aQ\"}".as_slice()).unwrap();
+    db.open_tree(crate::db::TopLevel::User.table()).unwrap().insert(uuid::uuid!("474e9c8a-3cb9-438e-9896-ded5e77fde22").as_bytes(), b"{\"username\":\"beppy\",\"password\":\"$argon2id$v=19$m=16,t=2,p=1$WkYxdjltaHpnMDV6Zng5dQ$BfaUJfTMMsE+hLzWKee6aQ\"}".as_slice())?;
     let (proc_tracks_tx, proc_tracks_rx) = unbounded_channel();
     let state = Arc::new(MioState {
         db,

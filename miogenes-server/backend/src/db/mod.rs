@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -8,6 +10,7 @@ pub enum UserTable {
     Album(Uuid),
     AlbumArt(Uuid),
     Artist(Uuid),
+    Playlist(Uuid),
 }
 
 #[derive(Clone, Debug)]
@@ -19,24 +22,12 @@ pub enum TopLevel {
 
 impl DbTable for UserTable {
     fn table(&self) -> Box<[u8]> {
-        let idx;
-        let x: &[u8] = match self {
-            UserTable::Track(id) => {
-                idx = id;
-                b"tracks"
-            }
-            UserTable::Album(id) => {
-                idx = id;
-                b"album"
-            }
-            UserTable::AlbumArt(id) => {
-                idx = id;
-                b"albumart"
-            }
-            UserTable::Artist(id) => {
-                idx = id;
-                b"artist"
-            }
+        let (idx, x): (Uuid, &[u8]) = match self {
+            UserTable::Track(id) => (*id, b"tracks"),
+            UserTable::Album(id) => (*id, b"album"),
+            UserTable::AlbumArt(id) => (*id, b"albumart"),
+            UserTable::Artist(id) => (*id, b"artist"),
+            UserTable::Playlist(id) => (*id, b"playlist"),
         };
         [x, b"-", idx.to_string().as_bytes()]
             .concat()
@@ -108,6 +99,46 @@ impl UserToken {
 
     pub fn user(&self) -> Uuid {
         self.user
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Track {
+    album: Option<Uuid>,
+    cover_art: Option<Uuid>,
+    artist: Option<Uuid>,
+    title: String,
+    tags: HashMap<String, String>,
+}
+
+impl IdTable for Track {
+    fn id_table(&self, id: Uuid) -> Box<[u8]> {
+        UserTable::Track(id).table()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Album {
+    artist: Vec<Uuid>,
+    title: String,
+    track: Vec<Uuid>,
+}
+
+impl IdTable for Album {
+    fn id_table(&self, id: Uuid) -> Box<[u8]> {
+        UserTable::Album(id).table()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Playlist {
+    tracks: Vec<Uuid>,
+    name: String,
+}
+
+impl IdTable for Playlist {
+    fn id_table(&self, id: Uuid) -> Box<[u8]> {
+        UserTable::Playlist(id).table()
     }
 }
 

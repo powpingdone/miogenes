@@ -5,6 +5,14 @@ use log::*;
 use crate::state::*;
 use crate::tasks;
 
+// debug macro 
+macro_rules! enable_debug {
+    () => {
+        self.debug.ui(ui);
+        ui.style_mut().debug = self.debug;
+    };
+}
+
 // util function to do centered box
 fn center_box(ui: &mut Ui, size: Vec2, f: impl Widget) {
     ui.vertical_centered(|ui| {
@@ -45,8 +53,6 @@ impl Application {
         } = self.page
         {
             CentralPanel::default().show(ctx, |ui| {
-                self.debug.ui(ui);
-                ui.style_mut().debug = self.debug;
                 center_box(ui, [96.0, 42.0].into(), |ui: &mut Ui| {
                     ui.vertical_centered(|ui| {
                         ui.add(Label::new(RichText::new("Miogenes").size(25.0)).wrap(false));

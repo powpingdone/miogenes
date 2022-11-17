@@ -38,7 +38,6 @@ where
         )
         .map_err(|err| {
             debug!("could not parse token: {err}");
-
             StatusCode::BAD_REQUEST
         })?;
         let user: Index<UserToken> = {

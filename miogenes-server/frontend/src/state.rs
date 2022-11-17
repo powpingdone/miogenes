@@ -10,23 +10,26 @@ use mio_common::*;
 pub enum Page {
     #[default]
     Loaded,
-    #[serde(skip)]
     Login {
+        #[serde(default)]
         user: String,
+        #[serde(default)]
         pass: String,
+        #[serde(default)]
         err_msg: Option<String>,
+        #[serde(skip)]
         login_resp: Option<osh::Receiver<Result<msgstructs::UserToken, String>>>,
     },
     Signup {
-        #[serde(skip)]
+        #[serde(default)]
         user: String,
-        #[serde(skip)]
+        #[serde(default)]
         pass: String,
-        #[serde(skip)]
+        #[serde(default)]
         pass2: String,
         #[serde(skip)]
         signup_resp: Option<osh::Receiver<Option<u16>>>,
-        #[serde(skip)]
+        #[serde(default)]
         err_msg: Option<String>,
     },
 }
