@@ -145,26 +145,26 @@ async fn playlists(
         StatusCode::OK,
         Json(retstructs::Playlists {
             lists: {
-                let mut x = vec![];
+                let mut ret = vec![];
                 for poss in state
                     .db
                     .open_tree(UserTable::Playlist(key.id()).table())
                     .map_err(|err| {
-                        error!("/track/pl could not open table {err}");
+                        error!("GET /track/pl could not open table {err}");
                         StatusCode::INTERNAL_SERVER_ERROR
                     })?
                     .iter()
                 {
                     let (key, _) = poss.map_err(|err| {
-                        error!("/track/pl failed to serialize uuid {err}");
+                        error!("GET /track/pl failed to serialize uuid {err}");
                         StatusCode::INTERNAL_SERVER_ERROR
                     })?;
-                    x.push(Uuid::from_slice(&key).map_err(|err| {
-                        error!("/track/pl failed to serialize uuid {err}");
+                    ret.push(Uuid::from_slice(&key).map_err(|err| {
+                        error!("GET /track/pl failed to serialize uuid {err}");
                         StatusCode::INTERNAL_SERVER_ERROR
                     })?);
                 }
-                x
+                ret
             },
         }),
     ))

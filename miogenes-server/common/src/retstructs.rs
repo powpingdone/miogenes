@@ -47,3 +47,8 @@ pub struct Index<T> {
 pub struct Playlists {
     pub lists: Vec<Uuid>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UploadReturn {
+    pub uuid: Vec<Uuid>,
+}

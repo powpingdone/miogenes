@@ -220,7 +220,23 @@ pub async fn logout(
     Extension(state): Extension<Arc<crate::MioState>>,
     Query(msgstructs::UserToken(token)): Query<msgstructs::UserToken>,
 ) -> impl IntoResponse {
-    todo!()
+    state
+        .db
+        .open_tree(TopLevel::UserToken.table())
+        .map_err(|err| {
+            error!("/l/logout failed to open DB: {err}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .remove(token.as_bytes())
+        .map_err(|err| {
+            error!("/l/logout failed to remove key: {err}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or_else(|| {
+            debug!("/l/logout no key found for {token}");
+            StatusCode::NOT_FOUND
+        })?;
+    Ok::<_, StatusCode>(StatusCode::OK)
 }
 
 pub async fn signup(
@@ -232,7 +248,7 @@ pub async fn signup(
     // TODO: user config to disable signing up
     // argon2 the password
     let passwd = auth.password().to_owned();
-    let phc_string = tokio::task::spawn_blocking(move || {
+    let phc_string = tokio::task::block_in_place(move || {
         debug!("POST /l/signup generating phc string");
         let salt = argon2::password_hash::SaltString::generate(&mut OsRng);
         let ret = Argon2::default()
@@ -242,20 +258,15 @@ pub async fn signup(
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
         Ok::<_, StatusCode>(ret.to_string())
-    })
-    .await
-    .map_err(|err| {
-        error!("POST /l/signup argon passwd generation failed: {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })??;
+    })?;
 
-    // meanwhile, setup user
+    // then, setup user
     debug!("POST /l/signup acquire HOLD");
     let lock = HOLD.acquire().await.map_err(|err| {
         error!("POST /l/signup semaphore failed to acquire: {err}",);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    let ret = tokio::task::spawn_blocking(move || {
+    let ret = tokio::task::block_in_place(move || {
         debug!("POST /l/signup writing out to db");
         let idxtree = state
             .db
@@ -292,15 +303,7 @@ pub async fn signup(
 
         debug!("POST /l/signup created user {uid}");
         Ok(StatusCode::OK)
-    })
-    .await
-    .map_or_else(
-        |err| {
-            error!("POST /l/signup failed to start db task: {err}");
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        },
-        |ret| ret,
-    );
+    });
     drop(lock);
     ret
 }

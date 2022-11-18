@@ -3,8 +3,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use log::*;
-use mio_common::msgstructs;
-use serde::{Deserialize, Serialize};
+use mio_common::*;
 use std::sync::Arc;
 use tokio::fs::{remove_file, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
@@ -100,7 +99,6 @@ async fn track_upload(
                 }
                 // No more data
                 Ok(None) => break,
-                // TODO: log this error
                 Err(err) => {
                     // delete failed upload, as well as all other uploads per this req
                     info!("GET /track/tu failed upload for {uuid}: {err}");
@@ -121,14 +119,10 @@ async fn track_upload(
         ret_ids.push((uuid, userid, orig_filename));
     }
 
-    #[derive(Serialize)]
-    struct UploadReturn {
-        uuid: Vec<Uuid>,
-    }
 
     Ok((
         StatusCode::PROCESSING,
-        Json(UploadReturn {
+        Json(retstructs::UploadReturn {
             uuid: ret_ids
                 .into_iter()
                 .map(|x| {
