@@ -41,7 +41,7 @@ try:
         sleep_until = begin + (60.0 * 60.0 * 24.0) + (60.0 * 15.0)
         print(f"\nfinished epoch, gathered {actual_new - actual_hold} playlists ({actual_hold} -> {actual_new}). sleeping until {time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(sleep_until))}\n")
         spinner = ["|", '/', '-', '\\']
-        for x in range(sleep_until - time.time()):
+        for x in range(int(sleep_until - time.time())):
             time.sleep(1)
             choice = spinner[x % len(spinner)]
             print(f"\b{choice}", flush=True, end='')
