@@ -48,6 +48,7 @@ impl MigrationTrait for Migration {
                     // ser
                     .col(ColumnDef::new(Artist::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Artist::Name).string().not_null())
+                    .col(ColumnDef::new(Artist::SortName).string().null())
                     .to_owned(),
             )
             .await?;
@@ -283,6 +284,7 @@ enum Artist {
     // ser
     Id,
     Name,
+    SortName,
 }
 
 #[derive(Iden)]

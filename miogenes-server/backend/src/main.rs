@@ -5,12 +5,12 @@ use axum::routing::*;
 use axum::*;
 use log::*;
 use once_cell::sync::OnceCell;
+use sea_orm::{Database, DatabaseConnection, DbErr, TransactionError};
+use thiserror::Error;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::Semaphore;
 use uuid::Uuid;
-use sea_orm::{Database, DatabaseConnection};
 
-use std::fmt::Display;
 use std::sync::Arc;
 
 use mio_migration::{Migrator, MigratorTrait};
@@ -25,16 +25,66 @@ mod user;
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 
+// transaction errors used in the server
+#[derive(Debug, Error)]
+pub enum MioInnerError {
+    #[error("could not find: `{0}`")]
+    NotFound(Level, anyhow::Error),
+    #[error("DATABASE ERROR: `{0}`")]
+    DbError(Level, sea_orm::DbErr),
+    #[error("user challenge failure: `{0}`")]
+    UserChallengedFail(Level, anyhow::Error, StatusCode),
+    #[error("user creation failure: `{0}`")]
+    UserCreationFail(Level, anyhow::Error, StatusCode),
+}
+
+impl From<sea_orm::DbErr> for MioInnerError {
+    fn from(err: sea_orm::DbErr) -> Self {
+        MioInnerError::DbError(Level::Error, err)
+    }
+}
+
+impl Into<StatusCode> for MioInnerError {
+    fn into(self) -> StatusCode {
+        // log errors
+        log!(
+            match self {
+                MioInnerError::NotFound(lvl, _)
+                | MioInnerError::DbError(lvl, _)
+                | MioInnerError::UserChallengedFail(lvl, _, _)
+                | MioInnerError::UserCreationFail(lvl, _, _) => lvl,
+            },
+            "{self}"
+        );
+
+        // return status
+        match self {
+            MioInnerError::NotFound(..) => StatusCode::NOT_FOUND,
+            MioInnerError::DbError(..) => StatusCode::INTERNAL_SERVER_ERROR,
+            MioInnerError::UserChallengedFail(_, _, code) => code,
+            MioInnerError::UserCreationFail(_, _, code) => code,
+        }
+    }
+}
+
+pub fn db_err(err: DbErr) -> StatusCode {
+    error!("DATABASE ERROR: {err}");
+    StatusCode::INTERNAL_SERVER_ERROR
+}
+
+// change a transaction error to a StatusCode
+pub fn tr_conv_code(err: TransactionError<MioInnerError>) -> StatusCode {
+    match err {
+        TransactionError::Connection(err) => db_err(err),
+        TransactionError::Transaction(err) => err.into(),
+    }
+}
+
 #[derive(Clone)]
 pub struct MioState {
     db: DatabaseConnection,
     proc_tracks_tx: UnboundedSender<(Uuid, Uuid, String)>,
     lim: Arc<Semaphore>,
-}
-
-pub fn db_err(err: impl Display) -> StatusCode {
-    error!("DATABASE ERROR: {err}");
-    StatusCode::INTERNAL_SERVER_ERROR
 }
 
 async fn version() -> impl IntoResponse {

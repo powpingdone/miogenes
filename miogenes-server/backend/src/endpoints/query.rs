@@ -1,15 +1,15 @@
-use std::fmt::{Debug, Display};
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use axum::extract::*;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use log::*;
-use uuid::Uuid;
+use sea_orm::*;
 
 use crate::db::WebOut;
-use crate::MioState;
+use crate::{db_err, MioInnerError, MioState};
 use mio_common::*;
 use mio_entity::*;
 
@@ -19,103 +19,155 @@ pub fn routes() -> Router {
         .route("/ai", get(album_info))
         .route("/pl", get(playlists))
         .route("/pi", get(playlist_info))
-        .route("/aa", get(album_art))
+        .route("/ca", get(cover_art))
         .route("/ar", get(artist))
 }
 
 async fn track_info(
     Extension(state): Extension<Arc<MioState>>,
-    Extension(key): Extension<User>,
+    Extension(key): Extension<mio_entity::user::Model>,
     Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
-    Track::get_by_id()
+    Ok::<_, StatusCode>((
+        StatusCode::OK,
+        Json(
+            Track::find_by_id(id)
+                .filter(track::Column::Owner.eq(key.id))
+                .one(&state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| {
+                    Into::<StatusCode>::into(MioInnerError::NotFound(
+                        Level::Debug,
+                        anyhow!("could not find track {id}"),
+                    ))
+                })?
+                .web_out(&state.db)
+                .await,
+        ),
+    ))
 }
 
 async fn album_info(
     Extension(state): Extension<Arc<MioState>>,
-    Extension(key): Extension<Index<User>>,
+    Extension(key): Extension<mio_entity::user::Model>,
     Query(msgstructs::IdInfoQuery(album)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
-    query_db::<Album>(
-        "GET /track/ai",
-        state,
-        UserTable::Album(key.id()).table(),
-        album,
-        key.id(),
-    )
+    Ok::<_, StatusCode>((
+        StatusCode::OK,
+        Json(
+            Album::find_by_id(album)
+                .join(JoinType::Join, track::Relation::Album.def())
+                .filter(track::Column::Owner.eq(key.id))
+                .one(&state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| {
+                    Into::<StatusCode>::into(MioInnerError::NotFound(
+                        Level::Debug,
+                        anyhow!("could not find album {album}"),
+                    ))
+                })?
+                .web_out(&state.db)
+                .await,
+        ),
+    ))
 }
 
 async fn playlist_info(
     Extension(state): Extension<Arc<MioState>>,
-    Extension(key): Extension<Index<User>>,
-    Query(msgstructs::IdInfoQuery(plquery)): Query<msgstructs::IdInfoQuery>,
-) -> impl IntoResponse {
-    query_db::<Playlist>(
-        "GET /track/pi",
-        state,
-        UserTable::Playlist(key.id()).table(),
-        plquery,
-        key.id(),
-    )
-}
-
-async fn album_art(
-    Extension(state): Extension<Arc<MioState>>,
-    Extension(key): Extension<Index<User>>,
+    Extension(key): Extension<mio_entity::user::Model>,
     Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
-    query_db::<AlbumArt>(
-        "GET /track/pi",
-        state,
-        UserTable::Playlist(key.id()).table(),
-        id,
-        key.id(),
-    )
+    Ok::<_, StatusCode>((
+        StatusCode::OK,
+        Json(
+            Playlist::find_by_id(id)
+                .filter(playlist::Column::Owner.eq(key.id))
+                .one(&state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| {
+                    Into::<StatusCode>::into(MioInnerError::NotFound(
+                        Level::Debug,
+                        anyhow!("could not find album {id}"),
+                    ))
+                })?
+                .web_out(&state.db)
+                .await,
+        ),
+    ))
+}
+
+async fn cover_art(
+    Extension(state): Extension<Arc<MioState>>,
+    Extension(key): Extension<mio_entity::user::Model>,
+    Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
+) -> impl IntoResponse {
+    Ok::<_, StatusCode>((
+        StatusCode::OK,
+        Json(
+            CoverArt::find_by_id(id)
+                .join(JoinType::Join, track::Relation::CoverArt.def())
+                .filter(track::Column::Owner.eq(key.id))
+                .one(&state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| {
+                    Into::<StatusCode>::into(MioInnerError::NotFound(
+                        Level::Debug,
+                        anyhow!("could not find album {id}"),
+                    ))
+                })?
+                .web_out(&state.db)
+                .await,
+        ),
+    ))
 }
 
 async fn artist(
     Extension(state): Extension<Arc<MioState>>,
-    Extension(key): Extension<Index<User>>,
+    Extension(key): Extension<mio_entity::user::Model>,
     Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
-    query_db::<Artist>(
-        "GET /track/ar",
-        state,
-        UserTable::Artist(key.id()).table(),
-        id,
-        key.id(),
-    )
+    Ok::<_, StatusCode>((
+        StatusCode::OK,
+        Json(
+            Artist::find_by_id(id)
+                .join(JoinType::Join, track::Relation::Artist.def())
+                .filter(track::Column::Owner.eq(key.id))
+                .one(&state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| {
+                    Into::<StatusCode>::into(MioInnerError::NotFound(
+                        Level::Debug,
+                        anyhow!("could not find album {id}"),
+                    ))
+                })?
+                .web_out(&state.db)
+                .await,
+        ),
+    ))
 }
 
 // return all playlists
 async fn playlists(
     Extension(state): Extension<Arc<MioState>>,
-    Extension(key): Extension<Index<User>>,
+    Extension(key): Extension<mio_entity::user::Model>,
 ) -> impl IntoResponse {
     Ok::<_, StatusCode>((
         StatusCode::OK,
         Json(retstructs::Playlists {
             lists: {
-                let mut ret = vec![];
-                for poss in state
-                    .db
-                    .open_tree(UserTable::Playlist(key.id()).table())
-                    .map_err(|err| {
-                        error!("GET /track/pl could not open table {err}");
-                        StatusCode::INTERNAL_SERVER_ERROR
-                    })?
-                    .iter()
-                {
-                    let (key, _) = poss.map_err(|err| {
-                        error!("GET /track/pl failed to serialize uuid {err}");
-                        StatusCode::INTERNAL_SERVER_ERROR
-                    })?;
-                    ret.push(Uuid::from_slice(&key).map_err(|err| {
-                        error!("GET /track/pl failed to serialize uuid {err}");
-                        StatusCode::INTERNAL_SERVER_ERROR
-                    })?);
-                }
-                ret
+                Playlist::find()
+                    .filter(playlist::Column::Owner.eq(key.id))
+                    .all(&state.db)
+                    .await
+                    .map_err(db_err)?
+                    .into_iter()
+                    .map(|x| x.id)
+                    .collect()
             },
         }),
     ))
