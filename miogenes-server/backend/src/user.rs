@@ -155,7 +155,7 @@ pub async fn login(
                     expiry: Set(expiry),
                     user_id: Set(user.id),
                 }
-                .save(txn)
+                .insert(txn)
                 .await?;
 
                 debug!(
@@ -281,7 +281,7 @@ pub async fn signup(
                     username: Set(auth.username().to_owned()),
                     password: Set(phc_string),
                 }
-                .save(txn)
+                .insert(txn)
                 .await?;
 
                 debug!("POST /l/signup created user {uid}");

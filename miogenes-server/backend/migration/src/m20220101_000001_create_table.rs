@@ -109,7 +109,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(UserToken::UserId).uuid().not_null())
                     .foreign_key(
                         ForeignKey::create()
-                            .from(UserToken::Table, UserToken::Id)
+                            .from(UserToken::Table, UserToken::UserId)
                             .to(User::Table, User::Id)
                             .on_update(ForeignKeyAction::NoAction)
                             .on_delete(ForeignKeyAction::NoAction),

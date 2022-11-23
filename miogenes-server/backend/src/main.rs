@@ -28,19 +28,19 @@ static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 // transaction errors used in the server
 #[derive(Debug, Error)]
 pub enum MioInnerError {
-    #[error("could not find: `{0}`")]
+    #[error("could not find: `{1}`")]
     NotFound(Level, anyhow::Error),
-    #[error("DATABASE ERROR: `{0}`")]
-    DbError(Level, sea_orm::DbErr),
-    #[error("user challenge failure: `{0}`")]
+    #[error("DATABASE ERROR: `{1}`")]
+    DbError(Level, anyhow::Error),
+    #[error("user challenge failure: `{1}`")]
     UserChallengedFail(Level, anyhow::Error, StatusCode),
-    #[error("user creation failure: `{0}`")]
+    #[error("user creation failure: `{1}`")]
     UserCreationFail(Level, anyhow::Error, StatusCode),
 }
 
 impl From<sea_orm::DbErr> for MioInnerError {
     fn from(err: sea_orm::DbErr) -> Self {
-        MioInnerError::DbError(Level::Error, err)
+        MioInnerError::DbError(Level::Error, anyhow::Error::new(err))
     }
 }
 
@@ -68,8 +68,7 @@ impl Into<StatusCode> for MioInnerError {
 }
 
 pub fn db_err(err: DbErr) -> StatusCode {
-    error!("DATABASE ERROR: {err}");
-    StatusCode::INTERNAL_SERVER_ERROR
+    MioInnerError::from(err).into()
 }
 
 // change a transaction error to a StatusCode
