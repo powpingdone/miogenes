@@ -27,7 +27,7 @@ pub struct Playlist {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AlbumArt {
+pub struct CoverArt {
     pub data: Vec<u8>,
 }
 

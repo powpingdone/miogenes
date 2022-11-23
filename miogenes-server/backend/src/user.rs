@@ -7,16 +7,15 @@ use axum::headers::Authorization;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{async_trait, Extension, Json, TypedHeader};
-use chrono::Duration;
+use chrono::{Duration, Utc};
 use log::*;
 use rand::rngs::OsRng;
-use sled::transaction::{abort, TransactionError};
-use sled::Transactional;
+use sea_orm::{prelude::*, *};
 use uuid::Uuid;
 
-use crate::db::{self, DbTable, Index, TopLevel, User, UserToken};
-use crate::MioState;
+use crate::{db_err, MioState};
 use mio_common::*;
+use mio_entity::{user, user_token, User, UserToken};
 
 static TIMEOUT_TIME: i64 = 3;
 
@@ -30,6 +29,7 @@ where
     type Rejection = StatusCode;
     async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
         let Extension(state) = req.extract::<Extension<Arc<MioState>>>().await.unwrap();
+        // get user token
         let auth = Uuid::parse_str(
             req.extract::<TypedHeader<Authorization<Bearer>>>()
                 .await
@@ -37,50 +37,36 @@ where
                 .token(),
         )
         .map_err(|err| {
-            debug!("could not parse token: {err}");
+            debug!("USER_INJ could not parse token: {err}");
             StatusCode::BAD_REQUEST
         })?;
-        let user: Index<UserToken> = {
-            let user: Option<Index<UserToken>> = state
-                .db
-                .open_tree(TopLevel::UserToken.table())
-                .unwrap()
-                .get(auth.as_bytes())
-                .unwrap()
-                .map(|ret| Index::new(auth, &ret).unwrap());
-            if let Some(ret) = user {
-                ret
-            } else {
-                debug!("USER_INJ token not found: {}", auth);
-                return Err(StatusCode::UNAUTHORIZED);
-            }
-        };
 
-        let user = Index::<User>::new(
-            user.inner().user(),
-            &state
-                .db
-                .open_tree(TopLevel::User.table())
-                .unwrap()
-                .get(user.inner().user())
-                .unwrap()
-                .ok_or_else(|| {
-                    error!(
-                        "USER_INJ could not find user with token {}",
-                        user.inner().user()
-                    );
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?,
-        )
-        .map_err(|err| {
-            error!("USER_INJ failed to serialize user: {err}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        // check for existence and validity of token
+        let usertoken = UserToken::find_by_id(auth)
+            .one(&state.db)
+            .await
+            .map_err(db_err)?
+            .ok_or_else(|| {
+                debug!("USER_INJ usertoken not found");
+                StatusCode::UNAUTHORIZED
+            })?;
+        if usertoken.expiry > Utc::now() {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
 
+        // inject user
+        let user = User::find_by_id(usertoken.user_id)
+            .one(&state.db)
+            .await
+            .map_err(db_err)?
+            .ok_or_else(|| {
+                error!("USER_INJ usertoken found, but no user found");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
         if let Some(item) = req.extensions_mut().insert(user) {
             warn!(
-                "USER_INJ warning while injecting user: user of {:?} already existed. replacing.",
-                item.inner().username()
+                "USER_INJ warning while injecting user: user of {} already existed. replacing.",
+                item.username
             );
         }
 
@@ -92,30 +78,22 @@ pub async fn login(
     Extension(state): Extension<Arc<crate::MioState>>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
 ) -> impl IntoResponse {
-    let user: Index<User> = {
-        let tree = state
-            .db
-            .open_tree(TopLevel::IndexUsernameToUser.table())
-            .unwrap();
-        let utree = state.db.open_tree(TopLevel::User.table()).unwrap();
-
-        if let Some(uid) = tree.get(auth.username().as_bytes()).unwrap() {
-            Index::new(
-                Uuid::from_slice(&uid).unwrap(),
-                &utree.get(uid).unwrap().unwrap(),
-            )
-            .unwrap()
-        } else {
+    // get user
+    let user = User::find()
+        .filter(user::Column::Username.eq(auth.username()))
+        .one(&state.db)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| {
             debug!(
                 "GET /l/login failed to find user \"{}\" in index",
                 auth.username()
             );
-            return Err(StatusCode::UNAUTHORIZED);
-        }
-    };
+            StatusCode::UNAUTHORIZED
+        })?;
 
     // check hash
-    let passwd = user.inner().password().to_owned();
+    let passwd = user.password.to_owned();
     tokio::task::spawn_blocking({
         move || {
             let parsed = PasswordHash::new(&passwd).map_err(|err| {
@@ -136,23 +114,22 @@ pub async fn login(
         StatusCode::INTERNAL_SERVER_ERROR
     })??;
 
-    // gen new token
+    // generate new token
     let new_token = Uuid::new_v4();
     // TODO: let server host specify when logout tokens expire
-    let expiry = chrono::Utc::now() + chrono::Duration::days(TIMEOUT_TIME);
-    state
-        .db
-        .open_tree(TopLevel::UserToken.table())
-        .unwrap()
-        .insert(new_token, UserToken::generate(user.id(), expiry))
-        .map_err(|err| {
-            error!("GET /l/login failed to insert new token: {err}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let expiry = Utc::now() + chrono::Duration::days(TIMEOUT_TIME);
+    user_token::Entity::insert(UserToken::insert(user_token::ActiveModel {
+        id: Set(new_token),
+        expiry: Set(expiry),
+        user_id: Set(user.id),
+    }))
+    .exec(&state.db)
+    .await
+    .map_err(db_err)?;
 
     debug!(
         "GET /l/login new token generated for {}: {new_token}, expires {expiry}",
-        user.id()
+        user.id
     );
     Ok((StatusCode::OK, Json(msgstructs::UserToken(new_token))))
 }
@@ -161,82 +138,55 @@ pub async fn refresh_token(
     Extension(state): Extension<Arc<crate::MioState>>,
     Query(msgstructs::UserToken(token)): Query<msgstructs::UserToken>,
 ) -> impl IntoResponse {
-    #[derive(Debug)]
-    enum ErrorOut {
-        NoUserFound,
-        DeserializationErr,
-        TimeExpired,
-    }
-
-    let ret = state
+    state
         .db
-        .open_tree(TopLevel::UserToken.table())
-        .unwrap()
-        .transaction(|tx_db| {
-            let timeup: Result<Index<db::UserToken>, _> = Index::new(token, &{
-                let x = tx_db.get(token)?;
-                if x.is_none() {
-                    abort(ErrorOut::NoUserFound)?;
-                }
-                x.unwrap()
-            });
-            if let Err(ref err) = timeup {
-                error!("POST /l/login deserialization error: {err}");
-                abort(ErrorOut::DeserializationErr)?;
-            }
-            let mut timeup = timeup.unwrap();
+        .transaction(|txn| {
+            Box::pin(async move {
+                let mut token: user_token::ActiveModel = UserToken::find_by_id(token)
+                    .one(txn)
+                    .await
+                    .map_err(db_err)?
+                    .ok_or_else(|| {
+                        debug!("POST /l/login no user token found");
+                        StatusCode::NOT_FOUND
+                    })?
+                    .into();
+                token.expiry = Set(Utc::now() + chrono::Duration::days(TIMEOUT_TIME));
+                token.update(txn).await.map_err(db_err)?;
 
-            if !timeup.inner().is_expired() {
-                timeup
-                    .inner_mut()
-                    .push_forward(Duration::days(TIMEOUT_TIME));
-            } else {
-                abort(ErrorOut::TimeExpired)?;
-            }
-
-            tx_db.insert(token.as_bytes(), timeup.decompose().unwrap())?;
-
-            Ok(())
-        });
-
-    if let Err(err) = ret {
-        debug!("POST /l/login error encountered: {err:?}");
-        match err {
-            sled::transaction::TransactionError::Abort(x) => match x {
-                ErrorOut::NoUserFound => StatusCode::NOT_FOUND,
-                ErrorOut::DeserializationErr => StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorOut::TimeExpired => StatusCode::GONE,
-            },
-            sled::transaction::TransactionError::Storage(err) => {
-                panic!("encountered db problem: {err}")
-            }
-        }
-    } else {
-        StatusCode::OK
-    }
+                Ok::<_, StatusCode>(StatusCode::OK)
+            })
+        })
+        .await
+        .map_err(|err| match err {
+            TransactionError::Connection(err) => db_err(err),
+            TransactionError::Transaction(err) => err,
+        })
 }
 
 pub async fn logout(
     Extension(state): Extension<Arc<crate::MioState>>,
     Query(msgstructs::UserToken(token)): Query<msgstructs::UserToken>,
 ) -> impl IntoResponse {
-    state
-        .db
-        .open_tree(TopLevel::UserToken.table())
-        .map_err(|err| {
-            error!("/l/logout failed to open DB: {err}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .remove(token.as_bytes())
-        .map_err(|err| {
-            error!("/l/logout failed to remove key: {err}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or_else(|| {
-            debug!("/l/logout no key found for {token}");
-            StatusCode::NOT_FOUND
-        })?;
-    Ok::<_, StatusCode>(StatusCode::OK)
+    match UserToken::delete_by_id(token)
+        .exec(&state.db)
+        .await
+        .map_err(db_err)?
+        .rows_affected
+    {
+        0 => {
+            debug!("POST /l/logout no token found for {token}");
+            Err(StatusCode::NOT_FOUND)
+        }
+        1 => {
+            debug!("POST /l/logout deleted token {token}");
+            Ok(StatusCode::OK)
+        }
+        _long => {
+            error!("POST /l/logout more than one record deleted on token {token}: {_long}");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 pub async fn signup(

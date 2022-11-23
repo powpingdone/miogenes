@@ -294,7 +294,9 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
     Ok(mdata)
 }
 
-// TODO: maybe just directly copy the array
+// copy the hash of one value into a regular array
+// since sha2 uses GenericArray's, this is done via just
+// manually iterating through it
 fn hash(data: &[u8]) -> [u8; 32] {
     let sha = Sha256::digest(data);
     let mut actual_hash: [u8; 32] = Default::default();
@@ -319,7 +321,7 @@ fn proc_tag(data: SendValue) -> Option<String> {
 }
 
 async fn insert_into_db(
-    db: sled::Db,
+    db: sea_orm::DatabaseConnection,
     id: Uuid,
     userid: Uuid,
     metadata: Metadata,

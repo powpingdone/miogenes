@@ -8,8 +8,12 @@ use once_cell::sync::OnceCell;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::Semaphore;
 use uuid::Uuid;
+use sea_orm::{Database, DatabaseConnection};
 
+use std::fmt::Display;
 use std::sync::Arc;
+
+use mio_migration::{Migrator, MigratorTrait};
 
 mod endpoints;
 use endpoints::*;
@@ -17,18 +21,20 @@ mod subtasks;
 use subtasks::*;
 mod db;
 mod user;
-use db::migrate;
-
-use crate::db::DbTable;
 
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 
 #[derive(Clone)]
 pub struct MioState {
-    db: sled::Db,
+    db: DatabaseConnection,
     proc_tracks_tx: UnboundedSender<(Uuid, Uuid, String)>,
     lim: Arc<Semaphore>,
+}
+
+pub fn db_err(err: impl Display) -> StatusCode {
+    error!("DATABASE ERROR: {err}");
+    StatusCode::INTERNAL_SERVER_ERROR
 }
 
 async fn version() -> impl IntoResponse {
@@ -51,9 +57,8 @@ async fn main() -> anyhow::Result<()> {
 
     // create the main passing state
     trace!("main: creating state");
-    let db = sled::open(format!("{}/db", DATA_DIR.get().unwrap()))?;
-    migrate(&db);
-    db.open_tree(crate::db::TopLevel::User.table()).unwrap().insert(uuid::uuid!("474e9c8a-3cb9-438e-9896-ded5e77fde22").as_bytes(), b"{\"username\":\"beppy\",\"password\":\"$argon2id$v=19$m=16,t=2,p=1$WkYxdjltaHpnMDV6Zng5dQ$BfaUJfTMMsE+hLzWKee6aQ\"}".as_slice())?;
+    let db = Database::connect("sqlite:file:./files/db?mode=rwc").await?;
+    Migrator::up(&db, None).await?;
     let (proc_tracks_tx, proc_tracks_rx) = unbounded_channel();
     let state = Arc::new(MioState {
         db,

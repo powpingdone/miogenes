@@ -1,0 +1,16 @@
+[package]
+name = "mio_migration"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "mio_migration"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { version = "1.22.0", features = ["full"] }
+
+[dependencies.sea-orm-migration]
+version = "^0.10.0"
+features = ["sqlx-sqlite", "runtime-tokio-rustls"]
