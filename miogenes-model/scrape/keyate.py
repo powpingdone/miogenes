@@ -30,7 +30,7 @@ try:
         for (e, i) in enumerate(PAIRS):
             ID = i[0]
             SECRET = i[1]
-            print(f'key {e + 1} out of {len(PAIRS)}')
+            print(f'\nkey {e + 1} out of {len(PAIRS)}')
             run(['./target/release/scrape'], env={"RSPOTIFY_CLIENT_ID": ID, "RSPOTIFY_CLIENT_SECRET": SECRET})
             if begin is None:
                 begin = time.time() + (15.0 * 60.0)
