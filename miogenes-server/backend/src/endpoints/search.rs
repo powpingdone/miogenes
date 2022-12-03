@@ -1,22 +1,22 @@
-use std::sync::Arc;
-
 use axum::extract::ws::WebSocket;
-use axum::extract::WebSocketUpgrade;
+use axum::extract::{State, WebSocketUpgrade};
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum::{response::IntoResponse, *};
 use log::*;
 use uuid::Uuid;
 
+use crate::MioState;
+
 pub async fn search(
-    Extension(state): Extension<Arc<crate::MioState>>,
+    State(state): State<MioState>,
     ws: WebSocketUpgrade,
     Extension(userid): Extension<Uuid>,
 ) -> Result<Response, impl IntoResponse> {
     Ok::<_, StatusCode>(ws.on_upgrade(move |x| search_inner(x, state, userid)))
 }
 
-async fn search_inner(mut ws: WebSocket, state: Arc<crate::MioState>, userid: Uuid) {
+async fn search_inner(mut ws: WebSocket, state: MioState, userid: Uuid) {
     // idea:
     // dynamic keystroke sending and cancelling for db searching
     // each keystroke/string update is sent to here over the websocket.

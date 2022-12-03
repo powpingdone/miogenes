@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use anyhow::anyhow;
 use axum::extract::*;
@@ -13,7 +12,7 @@ use crate::{db_err, MioInnerError, MioState};
 use mio_common::*;
 use mio_entity::*;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<MioState> {
     Router::new()
         .route("/ti", get(track_info))
         .route("/ai", get(album_info))
@@ -24,7 +23,7 @@ pub fn routes() -> Router {
 }
 
 async fn track_info(
-    Extension(state): Extension<Arc<MioState>>,
+    State(state): State<MioState>,
     Extension(key): Extension<mio_entity::user::Model>,
     Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
@@ -49,7 +48,7 @@ async fn track_info(
 }
 
 async fn album_info(
-    Extension(state): Extension<Arc<MioState>>,
+    State(state): State<MioState>,
     Extension(key): Extension<mio_entity::user::Model>,
     Query(msgstructs::IdInfoQuery(album)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
@@ -75,7 +74,7 @@ async fn album_info(
 }
 
 async fn playlist_info(
-    Extension(state): Extension<Arc<MioState>>,
+    State(state): State<MioState>,
     Extension(key): Extension<mio_entity::user::Model>,
     Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
@@ -100,7 +99,7 @@ async fn playlist_info(
 }
 
 async fn cover_art(
-    Extension(state): Extension<Arc<MioState>>,
+    State(state): State<MioState>,
     Extension(key): Extension<mio_entity::user::Model>,
     Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
@@ -126,7 +125,7 @@ async fn cover_art(
 }
 
 async fn artist(
-    Extension(state): Extension<Arc<MioState>>,
+    State(state): State<MioState>,
     Extension(key): Extension<mio_entity::user::Model>,
     Query(msgstructs::IdInfoQuery(id)): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
@@ -153,7 +152,7 @@ async fn artist(
 
 // return all playlists
 async fn playlists(
-    Extension(state): Extension<Arc<MioState>>,
+    State(state): State<MioState>,
     Extension(key): Extension<mio_entity::user::Model>,
 ) -> impl IntoResponse {
     Ok::<_, StatusCode>((

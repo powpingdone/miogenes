@@ -1,13 +1,12 @@
-use std::sync::Arc;
-
 use anyhow::anyhow;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use axum::extract::{FromRequest, Query, RequestParts};
+use axum::extract::{FromRequestParts, Query, State};
 use axum::headers::authorization::{Basic, Bearer};
 use axum::headers::Authorization;
+use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::{async_trait, Extension, Json, TypedHeader};
+use axum::{async_trait, Json, RequestPartsExt, TypedHeader};
 use chrono::Utc;
 use log::*;
 use rand::rngs::OsRng;
@@ -18,18 +17,17 @@ use crate::{db_err, tr_conv_code, MioInnerError, MioState};
 use mio_common::*;
 use mio_entity::{user, user_token, User, UserToken};
 
-static TIMEOUT_TIME: i64 = 3;
+static TIMEOUT_TIME_DAY: i64 = 3;
 
 pub(crate) struct Authenticate;
 
 #[async_trait]
-impl<B> FromRequest<B> for Authenticate
+impl<S> FromRequestParts<S> for Authenticate
 where
-    B: Send,
+    S: Send + Sync + TransactionTrait,
 {
     type Rejection = StatusCode;
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let Extension(state) = req.extract::<Extension<Arc<MioState>>>().await.unwrap();
+    async fn from_request_parts(req: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         // get user token
         let auth = Uuid::parse_str(
             req.extract::<TypedHeader<Authorization<Bearer>>>()
@@ -54,7 +52,6 @@ where
             .into()
         })?;
         let user = state
-            .db
             .transaction(|txn| {
                 Box::pin(async move {
                     // check for existence and validity of token
@@ -92,7 +89,7 @@ where
             .map_err(tr_conv_code)?;
 
         // inject user
-        if let Some(item) = req.extensions_mut().insert(user) {
+        if let Some(item) = req.extensions.insert(user) {
             warn!(
                 "USER_INJ while injecting user: user of {} existed, replacing.",
                 item.username
@@ -104,7 +101,7 @@ where
 }
 
 pub async fn login(
-    Extension(state): Extension<Arc<crate::MioState>>,
+    State(state): State<MioState>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
 ) -> impl IntoResponse {
     state
@@ -149,7 +146,7 @@ pub async fn login(
                 // generate new token
                 let new_token = Uuid::new_v4();
                 // TODO: let server host specify when logout tokens expire
-                let expiry = Utc::now() + chrono::Duration::days(TIMEOUT_TIME);
+                let expiry = Utc::now() + chrono::Duration::days(TIMEOUT_TIME_DAY);
                 user_token::ActiveModel {
                     id: Set(new_token),
                     expiry: Set(expiry),
@@ -170,7 +167,7 @@ pub async fn login(
 }
 
 pub async fn refresh_token(
-    Extension(state): Extension<Arc<crate::MioState>>,
+    State(state): State<MioState>,
     Query(msgstructs::UserToken(token)): Query<msgstructs::UserToken>,
 ) -> impl IntoResponse {
     state
@@ -186,7 +183,7 @@ pub async fn refresh_token(
                     })?
                     .into();
                 // update expiry
-                token.expiry = Set(Utc::now() + chrono::Duration::days(TIMEOUT_TIME));
+                token.expiry = Set(Utc::now() + chrono::Duration::days(TIMEOUT_TIME_DAY));
                 token.update(txn).await?;
 
                 Ok(StatusCode::OK)
@@ -197,7 +194,7 @@ pub async fn refresh_token(
 }
 
 pub async fn logout(
-    Extension(state): Extension<Arc<crate::MioState>>,
+    State(state): State<MioState>,
     Query(msgstructs::UserToken(token)): Query<msgstructs::UserToken>,
 ) -> impl IntoResponse {
     match UserToken::delete_by_id(token)
@@ -222,7 +219,7 @@ pub async fn logout(
 }
 
 pub async fn signup(
-    Extension(state): Extension<Arc<crate::MioState>>,
+    State(state): State<MioState>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
 ) -> impl IntoResponse {
     // TODO: user config to disable signing up

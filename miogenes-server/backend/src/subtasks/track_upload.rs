@@ -14,7 +14,6 @@ use uuid::*;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::Path;
-use std::sync::Arc;
 
 use crate::DATA_DIR;
 
@@ -33,7 +32,7 @@ struct Metadata {
 // TODO: upload process time limits
 // TODO: size limits
 pub async fn track_upload_server(
-    state: Arc<crate::MioState>,
+    state: crate::MioState,
     mut rx: UnboundedReceiver<(Uuid, Uuid, String)>,
 ) {
     debug!("starting track_upload_server");

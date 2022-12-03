@@ -4,21 +4,22 @@ use axum::response::IntoResponse;
 use axum::routing::*;
 use log::*;
 use mio_common::*;
-use std::sync::Arc;
 use tokio::fs::{remove_file, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
 use uuid::Uuid;
 
-pub fn routes() -> Router {
+use crate::MioState;
+
+pub fn routes() -> Router<MioState> {
     Router::new()
         .route("/tu", put(track_upload))
         .route("/td", put(track_delete))
 }
 
 async fn track_upload(
-    Extension(state): Extension<Arc<crate::MioState>>,
-    mut payload: Multipart,
+    State(state): State<MioState>,
     Extension(userid): Extension<Uuid>,
+    mut payload: Multipart,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     let mut ret_ids: Vec<(Uuid, Uuid, String)> = vec![];
 
@@ -147,7 +148,7 @@ async fn rm_files(paths: Vec<Uuid>) {
 }
 
 async fn track_delete(
-    Extension(state): Extension<Arc<crate::MioState>>,
+    State(state): State<MioState>,
     Query(id): Query<msgstructs::DeleteQuery>,
     Extension(userid): Extension<Uuid>,
 ) -> impl IntoResponse {

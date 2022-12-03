@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
     let db = Database::connect("sqlite:file:./files/db?mode=rwc").await?;
     Migrator::up(&db, None).await?;
     let (proc_tracks_tx, proc_tracks_rx) = unbounded_channel();
-    let state = Arc::new(MioState {
+    let state = MioState {
         db,
         proc_tracks_tx,
         lim: Arc::new(Semaphore::const_new({
@@ -120,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
                 cpus - 1
             }
         })),
-    });
+    };
 
     // spin subtasks
     trace!("main: spinning subtasks");
@@ -141,7 +141,7 @@ async fn main() -> anyhow::Result<()> {
                 .nest("/track", track_manage::routes())
                 .nest("/query", query::routes()),
         )
-        .route_layer(middleware::from_extractor::<user::Authenticate>())
+        .route_layer(middleware::from_extractor_with_state::<user::Authenticate, _>(state.db.clone()))
         .merge(axum_extra::routing::SpaRouter::new("/assets", STATIC_DIR))
         .nest(
             "/l",
@@ -151,7 +151,8 @@ async fn main() -> anyhow::Result<()> {
                 .route("/signup", post(user::signup)),
         )
         .layer(axum::middleware::from_fn(log_req))
-        .layer(Extension(state));
+        .with_state(state)
+        ;
     // TODO: bind to user settings
     static BINDING: &str = "127.0.0.1:8081";
     info!("main: starting server on {BINDING}");
