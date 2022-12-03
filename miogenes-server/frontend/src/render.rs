@@ -252,4 +252,8 @@ impl Application {
             };
         }
     }
+
+    pub fn main_area(&mut self, ctx: &egui::Context, _: &eframe::Frame) {
+        if let Page::Main { .. } = self.page {}
+    }
 }

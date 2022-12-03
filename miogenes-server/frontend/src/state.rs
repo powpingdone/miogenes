@@ -32,6 +32,7 @@ pub enum Page {
         #[serde(default)]
         err_msg: Option<String>,
     },
+    Main {},
 }
 
 #[derive(Deserialize, Serialize)]
@@ -85,12 +86,9 @@ impl eframe::App for Application {
                     login_resp: None,
                 }
             }
-            Login { .. } => {
-                self.login_render(ctx, frame);
-            }
-            Signup { .. } => {
-                self.signup_render(ctx, frame);
-            }
+            Login { .. } => self.login_render(ctx, frame),
+            Signup { .. } => self.signup_render(ctx, frame),
+            Main { .. } => self.main_area(ctx, frame),
         }
     }
 }
