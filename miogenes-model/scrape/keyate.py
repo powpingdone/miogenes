@@ -11,11 +11,27 @@ from subprocess import run
 import time
 
 def getlens():
+    print("reading statistics, please wait...")
     r = {}
+    r['actual'] = 0
+    r['all'] = 0
+    # we can't use len here because of memory constraints,
+    # thanks gc, very cool
+    # so, just count the lines
     with open('playlists.csv') as t:
-        r['actual'] = len(t.readlines())
+        for _ in t:
+            r['actual'] += 1
+            if r['actual'] % 1000 == 0 and r['actual'] != 0:
+                out = f'actual: {r["actual"]} lines read...'
+                print("\b"*len(out)+out,end="",flush=True)
+        print("\b"*len(out)+out+"done",flush=True)
     with open('plists.txt') as t:
-        r['all'] = len(t.readlines())
+        for _ in t:
+            r['all'] += 1
+            if r['all'] % 1000 == 0 and r['all'] != 0:
+                out = f'all {r["all"]} lines read...'
+                print("\b"*len(out)+out,end="",flush=True)
+        print("\b"*len(out)+out+"done",flush=True)
     return r
 
 check = getlens()
