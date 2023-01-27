@@ -28,15 +28,9 @@ pub async fn get_token(
                     }
                 } else {
                     Err(format!(
-                        "server returned err: {}, {}",
+                        "server returned err: {}, {:?}",
                         res.status(),
-                        match res.body() {
-                            None => "".to_owned(),
-                            Some(body) => match body.to_string().as_string() {
-                                None => "".to_owned(),
-                                Some(ser) => ser,
-                            },
-                        }
+                        res.body()
                     ))
                 }
             }
