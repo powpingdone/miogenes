@@ -21,23 +21,15 @@ impl MigrationTrait for Migration {
             .await?;
 
         // coverart
-        manager
-            .create_table(
-                Table::create()
-                    .table(CoverArt::Table)
-                    .if_not_exists()
-                    // ser
-                    .col(ColumnDef::new(CoverArt::Id).uuid().not_null().primary_key())
-                    .col(
-                        ColumnDef::new(CoverArt::WebmBlob)
-                            .blob(BlobSize::Long)
-                            .not_null(),
-                    )
-                    // noser
-                    .col(ColumnDef::new(CoverArt::ImgHash).binary_len(32).not_null())
-                    .to_owned(),
-            )
-            .await?;
+        manager.create_table(Table::create()
+            .table(CoverArt::Table)
+            .if_not_exists()
+            // ser
+            .col(ColumnDef::new(CoverArt::Id).uuid().not_null().primary_key())
+            .col(ColumnDef::new(CoverArt::WebmBlob).blob(BlobSize::Long).not_null())
+            // noser
+            .col(ColumnDef::new(CoverArt::ImgHash).binary_len(32).not_null())
+            .to_owned()).await?;
 
         // artist
         manager
@@ -97,12 +89,7 @@ impl MigrationTrait for Migration {
                     .table(UserToken::Table)
                     .if_not_exists()
                     // ser
-                    .col(
-                        ColumnDef::new(UserToken::Id)
-                            .uuid()
-                            .not_null()
-                            .primary_key(),
-                    )
+                    .col(ColumnDef::new(UserToken::Id).uuid().not_null().primary_key())
                     // noser
                     .col(ColumnDef::new(UserToken::Expiry).date_time().not_null())
                     // fk
@@ -176,18 +163,10 @@ impl MigrationTrait for Migration {
                     .table(JoinPlaylistTrack::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(JoinPlaylistTrack::Id)
-                            .big_integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
+                        ColumnDef::new(JoinPlaylistTrack::Id).big_integer().not_null().auto_increment().primary_key(),
                     )
                     // fk
-                    .col(
-                        ColumnDef::new(JoinPlaylistTrack::PlaylistId)
-                            .uuid()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(JoinPlaylistTrack::PlaylistId).uuid().not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .from(JoinPlaylistTrack::Table, JoinPlaylistTrack::PlaylistId)
@@ -209,47 +188,22 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .drop_table(Table::drop().table(JoinPlaylistTrack::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(Track::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(UserToken::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(User::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(Playlist::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(Album::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(CoverArt::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(Artist::Table).to_owned())
-            .await
+        manager.drop_table(Table::drop().table(JoinPlaylistTrack::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(Track::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(UserToken::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(User::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(Playlist::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(Album::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(CoverArt::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(Artist::Table).to_owned()).await
     }
 }
 
 #[derive(Iden)]
 enum User {
     Table,
-
     // ser
     Id,
-
     // noser
     Username,
     Password,
@@ -258,13 +212,10 @@ enum User {
 #[derive(Iden)]
 enum UserToken {
     Table,
-
     // ser
     Id,
-
     // noser
     Expiry,
-
     // fk
     UserId,
 }
@@ -290,11 +241,9 @@ enum Artist {
 #[derive(Iden)]
 enum Playlist {
     Table,
-
     // ser
     Id,
     Name,
-
     // fk
     Owner,
 }
@@ -311,11 +260,9 @@ enum JoinPlaylistTrack {
 #[derive(Iden)]
 enum CoverArt {
     Table,
-
     // ser
     Id,
     WebmBlob,
-
     // noser
     ImgHash,
 }
@@ -323,17 +270,14 @@ enum CoverArt {
 #[derive(Iden)]
 enum Track {
     Table,
-
     // ser
     Id,
     Title,
     Tags,
     SortName,
-
     // noser
     AudioHash,
     OrigFname,
-
     // fk
     Album,
     CoverArt,

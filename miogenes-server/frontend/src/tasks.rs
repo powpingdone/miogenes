@@ -1,6 +1,5 @@
 use gloo_net::http::Request;
 use oneshot as osh;
-
 use mio_common::*;
 
 // get login token
@@ -9,14 +8,11 @@ pub async fn get_token(
     user: String,
     pass: String,
 ) -> Result<(), String> {
-    let ret = Request::get("/l/login")
-        .header(
-            "Authorization",
-            &format!("Basic {}", base64::encode(format!("{user}:{pass}"))),
-        )
-        .send()
-        .await;
-
+    let ret =
+        Request::get("/l/login")
+            .header("Authorization", &format!("Basic {}", base64::encode(format!("{user}:{pass}"))))
+            .send()
+            .await;
     let ret = {
         match ret {
             Ok(res) => {
@@ -27,13 +23,9 @@ pub async fn get_token(
                         Err(err) => Err(format!("failed to seralize: {err}")),
                     }
                 } else {
-                    Err(format!(
-                        "server returned err: {}, {:?}",
-                        res.status(),
-                        res.body()
-                    ))
+                    Err(format!("server returned err: {}, {:?}", res.status(), res.body()))
                 }
-            }
+            },
             Err(err) => Err(format!("failed to connect to server: {err}")),
         }
     };
@@ -47,19 +39,12 @@ pub async fn get_token(
     }
 }
 
-pub async fn signup_send(
-    tx: osh::Sender<Option<u16>>,
-    user: String,
-    pass: String,
-) -> Result<(), String> {
-    let ret = Request::post("/l/signup")
-        .header(
-            "Authorization",
-            &format!("Basic {}", base64::encode(format!("{user}:{pass}"))),
-        )
-        .send()
-        .await;
-
+pub async fn signup_send(tx: osh::Sender<Option<u16>>, user: String, pass: String) -> Result<(), String> {
+    let ret =
+        Request::post("/l/signup")
+            .header("Authorization", &format!("Basic {}", base64::encode(format!("{user}:{pass}"))))
+            .send()
+            .await;
     match ret {
         Ok(resp) => {
             if let Err(x) = tx.send(Some(resp.status())) {
@@ -67,15 +52,15 @@ pub async fn signup_send(
             } else {
                 Ok(())
             }
-        }
+        },
         Err(err) => {
-            // we *cannot fail*, else we leak memory
+            // we _cannot fail_, else we leak memory
             let other_err = if let Err(x) = tx.send(None) {
                 " AND SENDERR ".to_owned() + &x.to_string()
             } else {
                 "".to_owned()
             };
             Err(err.to_string() + &other_err)
-        }
+        },
     }
 }

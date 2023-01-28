@@ -1,16 +1,19 @@
+use crate::state::*;
 use dioxus::prelude::*;
 
-use crate::state::*;
-
-mod tasks;
 mod state;
+mod tasks;
 
 fn app_main(cx: Scope) -> Element {
     let curr_state = use_ref(cx, State::default);
-    let curr_token = use_state(cx, || None);
-
+    let curr_token = use_ref(cx, || None);
     cx.render(rsx!{
-        div { StatePage { state: curr_state, token: curr_token}}
+        div {
+            StatePage {
+                state: curr_state,
+                token: curr_token,
+            }
+        }
     })
 }
 
