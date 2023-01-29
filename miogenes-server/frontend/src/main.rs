@@ -1,17 +1,21 @@
-use crate::state::*;
 use dioxus::prelude::*;
+use dioxus_router::*;
+use uuid::*;
 
-mod state;
+mod routepts;
 mod tasks;
 
 fn app_main(cx: Scope) -> Element {
-    let curr_state = use_ref(cx, State::default);
-    let curr_token = use_ref(cx, || None);
+    let curr_token = use_ref(cx, || None::<Uuid>);
     cx.render(rsx!{
-        div {
-            StatePage {
-                state: curr_state,
-                token: curr_token,
+        Router {
+            Route {
+                to: "/",
+                routepts::Login { token: curr_token }
+            }
+            Route {
+                to: "/signup",
+                routepts::Signup { token: curr_token }
             }
         }
     })
