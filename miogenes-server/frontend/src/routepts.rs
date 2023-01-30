@@ -8,7 +8,7 @@ pub fn Login<'a>(cx: Scope, token: &'a UseRef<Option<Uuid>>) -> Element {
     let rtr = use_router(cx);
     let username = use_state(cx, String::default);
     let password = use_state(cx, String::default);
-    cx.render(rsx!{
+    cx.render(rsx! {
         div {
             p {
                 "Username"
@@ -48,7 +48,7 @@ pub fn Login<'a>(cx: Scope, token: &'a UseRef<Option<Uuid>>) -> Element {
 #[inline_props]
 #[allow(non_snake_case)]
 pub fn Signup<'a>(cx: Scope, token: &'a UseRef<Option<Uuid>>) -> Element {
-    cx.render(rsx!{
+    cx.render(rsx! {
         div {}
     })
 }
