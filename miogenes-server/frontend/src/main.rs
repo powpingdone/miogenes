@@ -11,16 +11,21 @@ fn app_main(cx: Scope) -> Element {
         Router {
             Route {
                 to: "/",
-                routepts::Login { token: curr_token }
+                routepts::Login { token: curr_token.clone() }
             }
             Route {
                 to: "/signup",
-                routepts::Signup { token: curr_token }
+                routepts::Signup {}
+            }
+            Route {
+                to: "/home",
+                routepts::MainPage { token: curr_token.clone() }
             }
         }
     })
 }
 
 fn main() {
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
     dioxus_web::launch(app_main);
 }

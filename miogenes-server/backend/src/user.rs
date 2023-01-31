@@ -1,3 +1,9 @@
+use crate::{
+    db_err,
+    tr_conv_code,
+    MioInnerError,
+    MioState,
+};
 use anyhow::anyhow;
 use argon2::{
     Argon2,
@@ -26,18 +32,6 @@ use axum::{
 };
 use chrono::Utc;
 use log::*;
-use rand::rngs::OsRng;
-use sea_orm::{
-    prelude::*,
-    *,
-};
-use uuid::Uuid;
-use crate::{
-    db_err,
-    tr_conv_code,
-    MioInnerError,
-    MioState,
-};
 use mio_common::*;
 use mio_entity::{
     user,
@@ -45,6 +39,12 @@ use mio_entity::{
     User,
     UserToken,
 };
+use rand::rngs::OsRng;
+use sea_orm::{
+    prelude::*,
+    *,
+};
+use uuid::Uuid;
 
 static TIMEOUT_TIME_DAY: i64 = 3;
 
@@ -202,10 +202,12 @@ pub async fn logout(
 pub async fn signup(
     State(state): State<MioState>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
+    // TODO: user config to disable signing up
 ) -> impl IntoResponse {
-    // TODO: user config to disable signing up TODO: defer this generation? argon2 the
-    // password
+    // TODO: defer this generation?
     let passwd = auth.password().to_owned();
+
+    // argon2 the password
     let phc_string = tokio::task::block_in_place(move || {
         debug!("POST /l/signup generating phc string");
         let salt = argon2::password_hash::SaltString::generate(&mut OsRng);

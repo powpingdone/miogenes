@@ -7,6 +7,10 @@ use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::*;
 use log::*;
+use mio_migration::{
+    Migrator,
+    MigratorTrait,
+};
 use once_cell::sync::OnceCell;
 use sea_orm::{
     Database,
@@ -14,6 +18,7 @@ use sea_orm::{
     DbErr,
     TransactionError,
 };
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc::{
     unbounded_channel,
@@ -21,11 +26,6 @@ use tokio::sync::mpsc::{
 };
 use tokio::sync::Semaphore;
 use uuid::Uuid;
-use std::sync::Arc;
-use mio_migration::{
-    Migrator,
-    MigratorTrait,
-};
 
 mod endpoints;
 
@@ -60,6 +60,7 @@ impl From<sea_orm::DbErr> for MioInnerError {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<StatusCode> for MioInnerError {
     fn into(self) -> StatusCode {
         // log errors
