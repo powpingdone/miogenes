@@ -6,12 +6,14 @@ use sea_orm::*;
 #[async_trait::async_trait]
 pub trait WebOut {
     type WebOut;
+
     async fn web_out(self, db: &DatabaseConnection) -> Self::WebOut;
 }
 
 #[async_trait::async_trait]
 impl WebOut for mio_entity::track::Model {
     type WebOut = retstructs::Track;
+
     async fn web_out(self, _: &DatabaseConnection) -> Self::WebOut {
         retstructs::Track {
             id: self.id,
@@ -20,13 +22,7 @@ impl WebOut for mio_entity::track::Model {
             cover_art: self.cover_art,
             artist: self.artist,
             sort_name: self.sort_name,
-            tags: self
-                .tags
-                .as_object()
-                .unwrap()
-                .iter()
-                .map(|(k, v)| (k.to_owned(), v.to_string()))
-                .collect(),
+            tags: self.tags.as_object().unwrap().iter().map(|(k, v)| (k.to_owned(), v.to_string())).collect(),
         }
     }
 }
@@ -34,6 +30,7 @@ impl WebOut for mio_entity::track::Model {
 #[async_trait::async_trait]
 impl WebOut for mio_entity::album::Model {
     type WebOut = retstructs::Album;
+
     async fn web_out(self, db: &DatabaseConnection) -> Self::WebOut {
         retstructs::Album {
             title: self.title,
@@ -54,6 +51,7 @@ impl WebOut for mio_entity::album::Model {
 #[async_trait::async_trait]
 impl WebOut for mio_entity::cover_art::Model {
     type WebOut = retstructs::CoverArt;
+
     async fn web_out(self, _: &DatabaseConnection) -> Self::WebOut {
         retstructs::CoverArt {
             id: self.id,
@@ -65,6 +63,7 @@ impl WebOut for mio_entity::cover_art::Model {
 #[async_trait::async_trait]
 impl WebOut for mio_entity::artist::Model {
     type WebOut = retstructs::Artist;
+
     async fn web_out(self, _: &DatabaseConnection) -> Self::WebOut {
         retstructs::Artist {
             id: self.id,
@@ -77,6 +76,7 @@ impl WebOut for mio_entity::artist::Model {
 #[async_trait::async_trait]
 impl WebOut for playlist::Model {
     type WebOut = retstructs::Playlist;
+
     async fn web_out(self, db: &DatabaseConnection) -> Self::WebOut {
         retstructs::Playlist {
             id: self.id,

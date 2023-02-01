@@ -1,28 +1,31 @@
-mod render;
-mod rt;
-mod state;
+use dioxus::prelude::*;
+use dioxus_router::*;
+use uuid::*;
+
+mod routepts;
 mod tasks;
 
-// DUMMY MAIN, PLEASE IGNORE. RUST-ANALYZER DOES NOT LIKE WASM
-#[cfg(not(target_arch = "wasm32"))]
-fn main() {
-    eframe::run_native(
-        "main",
-        eframe::NativeOptions::default(),
-        Box::new(|cc| Box::new(state::Application::new(cc))),
-    );
+fn app_main(cx: Scope) -> Element {
+    let curr_token = use_ref(cx, || None::<Uuid>);
+    cx.render(rsx!{
+        Router {
+            Route {
+                to: "/",
+                routepts::Login { token: curr_token.clone() }
+            }
+            Route {
+                to: "/signup",
+                routepts::Signup {}
+            }
+            Route {
+                to: "/home",
+                routepts::MainPage { token: curr_token.clone() }
+            }
+        }
+    })
 }
 
-// actual main here
-#[cfg(target_arch = "wasm32")]
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
-    console_error_panic_hook::set_once();
-    let web_options = eframe::WebOptions::default();
-    eframe::start_web(
-        "main",
-        web_options,
-        Box::new(|cc| Box::new(state::Application::new(cc))),
-    )
-    .expect("failed to start eframe");
+    dioxus_web::launch(app_main);
 }

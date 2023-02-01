@@ -1,87 +1,54 @@
+use base64::alphabet::STANDARD;
+use base64::engine::{
+    GeneralPurpose,
+    GeneralPurposeConfig,
+};
+use base64::Engine;
 use gloo_net::http::Request;
-use oneshot as osh;
-
 use mio_common::*;
 
 // get login token
-pub async fn get_token(
-    tx: osh::Sender<Result<msgstructs::UserToken, String>>,
-    user: String,
-    pass: String,
-) -> Result<(), String> {
-    let ret = Request::get("/l/login")
-        .header(
-            "Authorization",
-            &format!("Basic {}", base64::encode(format!("{user}:{pass}"))),
-        )
-        .send()
-        .await;
-
-    let ret = {
-        match ret {
-            Ok(res) => {
-                if res.ok() {
-                    let ser = res.json().await;
-                    match ser {
-                        Ok(ret) => Ok(ret),
-                        Err(err) => Err(format!("failed to seralize: {err}")),
-                    }
-                } else {
-                    Err(format!(
-                        "server returned err: {}, {}",
-                        res.status(),
-                        match res.body() {
-                            None => "".to_owned(),
-                            Some(body) => match body.to_string().as_string() {
-                                None => "".to_owned(),
-                                Some(ser) => ser,
-                            },
-                        }
-                    ))
+pub async fn get_token(user: String, pass: String) -> Result<msgstructs::UserToken, String> {
+    let ret =
+        Request::get("/l/login")
+            .header(
+                "Authorization",
+                &format!(
+                    "Basic {}",
+                    GeneralPurpose::new(&STANDARD, GeneralPurposeConfig::new()).encode(format!("{user}:{pass}"))
+                ),
+            )
+            .send()
+            .await;
+    match ret {
+        Ok(res) => {
+            if res.ok() {
+                match res.json().await {
+                    Ok(ret) => Ok(ret),
+                    Err(err) => Err(format!("failed to seralize: {err}")),
                 }
+            } else {
+                Err(format!("server returned err: {}, {:?}", res.status(), res.body()))
             }
-            Err(err) => Err(format!("failed to connect to server: {err}")),
-        }
-    };
-    let chk = tx.send(ret.clone());
-    if ret.is_ok() && chk.is_ok() {
-        Ok(())
-    } else if ret.is_err() {
-        Err(ret.unwrap_err())
-    } else {
-        Err(chk.unwrap_err().to_string())
+        },
+        Err(err) => Err(format!("failed to connect to server: {err}")),
     }
 }
 
-pub async fn signup_send(
-    tx: osh::Sender<Option<u16>>,
-    user: String,
-    pass: String,
-) -> Result<(), String> {
-    let ret = Request::post("/l/signup")
-        .header(
-            "Authorization",
-            &format!("Basic {}", base64::encode(format!("{user}:{pass}"))),
-        )
-        .send()
-        .await;
-
+pub async fn signup_send(user: String, pass: String) -> Result<(), String> {
+    let ret =
+        Request::post("/l/signup")
+            .header(
+                "Authorization",
+                &format!(
+                    "Basic {}",
+                    GeneralPurpose::new(&STANDARD, GeneralPurposeConfig::new()).encode(format!("{user}:{pass}"))
+                ),
+            )
+            .send()
+            .await;
     match ret {
-        Ok(resp) => {
-            if let Err(x) = tx.send(Some(resp.status())) {
-                Err(x.to_string())
-            } else {
-                Ok(())
-            }
-        }
-        Err(err) => {
-            // we *cannot fail*, else we leak memory
-            let other_err = if let Err(x) = tx.send(None) {
-                " AND SENDERR ".to_owned() + &x.to_string()
-            } else {
-                "".to_owned()
-            };
-            Err(err.to_string() + &other_err)
-        }
+        Ok(_) => Ok(()),
+        Err(err) => Err(err.to_string()),
     }
 }
