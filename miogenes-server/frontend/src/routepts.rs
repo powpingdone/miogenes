@@ -43,6 +43,7 @@ pub fn Login(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
             }
             input {
                 value: "{password}",
+                r#type: "password",
                 oninput: move |evt| {
                     password.set(evt.value.clone())
                 },
@@ -106,6 +107,7 @@ pub fn Signup(cx: Scope) -> Element {
             }
             input {
                 value: "{password}",
+                r#type: "password",
                 oninput: move |evt| {
                     password.set(evt.value.clone())
                 },
@@ -115,6 +117,7 @@ pub fn Signup(cx: Scope) -> Element {
             }
             input {
                 value: "{password_check}",
+                r#type: "password",
                 oninput: move |evt| {
                     password_check.set(evt.value.clone())
                 },
@@ -122,20 +125,13 @@ pub fn Signup(cx: Scope) -> Element {
             div {
                 input {
                     r#type: "button",
-                    value: "Login",
+                    value: "Signup",
                     onclick: move |_| {
-                        if password == password_check {
+                        if password.current() == password_check.current() {
                             signin_routine.send((username.get().clone(), password.get().clone()))
                         } else {
                             err_str.set("passwords do not match".to_owned())
                         }
-                    },
-                }
-                input {
-                    r#type: "button",
-                    value: "Signup",
-                    onclick: move |_| {
-                        rtr.navigate_to("/signup")
                     },
                 }
             }
