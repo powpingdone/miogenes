@@ -141,11 +141,3 @@ pub fn Signup(cx: Scope) -> Element {
         }
     })
 }
-
-#[inline_props]
-#[allow(non_snake_case)]
-pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
-    cx.render(rsx! {
-        div {}
-    })
-}

@@ -2,12 +2,13 @@ use dioxus::prelude::*;
 use dioxus_router::*;
 use uuid::*;
 
+mod mainpage;
 mod routepts;
 mod tasks;
 
 fn app_main(cx: Scope) -> Element {
     let curr_token = use_ref(cx, || None::<Uuid>);
-    cx.render(rsx!{
+    cx.render(rsx! {
         Router {
             Route {
                 to: "/",
@@ -19,7 +20,7 @@ fn app_main(cx: Scope) -> Element {
             }
             Route {
                 to: "/home",
-                routepts::MainPage { token: curr_token.clone() }
+                mainpage::MainPage { token: curr_token.clone() }
             }
         }
     })
