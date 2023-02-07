@@ -44,10 +44,16 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
     });
     cx.render(rsx!{
         div {
-            {match fut.value() {
-                Some(x)=> {format!("{x:?}")},
-                None => {"waiting...".to_owned()}
-            }}
+            {
+                match fut.value() {
+                    Some(x) => {
+                        format!("{x:?}")
+                    },
+                    None => {
+                        "waiting...".to_owned()
+                    },
+                }
+            }
         }
     })
 }
