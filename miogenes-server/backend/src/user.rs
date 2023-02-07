@@ -65,7 +65,6 @@ where
                 StatusCode::BAD_REQUEST,
             ).into()
         })?.token()).map_err(|err| -> StatusCode {
-            debug!("USER_INJ could not parse token: {err}");
             MioInnerError::UserChallengedFail(
                 Level::Debug,
                 anyhow!("could not parse token: {err}"),

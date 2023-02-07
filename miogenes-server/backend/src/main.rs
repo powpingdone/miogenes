@@ -156,7 +156,8 @@ async fn main() -> anyhow::Result<()> {
                     .route("/ver", get(version))
                     .route("/search", get(search::search))
                     .nest("/track", track_manage::routes())
-                    .nest("/query", query::routes()),
+                    .nest("/query", query::routes())
+                    .nest("/load", idquery::routes()),
             )
             .route_layer(middleware::from_extractor_with_state::<user::Authenticate, _>(state.db.clone()))
             .merge(axum_extra::routing::SpaRouter::new("/assets", STATIC_DIR))
