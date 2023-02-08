@@ -1,3 +1,4 @@
+use std::time::Duration;
 use base64::{
     engine::{
         GeneralPurposeConfig,
@@ -9,6 +10,12 @@ use base64::{
 use dioxus::prelude::*;
 use dioxus_router::*;
 use uuid::*;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::{
+    JsFuture,
+    spawn_local,
+};
+use web_sys::HtmlInputElement;
 
 #[inline_props]
 #[allow(non_snake_case)]
@@ -42,16 +49,55 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
             .send()
             .await
     });
+    let fileconts = use_state(cx, String::default);
     cx.render(rsx!{
         div {
-            {
-                match fut.value() {
-                    Some(x) => {
-                        format!("{x:?}")
-                    },
-                    None => {
-                        "waiting...".to_owned()
-                    },
+            input {
+                r#type: "file",
+                id: "inp",
+                multiple: "false",
+                onchange: |_| {
+                    let files =
+                        web_sys::window()
+                            .unwrap()
+                            .document()
+                            .unwrap()
+                            .get_element_by_id("inp")
+                            .unwrap()
+                            .dyn_ref::<HtmlInputElement>()
+                            .unwrap()
+                            .files()
+                            .unwrap();
+                    let mut send_files = vec![];
+                    for pos in 0 .. files.length() {
+                        let file = files.item(pos).unwrap();
+                        send_files.push(JsFuture::from(file.text()));
+                    }
+                    spawn_local({
+                        let fileconts = fileconts.clone();
+                        async move {
+                            let mut buf = "".to_owned();
+                            for x in send_files {
+                                buf += &x.await.unwrap().as_string().unwrap();
+                            }
+                            fileconts.set(buf);
+                        }
+                    });
+                },
+            }
+            div {
+                "{fileconts}"
+            }
+            div {
+                {
+                    match fut.value() {
+                        Some(x) => {
+                            format!("{x:?}")
+                        },
+                        None => {
+                            "waiting...".to_owned()
+                        },
+                    }
                 }
             }
         }
