@@ -77,7 +77,7 @@ where
                 let usertoken = UserToken::find_by_id(auth).one(txn).await?.ok_or_else(|| {
                     MioInnerError::NotFound(Level::Debug, anyhow!("user token: {auth}"))
                 })?;
-                if usertoken.expiry > Utc::now() {
+                if usertoken.expiry < Utc::now() {
                     return Err(
                         MioInnerError::UserChallengedFail(
                             Level::Debug,
