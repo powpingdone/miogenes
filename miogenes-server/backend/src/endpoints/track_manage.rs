@@ -22,7 +22,7 @@ pub fn routes() -> Router<MioState> {
 
 async fn track_upload(
     State(state): State<MioState>,
-    Extension(userid): Extension<Uuid>,
+    Extension(key): Extension<mio_entity::user::Model>,
     mut payload: Multipart,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     let mut ret_ids: Vec<(Uuid, Uuid, String)> = vec![];
@@ -30,10 +30,10 @@ async fn track_upload(
     // collect file
     loop {
         // get field
-        trace!("GET /track/tu getting field");
+        trace!("PUT /track/tu getting field");
         let field = payload.next_field().await;
         if field.is_err() {
-            info!("GET /track/tu could not fetch field during request");
+            info!("PUT /track/tu could not fetch field during request");
             rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -44,7 +44,7 @@ async fn track_upload(
         let mut field = field.unwrap();
 
         // TODO: store the filename for dumping purposes find a unique id for the track
-        debug!("GET /track/tu generating UUID");
+        debug!("PUT /track/tu generating UUID");
         let mut uuid;
         let mut file: File;
         let mut fname;
@@ -56,16 +56,16 @@ async fn track_upload(
             let check = OpenOptions::new().create_new(true).read(true).write(true).open(fname.clone()).await;
             match check {
                 Ok(x) => {
-                    trace!("GET /track/tu opened file {fname}");
+                    trace!("PUT /track/tu opened file {fname}");
                     file = x;
                     break;
                 },
                 Err(err) => {
                     if err.kind() == ErrorKind::AlreadyExists {
-                        trace!("GET /track/tu file already exists");
+                        trace!("PUT /track/tu file already exists");
                         continue;
                     }
-                    error!("GET /track/tu failed to open file: {err}");
+                    error!("PUT /track/tu failed to open file: {err}");
                     rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
                     return Err(StatusCode::INTERNAL_SERVER_ERROR);
                 },
@@ -74,27 +74,27 @@ async fn track_upload(
 
         // get original filename
         let orig_filename = sanitize_filename::sanitize(field.file_name().map_or_else(|| {
-            trace!("GET /track/tu generated fname with uuid");
+            trace!("PUT /track/tu generated fname with uuid");
             uuid.to_string()
         }, |ret| {
-            trace!("GET /track/tu used orig filename: {ret}");
+            trace!("PUT /track/tu used orig filename: {ret}");
             ret.to_owned()
         }));
-        info!("GET /track/tu filename and uuid used: \"{fname}\" {uuid}");
+        info!("PUT /track/tu filename and uuid used: \"{fname}\" {uuid}");
 
         // download the file TODO: filesize limits TODO: maybe don't panic on filesystem errors(?)
         loop {
             match field.chunk().await {
                 Ok(Some(chunk)) => {
-                    debug!("GET /track/tu {uuid}: writing {} bytes", chunk.len());
+                    debug!("PUT /track/tu {uuid}: writing {} bytes", chunk.len());
                     file.write_all(&chunk).await.expect("Failed to write to file: {}");
                 },
                 // No more data
                 Ok(None) => break,
                 Err(err) => {
                     // delete failed upload, as well as all other uploads per this req
-                    info!("GET /track/tu failed upload for {uuid}: {err}");
-                    trace!("GET /track/tu flushing {uuid}");
+                    info!("PUT /track/tu failed upload for {uuid}: {err}");
+                    trace!("PUT /track/tu flushing {uuid}");
                     file.flush().await.expect("Failed to flush uploaded file: {}");
                     drop(file);
 
@@ -105,7 +105,7 @@ async fn track_upload(
                 },
             }
         }
-        ret_ids.push((uuid, userid, orig_filename));
+        ret_ids.push((uuid, key.id, orig_filename));
     }
     Ok((StatusCode::PROCESSING, Json(retstructs::UploadReturn { uuid: ret_ids.into_iter().map(|x| {
         let ret = x.0;
