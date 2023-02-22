@@ -65,7 +65,6 @@ where
                 StatusCode::BAD_REQUEST,
             ).into()
         })?.token()).map_err(|err| -> StatusCode {
-            debug!("USER_INJ could not parse token: {err}");
             MioInnerError::UserChallengedFail(
                 Level::Debug,
                 anyhow!("could not parse token: {err}"),
@@ -78,7 +77,7 @@ where
                 let usertoken = UserToken::find_by_id(auth).one(txn).await?.ok_or_else(|| {
                     MioInnerError::NotFound(Level::Debug, anyhow!("user token: {auth}"))
                 })?;
-                if usertoken.expiry > Utc::now() {
+                if usertoken.expiry < Utc::now() {
                     return Err(
                         MioInnerError::UserChallengedFail(
                             Level::Debug,

@@ -1,8 +1,14 @@
 use crate::tasks;
+use chrono::{
+    Duration,
+    Utc,
+};
 use dioxus::prelude::*;
 use dioxus_router::*;
 use futures::*;
 use uuid::*;
+use wasm_bindgen::JsCast;
+use web_sys::HtmlDocument;
 
 #[inline_props]
 #[allow(non_snake_case)]
@@ -21,13 +27,23 @@ pub fn Login(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                     Ok(good) => {
                         token.set(Some(good.0));
                         rtr.navigate_to("/home");
-                    }
+
+                        // set cookie
+                        let doc = web_sys::window().unwrap().document().unwrap();
+                        let htmdoc = doc.dyn_ref::<HtmlDocument>().unwrap();
+                        htmdoc
+                            .set_cookie(
+                                &(htmdoc.cookie().unwrap() +
+                                    &format!("Token={}; expires={};", good.0, Utc::now() + Duration::days(1))),
+                            )
+                            .unwrap();
+                    },
                     Err(err) => err_str.set(err),
                 }
             }
         }
     });
-    cx.render(rsx! {
+    cx.render(rsx!{
         div {
             p {
                 "Username"
@@ -91,7 +107,7 @@ pub fn Signup(cx: Scope) -> Element {
             }
         }
     });
-    cx.render(rsx! {
+    cx.render(rsx!{
         div {
             p {
                 "Username"
@@ -139,13 +155,5 @@ pub fn Signup(cx: Scope) -> Element {
                 format!("{}", err_str.read())
             }
         }
-    })
-}
-
-#[inline_props]
-#[allow(non_snake_case)]
-pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
-    cx.render(rsx! {
-        div {}
     })
 }

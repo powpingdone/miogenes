@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4.23"
-sea-orm = { version = "0.10.3", features = ["macros"] }
+sea-orm = { version = "0.10.7", features = ["macros"] }

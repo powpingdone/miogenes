@@ -115,7 +115,7 @@ async fn version() -> impl IntoResponse {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
     gstreamer::init()?;
 
     // create the main passing state
@@ -156,7 +156,8 @@ async fn main() -> anyhow::Result<()> {
                     .route("/ver", get(version))
                     .route("/search", get(search::search))
                     .nest("/track", track_manage::routes())
-                    .nest("/query", query::routes()),
+                    .nest("/query", query::routes())
+                    .nest("/load", idquery::routes()),
             )
             .route_layer(middleware::from_extractor_with_state::<user::Authenticate, _>(state.db.clone()))
             .merge(axum_extra::routing::SpaRouter::new("/assets", STATIC_DIR))

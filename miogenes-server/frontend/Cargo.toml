@@ -9,7 +9,7 @@ console_error_panic_hook = "0.1.7"
 gloo-net = "0.2.5"
 log = "0.4.17"
 mio_common = { path = "../common" }
-wasm-bindgen-futures = "0.4.33"
+wasm-bindgen-futures = "0.4.34"
 serde_json = "1.0.89"
 serde = { version = "1.0.148", features = ["derive"] }
 js-sys = "0.3.60"
@@ -24,3 +24,5 @@ dioxus = "0.3.1"
 dioxus-web = "0.3.0"
 dioxus-router = { version = "0.3.0", features = ["web"] }
 futures = "0.3.26"
+web-sys = { version = "0.3.61", features = ["FileList", "HtmlInputElement", "Window", "Document", "Element", "File", "Blob", "HtmlDocument"] }
+chrono = "0.4.23"
