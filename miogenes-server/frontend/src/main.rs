@@ -12,22 +12,12 @@ fn app_main(cx: Scope) -> Element {
     let curr_token = use_ref(cx, || None::<Uuid>);
 
     // load token if set
-    let doc = web_sys::window().unwrap().document().unwrap();
-    let htmdoc = doc.dyn_ref::<HtmlDocument>().unwrap();
-    if let Ok(cookie) = htmdoc.cookie() {
-        if cookie != "" {
-            // parse out cookie
-            let split = cookie.split(";");
-            for x in split {
-                log::trace!("cookie: {x}");
-                let split_kv = x.split("=").collect::<Vec<_>>();
-                let (k, v) = (split_kv[0], split_kv[1]);
-                log::debug!("kv: (\"{k}\", \"{v}\")");
-                if k == "Token" {
-                    curr_token.set(Some(Uuid::parse_str(v).unwrap()));
-                    break;
-                }
-            }
+    // this target_arch directive is only here for r-a
+    // because r-a thinks this is a amd64 project
+    #[cfg(target_arch = "wasm32")]
+    if let Some(Ok(token)) = wasm_cookies::get("Token") {
+        if let Some(token) = Uuid::parse_str(token) {
+            curr_token.set(token);
         }
     }
 

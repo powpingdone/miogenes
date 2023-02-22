@@ -29,14 +29,11 @@ pub fn Login(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                         rtr.navigate_to("/home");
 
                         // set cookie
-                        let doc = web_sys::window().unwrap().document().unwrap();
-                        let htmdoc = doc.dyn_ref::<HtmlDocument>().unwrap();
-                        htmdoc
-                            .set_cookie(
-                                &(htmdoc.cookie().unwrap() +
-                                    &format!("Token={}; expires={};", good.0, Utc::now() + Duration::days(1))),
-                            )
-                            .unwrap();
+                        #[cfg(target_arch = "wasm32")]
+                        wasm_cookies::set("Token", good.to_string(), CookieOptions {
+                            expires: Some(Utc::now().to_rfc2822)
+                            ..CookieOptions::default()
+                        })
                     },
                     Err(err) => err_str.set(err),
                 }
@@ -95,7 +92,7 @@ pub fn Signup(cx: Scope) -> Element {
     let password = use_state(cx, String::default);
     let password_check = use_state(cx, String::default);
     let err_str = use_ref(cx, String::default);
-    let signin_routine = use_coroutine(cx, |mut rx: UnboundedReceiver<(String, String)>| {
+    let signup_routine = use_coroutine(cx, |mut rx: UnboundedReceiver<(String, String)>| {
         let rtr = rtr.clone();
         let err_str = err_str.clone();
         async move {
@@ -144,7 +141,7 @@ pub fn Signup(cx: Scope) -> Element {
                     value: "Signup",
                     onclick: move |_| {
                         if password.current() == password_check.current() {
-                            signin_routine.send((username.get().clone(), password.get().clone()))
+                            signup_routine.send((username.get().clone(), password.get().clone()))
                         } else {
                             err_str.set("passwords do not match".to_owned())
                         }
