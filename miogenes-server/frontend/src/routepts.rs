@@ -7,8 +7,7 @@ use dioxus::prelude::*;
 use dioxus_router::*;
 use futures::*;
 use uuid::*;
-use wasm_bindgen::JsCast;
-use web_sys::HtmlDocument;
+use wasm_cookies::CookieOptions;
 
 #[inline_props]
 #[allow(non_snake_case)]
@@ -30,8 +29,8 @@ pub fn Login(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
 
                         // set cookie
                         #[cfg(target_arch = "wasm32")]
-                        wasm_cookies::set("Token", good.to_string(), CookieOptions {
-                            expires: Some(Utc::now().to_rfc2822)
+                        wasm_cookies::set("Token", &good.0.to_string(), &CookieOptions {
+                            expires: Some((Utc::now() + Duration::days(2)).to_rfc2822().into()),
                             ..CookieOptions::default()
                         })
                     },

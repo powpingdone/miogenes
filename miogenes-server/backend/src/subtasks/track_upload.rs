@@ -41,8 +41,8 @@ pub async fn track_upload_server(state: crate::MioState, mut rx: UnboundedReceiv
     debug!("starting track_upload_server");
     let (tx_gc, mut rx_gc) = unbounded_channel();
 
-    // joiner, this cleans up the join handles along with any errors that might have been
-    // propagated
+    // joiner, this cleans up the join handles along with any errors that might have
+    // been propagated
     let gc = tokio::spawn({
         async move {
             let mut queue: Vec<JoinHandle<_>> = vec![];
@@ -122,11 +122,13 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
         DiscovererResult::Timeout => {
             anyhow::bail!("Timeout reached for processing tags")
         },
-        // these branches _shouldn't_ fail. Busy -> each discoverer is in it's own thread, where it
-        // only reads one file UriInvalid -> fname is produced via glib::filename_to_uri Error ->
-        // discover_uri can return an error, so this shouldn't happen here
+        // these branches _shouldn't_ fail.
+        //
+        // Busy -> each discoverer is in it's own thread, where it only reads one file
         DiscovererResult::Busy => unimplemented!(),
+        // UriInvalid -> fname is produced via glib::filename_to_uri
         DiscovererResult::UriInvalid => unimplemented!(),
+        // Error -> discover_uri can return an error, so this shouldn't happen here
         DiscovererResult::Error => unimplemented!(),
         _other => panic!("unhandled enum: {_other:?}"),
     }
@@ -210,7 +212,9 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
             .downcast::<gstreamer::Pipeline>()
             .expect("Expected a gst::Pipeline");
 
-    // sink extractor TODO: either do a shared memory thing or Oneshot it
+    // sink extractor 
+    //
+    // TODO: either do a shared memory thing or Oneshot it
     let (tx, rx) = std::sync::mpsc::channel();
     let sink =
         pipeline

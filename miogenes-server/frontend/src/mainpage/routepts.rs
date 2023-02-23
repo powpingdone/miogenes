@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus::{prelude::*, html::input_data::MouseButton};
 use dioxus_router::*;
 use uuid::*;
 use gloo_net::http::{
@@ -42,8 +42,8 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                     multiple: "false",
                 }
                 button {
-                    r#type: "submit",
-                    onsubmit: move | _ | {
+                    onclick: move | _ | {
+                        log::trace!("onclick");
                         let files =
                             web_sys::window()
                                 .unwrap()
@@ -60,8 +60,10 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                             let file = files.item(pos).unwrap();
                             send_files.append_with_blob(&format!("file{pos}"), file.as_ref()).unwrap();
                         }
+                        log::trace!("entering future.");
                         spawn_local({
                             async move {
+                                log::trace!("entered future.");
                                 log::trace!("{:?}", Request::put("/track/tu").body(send_files).send().await);
                             }
                         });
