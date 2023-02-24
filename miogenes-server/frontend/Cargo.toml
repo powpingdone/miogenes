@@ -24,6 +24,6 @@ dioxus = "0.3.1"
 dioxus-web = "0.3.0"
 dioxus-router = { version = "0.3.0", features = ["web"] }
 futures = "0.3.26"
-web-sys = { version = "0.3.61", features = ["FileList", "HtmlInputElement", "Window", "Document", "Element", "File", "Blob", "HtmlDocument"] }
+web-sys = { version = "0.3.61", features = ["FileList", "HtmlInputElement", "Window", "Document", "Element", "File", "Blob", "HtmlDocument", "ReadableStream"] }
 chrono = "0.4.23"
 wasm-cookies = "0.2.1"

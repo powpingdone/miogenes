@@ -198,7 +198,10 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
             },
         }
     }
-    mdata.overflow = Some(serde_json::to_string(&set)?);
+    mdata.overflow =
+        Some(
+            serde_json::to_string(&set.into_iter().map(|(a, b)| (a.to_string(), b)).collect::<HashMap<_, _>>())?,
+        );
     if mdata.title.is_none() {
         warn!("{orig_path}: this song has no \"title\" tag, using filename");
         mdata.title = Some(orig_path.to_owned())
@@ -212,7 +215,7 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
             .downcast::<gstreamer::Pipeline>()
             .expect("Expected a gst::Pipeline");
 
-    // sink extractor 
+    // sink extractor
     //
     // TODO: either do a shared memory thing or Oneshot it
     let (tx, rx) = std::sync::mpsc::channel();

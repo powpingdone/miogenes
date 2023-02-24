@@ -1,12 +1,17 @@
-use dioxus::{prelude::*, html::input_data::MouseButton};
+use dioxus::{
+    prelude::*,
+    html::input_data::MouseButton,
+};
 use dioxus_router::*;
 use uuid::*;
 use gloo_net::http::{
-    FormData,
     Request,
 };
 use wasm_bindgen::JsCast;
-use web_sys::HtmlInputElement;
+use web_sys::{
+    HtmlInputElement,
+    Blob,
+};
 use wasm_bindgen_futures::*;
 
 #[inline_props]
@@ -55,16 +60,22 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                                 .unwrap()
                                 .files()
                                 .unwrap();
-                        let send_files = FormData::new().unwrap();
+                        let send_files = vec![];
                         for pos in 0 .. files.length() {
                             let file = files.item(pos).unwrap();
-                            send_files.append_with_blob(&format!("file{pos}"), file.as_ref()).unwrap();
+                            send_files.push((file.name(), {
+                                let stream = AsRef::<Blob>::as_ref(&file).stream();
+                                stream.tee()
+                            }));
                         }
                         log::trace!("entering future.");
                         spawn_local({
                             async move {
                                 log::trace!("entered future.");
-                                log::trace!("{:?}", Request::put("/track/tu").body(send_files).send().await);
+                                log::trace!(
+                                    "{:?}",
+                                    Request::put(&format!("/track/tu")).body(send_files).send().await
+                                );
                             }
                         });
                         fut.restart();

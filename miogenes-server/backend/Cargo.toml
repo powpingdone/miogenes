@@ -8,18 +8,17 @@ version = "0.1.0"
 anyhow = { version = "1.0.66", features = ["backtrace"] }
 argon2 = "0.4.1"
 axum = { version = "0.6.4", features = [
-    "multipart",
     "ws",
     "headers",
     "macros"
 ] }
-axum-extra = { version = "0.4.2", features = ["spa"] }
+axum-extra = { version = "0.5.0", features = ["spa"] }
 chrono = { version = "0.4.23", features = ["serde"] }
 env_logger = "0.10.0"
-gstreamer = { version = "0.19.3", features = ["v1_20"] }
-gstreamer-app = { version = "0.19.2", features = ["v1_20"] }
-gstreamer-audio = { version = "0.19.3", features = ["v1_20"] }
-gstreamer-pbutils = { version = "0.19.2", features = ["v1_20"] }
+gstreamer = { version = "0.20.2", features = ["v1_20"] }
+gstreamer-app = { version = "0.20.0", features = ["v1_20"] }
+gstreamer-audio = { version = "0.20.2", features = ["v1_20"] }
+gstreamer-pbutils = { version = "0.20.0", features = ["v1_20"] }
 image = "0.24.5"
 konst = "0.3.4"
 log = "0.4.17"
@@ -31,7 +30,7 @@ once_cell = { version = "1.16.0", features = ["parking_lot"] }
 path-absolutize = "3.0.14"
 rand = { version = "0.8.5", features = ["log", "min_const_gen"] }
 sanitize-filename = "0.4.0"
-sea-orm = { version = "0.10.7", features = [
+sea-orm = { version = "0.11.0", features = [
     "sqlx-sqlite",
     "macros",
     "runtime-tokio-rustls",

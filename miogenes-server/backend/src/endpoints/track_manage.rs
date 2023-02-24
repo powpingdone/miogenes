@@ -2,8 +2,10 @@ use axum::extract::*;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::*;
+use futures::StreamExt;
 use log::*;
 use mio_common::*;
+use serde::Deserialize;
 use tokio::fs::{
     remove_file,
     File,
@@ -20,109 +22,87 @@ pub fn routes() -> Router<MioState> {
     Router::new().route("/tu", put(track_upload)).route("/td", put(track_delete))
 }
 
+#[derive(Deserialize)]
+struct TUQuery {
+    fname: Option<String>,
+}
+
 async fn track_upload(
     State(state): State<MioState>,
     Extension(key): Extension<mio_entity::user::Model>,
-    mut payload: Multipart,
+    Query(TUQuery { fname }): Query<TUQuery>,
+    mut payload: BodyStream,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
-    let mut ret_ids: Vec<(Uuid, Uuid, String)> = vec![];
-
-    // collect file
+    // TODO: store the filename for dumping purposes find a unique id for the track
+    debug!("PUT /track/tu generating UUID");
+    let mut uuid;
+    let mut file: File;
+    let mut real_fname;
     loop {
-        // get field
-        trace!("PUT /track/tu getting field");
-        let field = payload.next_field().await;
-        if field.is_err() {
-            info!("PUT /track/tu could not fetch field during request");
-            rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
-            return Err(StatusCode::BAD_REQUEST);
+        uuid = Uuid::new_v4();
+        real_fname = format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid);
+
+        // check if file is already taken
+        let check = OpenOptions::new().create_new(true).read(true).write(true).open(real_fname.clone()).await;
+        match check {
+            Ok(x) => {
+                trace!("PUT /track/tu opened file {real_fname}");
+                file = x;
+                break;
+            },
+            Err(err) => {
+                if err.kind() == ErrorKind::AlreadyExists {
+                    trace!("PUT /track/tu file already exists");
+                    continue;
+                }
+                error!("PUT /track/tu failed to open file: {err}");
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            },
         }
-        let field = field.unwrap();
-        if field.is_none() {
-            break;
-        }
-        let mut field = field.unwrap();
-
-        // TODO: store the filename for dumping purposes find a unique id for the track
-        debug!("PUT /track/tu generating UUID");
-        let mut uuid;
-        let mut file: File;
-        let mut fname;
-        loop {
-            uuid = Uuid::new_v4();
-            fname = format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid);
-
-            // check if file is already taken
-            let check = OpenOptions::new().create_new(true).read(true).write(true).open(fname.clone()).await;
-            match check {
-                Ok(x) => {
-                    trace!("PUT /track/tu opened file {fname}");
-                    file = x;
-                    break;
-                },
-                Err(err) => {
-                    if err.kind() == ErrorKind::AlreadyExists {
-                        trace!("PUT /track/tu file already exists");
-                        continue;
-                    }
-                    error!("PUT /track/tu failed to open file: {err}");
-                    rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
-                    return Err(StatusCode::INTERNAL_SERVER_ERROR);
-                },
-            }
-        }
-
-        // get original filename
-        let orig_filename = sanitize_filename::sanitize(field.file_name().map_or_else(|| {
-            trace!("PUT /track/tu generated fname with uuid");
-            uuid.to_string()
-        }, |ret| {
-            trace!("PUT /track/tu used orig filename: {ret}");
-            ret.to_owned()
-        }));
-        info!("PUT /track/tu filename and uuid used: \"{fname}\" {uuid}");
-
-        // download the file TODO: filesize limits TODO: maybe don't panic on filesystem
-        // errors(?)
-        loop {
-            match field.chunk().await {
-                Ok(Some(chunk)) => {
-                    debug!("PUT /track/tu {uuid}: writing {} bytes", chunk.len());
-                    file.write_all(&chunk).await.expect("Failed to write to file: {}");
-                },
-                // No more data
-                Ok(None) => break,
-                Err(err) => {
-                    // delete failed upload, as well as all other uploads per this req
-                    info!("PUT /track/tu failed upload for {uuid}: {err}");
-                    trace!("PUT /track/tu flushing {uuid}");
-                    file.flush().await.expect("Failed to flush uploaded file: {}");
-                    drop(file);
-
-                    // push blank id, just to delete uuid
-                    ret_ids.push((uuid, Uuid::nil(), "".to_owned()));
-                    rm_files(ret_ids.iter().map(|x| x.0).collect()).await;
-                    return Err(StatusCode::BAD_REQUEST);
-                },
-            }
-        }
-        ret_ids.push((uuid, key.id, orig_filename));
     }
-    Ok((StatusCode::PROCESSING, Json(retstructs::UploadReturn { uuid: ret_ids.into_iter().map(|x| {
-        let ret = x.0;
 
-        // set off tasks to process files
-        state.proc_tracks_tx.send(x).unwrap();
-        ret
-    }).collect::<Vec<_>>() })))
+    // get original filename
+    let orig_filename = sanitize_filename::sanitize(fname.unwrap_or_else(|| {
+        trace!("PUT /track/tu generated fname with uuid");
+        uuid.to_string()
+    }));
+    info!("PUT /track/tu filename and uuid used: \"{orig_filename}\" -> \"{real_fname}\": {uuid}");
+
+    // download the file
+    //
+    // TODO: filesize limits
+    //
+    // TODO: maybe don't panic on filesystem errors(?)
+    while let Some(chunk) = payload.next().await {
+        match chunk {
+            Ok(chunk) => {
+                debug!("PUT /track/tu {uuid}: writing {} bytes", chunk.len());
+                file.write_all(&chunk).await.expect("Failed to write to file: {}");
+            },
+            // on err just delete the file
+            Err(err) => {
+                // delete failed upload, as well as all other uploads per this req
+                info!("PUT /track/tu failed upload for {uuid}: {err}");
+                trace!("PUT /track/tu flushing {uuid}");
+                file.flush().await.expect("Failed to flush uploaded file: {}");
+                drop(file);
+                rm_file(uuid).await;
+                return Err(StatusCode::BAD_REQUEST);
+            },
+        }
+    }
+    trace!("PUT /track/tu final flushing {uuid}");
+    file.flush().await.expect("Failed to flush uploaded file: {}");
+
+    // set off tasks to process files
+    state.proc_tracks_tx.send((uuid, key.id, orig_filename)).unwrap();
+    Ok((StatusCode::PROCESSING, Json(retstructs::UploadReturn { uuid: vec![uuid] })))
 }
 
 // rm's file when track_upload errors out
-async fn rm_files(paths: Vec<Uuid>) {
-    for uuid in paths {
-        trace!("RM_FILES deleting {uuid}");
-        remove_file(format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid)).await.expect("unable to remove file {}");
-    }
+async fn rm_file(uuid: Uuid) {
+    trace!("RM_FILES deleting {uuid}");
+    remove_file(format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid)).await.expect("unable to remove file: {}");
 }
 
 async fn track_delete(
