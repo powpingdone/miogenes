@@ -1,12 +1,15 @@
 [workspace]
 members = [
-    "frontend",
-    "common",
-    "backend",
-    "backend/migration",
-    "backend/entity"
+  "frontend",
+  "common",
+  "backend",
+  "backend/migration",
+  "backend/entity",
 ]
 resolver = "2"
 
 [profile.release]
 lto = true
+
+[profile.release.package.mio_frontend]
+opt-level = "s"
