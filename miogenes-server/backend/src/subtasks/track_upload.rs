@@ -1,3 +1,4 @@
+use crate::DATA_DIR;
 use glib::SendValue;
 use gstreamer::glib;
 use gstreamer_app::AppSink;
@@ -5,24 +6,14 @@ use gstreamer_pbutils::prelude::*;
 use gstreamer_pbutils::DiscovererResult;
 use log::*;
 use path_absolutize::Absolutize;
-use sha2::{
-    Digest,
-    Sha256,
-};
-use tokio::sync::mpsc::{
-    unbounded_channel,
-    UnboundedReceiver,
-};
-use tokio::task::JoinHandle;
-use tokio::time::{
-    timeout,
-    Duration,
-};
-use uuid::*;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::Path;
-use crate::DATA_DIR;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::task::JoinHandle;
+use tokio::time::{timeout, Duration};
+use uuid::*;
 
 // metadata parsed from the individual file
 #[derive(Default)]
@@ -37,7 +28,10 @@ struct Metadata {
 }
 
 // TODO: upload process time limits TODO: size limits
-pub async fn track_upload_server(state: crate::MioState, mut rx: UnboundedReceiver<(Uuid, Uuid, String)>) {
+pub async fn track_upload_server(
+    state: crate::MioState,
+    mut rx: UnboundedReceiver<(Uuid, Uuid, String)>,
+) {
     debug!("starting track_upload_server");
     let (tx_gc, mut rx_gc) = unbounded_channel();
 
@@ -56,7 +50,7 @@ pub async fn track_upload_server(state: crate::MioState, mut rx: UnboundedReceiv
                         }
                         trace!("recv'd task");
                         queue.push(recv.unwrap());
-                    },
+                    }
                     Err(_) => {
                         if !queue.is_empty() {
                             trace!("GC activate");
@@ -64,7 +58,7 @@ pub async fn track_upload_server(state: crate::MioState, mut rx: UnboundedReceiv
                             queue.retain(|task| !task.is_finished());
                             trace!("cleaned {}", prev_len - queue.len());
                         }
-                    },
+                    }
                 }
             }
         }
@@ -73,32 +67,39 @@ pub async fn track_upload_server(state: crate::MioState, mut rx: UnboundedReceiv
     // recviver that schedules the processing tasks
     while let Some((id, userid, orig_filename)) = rx.recv().await {
         trace!("sending task {id}");
-        tx_gc.send(tokio::spawn({
-            let db = state.db.clone();
-            let permit = state.lim.clone();
-            async move {
-                let permit = permit.acquire().await.unwrap();
+        tx_gc
+            .send(tokio::spawn({
+                let db = state.db.clone();
+                let permit = state.lim.clone();
+                async move {
+                    let permit = permit.acquire().await.unwrap();
 
-                // TODO: possibly log "Starting task..."
-                let mdata = tokio::task::spawn_blocking({
-                    let orig_filename = orig_filename.clone();
-                    move || {
-                        get_metadata(format!("{}{}", DATA_DIR.get().unwrap(), id).as_str(), orig_filename.as_str())
+                    // TODO: possibly log "Starting task..."
+                    let mdata = tokio::task::spawn_blocking({
+                        let orig_filename = orig_filename.clone();
+                        move || {
+                            get_metadata(
+                                format!("{}{}", DATA_DIR.get().unwrap(), id).as_str(),
+                                orig_filename.as_str(),
+                            )
+                        }
+                    })
+                    .await
+                    .expect("join failure");
+                    drop(permit);
+                    if let Err(err) = mdata {
+                        error!("ERROR processing {orig_filename}: {err}");
+
+                        // TODO: handle error
+                        return;
                     }
-                }).await.expect("join failure");
-                drop(permit);
-                if let Err(err) = mdata {
-                    warn!("ERROR processing {orig_filename}: {err}");
-
-                    // TODO: handle error
-                    return;
+                    if let Err(err) = insert_into_db(db, id, userid, mdata.unwrap()).await {
+                        error!("ERROR querying the database for {orig_filename}: {err}");
+                        panic!("querying the database failed");
+                    }
                 }
-                if let Err(err) = insert_into_db(db, id, userid, mdata.unwrap()).await {
-                    error!("ERROR querying the database for {orig_filename}: {err}");
-                    panic!("querying the database failed");
-                }
-            }
-        })).unwrap();
+            }))
+            .unwrap();
     }
     gc.await.unwrap();
 }
@@ -118,10 +119,10 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
         DiscovererResult::Ok => (),
         DiscovererResult::MissingPlugins => {
             anyhow::bail!("Missing plugin needed for file {orig_path}");
-        },
+        }
         DiscovererResult::Timeout => {
             anyhow::bail!("Timeout reached for processing tags")
-        },
+        }
         // these branches _shouldn't_ fail.
         //
         // Busy -> each discoverer is in it's own thread, where it only reads one file
@@ -162,7 +163,10 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
                         let mut imgbuf: Vec<u8> = vec![];
                         for buf in bufs {
                             // TODO: make this error better
-                            buf.map_readable().expect("memory should be readable: {}").iter().for_each(|x| imgbuf.push(*x));
+                            buf.map_readable()
+                                .expect("memory should be readable: {}")
+                                .iter()
+                                .for_each(|x| imgbuf.push(*x));
                         }
                         imgbuf
                     };
@@ -171,37 +175,40 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
 
                     // convert to webp
                     let dropped = image::load_from_memory(&img)?;
-                    let conv = dropped.as_rgb8().ok_or(anyhow::anyhow!("failed to convert to rgb8"))?;
+                    let conv = dropped
+                        .as_rgb8()
+                        .ok_or(anyhow::anyhow!("failed to convert to rgb8"))?;
                     let mut hold = Cursor::new(vec![]);
                     conv.write_to(&mut hold, image::ImageFormat::WebP)?;
                     mdata.img = Some(hold.into_inner());
                 } else {
                     anyhow::bail!("no buffer found for image");
                 }
-            },
+            }
             "title" => {
                 mdata.title = proc_tag(data);
                 trace!("{orig_path}: title is {:?}", mdata.title)
-            },
+            }
             "artist" => {
                 mdata.artist = proc_tag(data);
                 trace!("{orig_path}: artist is {:?}", mdata.artist)
-            },
+            }
             "album" => {
                 mdata.album = proc_tag(data);
                 trace!("{orig_path}: album is {:?}", mdata.album)
-            },
+            }
             _ => {
                 let data = proc_tag(data);
                 let ret = set.insert(tag.clone(), data.clone());
                 trace!("{orig_path}: KV inserted ({tag}, {data:?}), replaced ({tag}, {ret:?})")
-            },
+            }
         }
     }
-    mdata.overflow =
-        Some(
-            serde_json::to_string(&set.into_iter().map(|(a, b)| (a.to_string(), b)).collect::<HashMap<_, _>>())?,
-        );
+    mdata.overflow = Some(serde_json::to_string(
+        &set.into_iter()
+            .map(|(a, b)| (a.to_string(), b))
+            .collect::<HashMap<_, _>>(),
+    )?);
     if mdata.title.is_none() {
         warn!("{orig_path}: this song has no \"title\" tag, using filename");
         mdata.title = Some(orig_path.to_owned())
@@ -210,51 +217,58 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
 
     // audiohash
     trace!("{orig_path}: beginning audiohash");
-    let pipeline =
-        gstreamer::parse_launch(&format!("uridecodebin3 uri={fname} ! audioconvert ! appsink name=sink"))?
-            .downcast::<gstreamer::Pipeline>()
-            .expect("Expected a gst::Pipeline");
+    let pipeline = gstreamer::parse_launch(&format!(
+        "uridecodebin3 uri={fname} ! audioconvert ! appsink name=sink"
+    ))?
+    .downcast::<gstreamer::Pipeline>()
+    .expect("Expected a gst::Pipeline");
 
     // sink extractor
     //
     // TODO: either do a shared memory thing or Oneshot it
     let (tx, rx) = std::sync::mpsc::channel();
-    let sink =
-        pipeline
-            .by_name("sink")
-            .expect("sink element not found")
-            .dynamic_cast::<AppSink>()
-            .expect("failed dynamic cast to AppSink");
+    let sink = pipeline
+        .by_name("sink")
+        .expect("sink element not found")
+        .dynamic_cast::<AppSink>()
+        .expect("failed dynamic cast to AppSink");
     sink.set_property("sync", false);
     sink.set_callbacks({
         let orig_path = orig_path.to_owned();
-        gstreamer_app::AppSinkCallbacks::builder().new_sample(move |sink| {
-            trace!("{orig_path}: sink match from main loop entered");
-            match sink.pull_sample() {
-                Ok(sample) => match sample.buffer() {
-                    Some(buflist) => {
-                        trace!("{orig_path}: found some buffers, sending over");
-                        tx.send(buflist.iter_memories().flat_map(|buf| {
-                            buf
-                                .map_readable()
-                                .expect("memory should be readable")
-                                .iter()
-                                .copied()
-                                .collect::<Vec<_>>()
-                        }).collect::<Vec<_>>()).unwrap();
-                        Err(gstreamer::FlowError::Eos)
+        gstreamer_app::AppSinkCallbacks::builder()
+            .new_sample(move |sink| {
+                trace!("{orig_path}: sink match from main loop entered");
+                match sink.pull_sample() {
+                    Ok(sample) => match sample.buffer() {
+                        Some(buflist) => {
+                            trace!("{orig_path}: found some buffers, sending over");
+                            tx.send(
+                                buflist
+                                    .iter_memories()
+                                    .flat_map(|buf| {
+                                        buf.map_readable()
+                                            .expect("memory should be readable")
+                                            .iter()
+                                            .copied()
+                                            .collect::<Vec<_>>()
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                            .unwrap();
+                            Err(gstreamer::FlowError::Eos)
+                        }
+                        None => {
+                            debug!("{orig_path}: failed to get buffer list as none was produced");
+                            Err(gstreamer::FlowError::Error)
+                        }
                     },
-                    None => {
-                        debug!("{orig_path}: failed to get buffer list as none was produced");
+                    Err(err) => {
+                        debug!("{orig_path}: failed to grab sample: {err}");
                         Err(gstreamer::FlowError::Error)
-                    },
-                },
-                Err(err) => {
-                    debug!("{orig_path}: failed to grab sample: {err}");
-                    Err(gstreamer::FlowError::Error)
-                },
-            }
-        }).build()
+                    }
+                }
+            })
+            .build()
     });
 
     // begin the actual fetching
