@@ -1,16 +1,26 @@
-use dioxus::{html::input_data::MouseButton, prelude::*};
+use dioxus::{
+    html::input_data::MouseButton,
+    prelude::*,
+};
 use dioxus_router::*;
 use gloo_net::http::Request;
 use std::sync::Arc;
 use uuid::*;
-use wasm_bindgen::{prelude::*, JsCast};
+use wasm_bindgen::{
+    prelude::*,
+    JsCast,
+};
 use wasm_bindgen_futures::*;
-use web_sys::{Blob, FileReader, HtmlInputElement};
+use web_sys::{
+    Blob,
+    FileReader,
+    HtmlInputElement,
+};
 
 #[inline_props]
 #[allow(non_snake_case)]
 pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
-    cx.render(rsx! {
+    cx.render(rsx!{
         Router {
             Route {
                 to: "/",
@@ -25,14 +35,11 @@ pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
 pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
     let fut = use_future(&cx, (token,), |(token,)| async move {
         Request::get(&format!("/api/load/albums"))
-            .header(
-                "Authorization",
-                &format!("Bearer {}", token.read().unwrap()),
-            )
+            .header("Authorization", &format!("Bearer {}", token.read().unwrap()))
             .send()
             .await
     });
-    cx.render(rsx! {
+    cx.render(rsx!{
         div {
             input {
                 r#type: "file",
@@ -69,7 +76,13 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                                         let req =
                                             Request::put(&format!("/api/track/tu?fname={fname}"))
                                                 .header("Authorization", &format!("Bearer {}", token.read().unwrap()))
-                                                .body(reader.result().unwrap() )
+                                                .header(
+                                                    "Content-Type",
+                                                    new_mime_guess::from_path(fname)
+                                                        .first_raw()
+                                                        .unwrap_or("application/octet-stream"),
+                                                )
+                                                .body(reader.result().unwrap())
                                                 .send()
                                                 .await;
                                         log::trace!("{req:?}");

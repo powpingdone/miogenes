@@ -17,6 +17,7 @@ pub fn routes() -> Router<MioState> {
         .route("/td", put(track_delete))
 }
 
+// TODO: this doesn't go here
 #[derive(Deserialize)]
 struct TUQuery {
     fname: Option<String>,
@@ -66,13 +67,15 @@ async fn track_upload(
         trace!("PUT /track/tu generated fname with uuid");
         uuid.to_string()
     }));
-    info!("PUT /track/tu filename and uuid used: \"{orig_filename}\" -> \"{real_fname}\": {uuid}");
+    debug!("PUT /track/tu filename and uuid used: \"{orig_filename}\" -> \"{real_fname}\": {uuid}");
 
     // download the file
     //
     // TODO: filesize limits
     //
     // TODO: maybe don't panic on filesystem errors(?)
+    //
+    // TODO: make this read base64
     while let Some(chunk) = payload.next().await {
         match chunk {
             Ok(chunk) => {
