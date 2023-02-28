@@ -38,4 +38,3 @@ web-sys = { version = "0.3.61", features = [
 ] }
 chrono = "0.4.23"
 wasm-cookies = "0.2.1"
-new_mime_guess = "4.0.1"

@@ -20,3 +20,8 @@ pub struct IdInfoQuery(
 pub struct DeleteQuery {
     pub id: Uuid,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TrackUploadQuery {
+    pub fname: Option<String>,
+}

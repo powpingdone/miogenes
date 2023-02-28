@@ -4,6 +4,11 @@ use dioxus::{
 };
 use dioxus_router::*;
 use gloo_net::http::Request;
+use js_sys::{
+    JsString,
+    ArrayBuffer,
+    Uint8Array,
+};
 use std::sync::Arc;
 use uuid::*;
 use wasm_bindgen::{
@@ -66,32 +71,31 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                         let file = files.item(pos).unwrap();
                         let fname = file.name();
                         let blob: Blob = file.into();
-                        let reader = Arc::new(FileReader::new().unwrap());
-                        let cl = Closure::once_into_js({
-                            let reader = reader.clone();
-                            let token = token.clone();
-                            move || {
-                                spawn_local({
-                                    async move {
-                                        let req =
-                                            Request::put(&format!("/api/track/tu?fname={fname}"))
-                                                .header("Authorization", &format!("Bearer {}", token.read().unwrap()))
-                                                .header(
-                                                    "Content-Type",
-                                                    new_mime_guess::from_path(fname)
-                                                        .first_raw()
-                                                        .unwrap_or("application/octet-stream"),
-                                                )
-                                                .body(reader.result().unwrap())
-                                                .send()
-                                                .await;
-                                        log::trace!("{req:?}");
-                                    }
-                                });
+                        spawn_local({
+                            let token = token.read().unwrap();
+                            async move {
+                                use base64::prelude::*;
+
+                                let req =
+                                    Request::put(&format!("/api/track/tu?fname={fname}"))
+                                        .header("Authorization", &format!("Bearer {}", token))
+                                        .body(
+                                            // maybe i could use atob?
+                                            BASE64_URL_SAFE_NO_PAD.encode(
+                                                Uint8Array::new(
+                                                    JsFuture::from(blob.array_buffer())
+                                                        .await
+                                                        .unwrap()
+                                                        .dyn_ref::<ArrayBuffer>()
+                                                        .unwrap(),
+                                                ).to_vec(),
+                                            ),
+                                        )
+                                        .send()
+                                        .await;
+                                log::trace!("{req:?}");
                             }
                         });
-                        reader.set_onload(Some(cl.as_ref().unchecked_ref()));
-                        reader.read_as_binary_string(&blob).unwrap();
                     }
                     fut.restart();
                 },
