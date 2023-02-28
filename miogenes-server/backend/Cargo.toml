@@ -14,7 +14,7 @@ gstreamer = { version = "0.20.2", features = ["v1_20"] }
 gstreamer-app = { version = "0.20.0", features = ["v1_20"] }
 gstreamer-audio = { version = "0.20.2", features = ["v1_20"] }
 gstreamer-pbutils = { version = "0.20.0", features = ["v1_20"] }
-image = "0.24.5"
+image = { version = "0.24.5", features = ["webp-encoder"] }
 konst = "0.3.4"
 log = "0.4.17"
 mio_common = { path = "../common" }
