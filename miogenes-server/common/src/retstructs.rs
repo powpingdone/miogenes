@@ -21,7 +21,6 @@ pub struct Album {
     pub id: Uuid,
     pub title: String,
     pub tracks: Vec<Uuid>,
-    pub sort_name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

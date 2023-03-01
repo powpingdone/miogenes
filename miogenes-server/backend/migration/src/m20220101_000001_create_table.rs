@@ -15,7 +15,6 @@ impl MigrationTrait for Migration {
                     // ser
                     .col(ColumnDef::new(Album::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Album::Title).string().not_null())
-                    .col(ColumnDef::new(Album::SortName).string().null())
                     .to_owned(),
             )
             .await?;
@@ -226,7 +225,6 @@ enum Album {
     // ser
     Id,
     Title,
-    SortName,
 }
 
 #[derive(Iden)]

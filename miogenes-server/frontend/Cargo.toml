@@ -18,7 +18,6 @@ wasm-bindgen = "0.2.84"
 anyhow = "1.0.69"
 uuid = "1.2.2"
 base64 = "0.21.0"
-serde_url_params = "0.2.1"
 wasm-logger = "0.2.0"
 dioxus = "0.3.2"
 dioxus-web = "0.3.0"
@@ -38,3 +37,4 @@ web-sys = { version = "0.3.61", features = [
 ] }
 chrono = "0.4.23"
 wasm-cookies = "0.2.1"
+serde_urlencoded = "0.7.1"

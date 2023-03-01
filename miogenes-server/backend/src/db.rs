@@ -34,7 +34,6 @@ impl WebOut for mio_entity::album::Model {
     async fn web_out(self, db: &DatabaseConnection) -> Self::WebOut {
         retstructs::Album {
             title: self.title,
-            sort_name: self.sort_name,
             id: self.id,
             tracks: mio_entity::Track::find()
                 .filter(mio_entity::track::Column::Album.eq(self.id))

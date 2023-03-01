@@ -21,6 +21,7 @@ use web_sys::{
     FileReader,
     HtmlInputElement,
 };
+use mio_common::*;
 
 #[inline_props]
 #[allow(non_snake_case)]
@@ -77,22 +78,29 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                                 use base64::prelude::*;
 
                                 let req =
-                                    Request::put(&format!("/api/track/tu?fname={fname}"))
-                                        .header("Authorization", &format!("Bearer {}", token))
-                                        .body(
-                                            // maybe i could use atob?
-                                            BASE64_URL_SAFE_NO_PAD.encode(
-                                                Uint8Array::new(
-                                                    JsFuture::from(blob.array_buffer())
-                                                        .await
-                                                        .unwrap()
-                                                        .dyn_ref::<ArrayBuffer>()
-                                                        .unwrap(),
-                                                ).to_vec(),
-                                            ),
-                                        )
-                                        .send()
-                                        .await;
+                                    Request::put(
+                                        &format!(
+                                            "/api/track/tu?{}",
+                                            serde_urlencoded::to_string(
+                                                msgstructs::TrackUploadQuery { fname: if fname != "" {
+                                                    Some(fname)
+                                                } else {
+                                                    None
+                                                } },
+                                            ).unwrap()
+                                        ),
+                                    ).header("Authorization", &format!("Bearer {}", token)).body(
+                                        // maybe i could use atob?
+                                        BASE64_URL_SAFE_NO_PAD.encode(
+                                            Uint8Array::new(
+                                                JsFuture::from(blob.array_buffer())
+                                                    .await
+                                                    .unwrap()
+                                                    .dyn_ref::<ArrayBuffer>()
+                                                    .unwrap(),
+                                            ).to_vec(),
+                                        ),
+                                    ).send().await;
                                 log::trace!("{req:?}");
                             }
                         });

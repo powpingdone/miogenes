@@ -38,18 +38,11 @@ impl RecvReadWrapper {
 impl std::io::Read for RecvReadWrapper {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let mut ret_len = 0;
-        while let Ok(byte) = self.inner.recv() {
-            buf[ret_len] = byte;
+        for (mutbuf, byte) in buf.iter_mut().zip(self.inner.iter()) {
+            *mutbuf = byte;
             ret_len += 1;
-            if ret_len >= buf.len() {
-                break;
-            }
         }
-        if ret_len != 0 {
-            Ok(ret_len)
-        } else {
-            Err(std::io::Error::from(ErrorKind::UnexpectedEof))
-        }
+        Ok(ret_len)
     }
 }
 
@@ -96,67 +89,43 @@ async fn track_upload(
 
     // base64 decoder
     let (tx_b64, rx_b64) = std::sync::mpsc::channel();
-    let (tx_byte, mut rx_byte) = tokio::sync::mpsc::unbounded_channel::<Result<Vec<_>, std::io::Error>>();
+    let (tx_byte, mut rx_byte) = tokio::sync::mpsc::unbounded_channel();
     let inner_decode = tokio::task::spawn_blocking({
         move || {
+            // this task takes in the base64 encoded body and decodes it. it does so by wrapping the rx_b64
+            // in a Read trait wrapper struct, and streaming the output via the Read::read function. it then
+            // buffers the bytes to write out in a 1MB block and sends it off. the remainder is then sent
             use base64::prelude::*;
             use base64::read::DecoderReader;
 
-            const BUFFER_SIZE: usize = 1048576; // 1MB blocks
+            // 1MB blocks
+            const BUFFER_SIZE: usize = 0x10000;
             let reader = RecvReadWrapper::new(rx_b64);
             let decoder = DecoderReader::new(reader, &BASE64_URL_SAFE_NO_PAD);
             let mut buf = Vec::with_capacity(BUFFER_SIZE);
-            let mut bytes = decoder.bytes();
-            loop {
-                let x = bytes.next();
-                if x.is_none() {
-                    if let Err(_) = tx_byte.send(Ok(buf.clone())) {
-                        error!("PUT /track/tu rx_byte suddenly closed during the last iteration!");
-                    }
-                    break;
-                }
-                let x = x.unwrap();
-                if let Err(err) = x {
-                    // i don't know how this could possibly happen...
-                    if err.kind() != ErrorKind::UnexpectedEof {
-                        if let Err(_) = tx_byte.send(Err(err)) {
-                            error!("PUT /track/tu rx_byte suddenly closed while handling not a EOF!");
-                        }
-                    }
-                    break;
-                }
+            for x in decoder.bytes() {
                 buf.push(x.unwrap());
-                if buf.len() == BUFFER_SIZE {
-                    if let Err(_) = tx_byte.send(Ok(buf.clone())) {
-                        error!("PUT /track/tu rx_byte suddenly closed!");
-                        break;
-                    }
+                if buf.len() >= BUFFER_SIZE {
+                    tx_byte.send(buf.clone()).unwrap();
                     buf.clear();
                 }
+            }
+            if buf.len() > 0 {
+                tx_byte.send(buf).unwrap();
             }
         }
     });
 
     // file writer
     let inner_write = tokio::spawn(async move {
+        // simple: write the vec sent over by inner_decode
         while let Some(read) = rx_byte.recv().await {
-            match read {
-                Ok(bytes) => {
-                    if let Err(err) = file.write_all(&bytes).await {
-                        error!("PUT /track/tu failed to write to file: {err}");
-                        file.flush().await.expect("Failed to flush uploaded file: {}");
-                        drop(file);
-                        rm_file(uuid).await;
-                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-                    }
-                },
-                Err(err) => {
-                    error!("PUT /track/tu failed decoding for {uuid}: {err}");
-                    file.flush().await.expect("Failed to flush uploaded file: {}");
-                    drop(file);
-                    rm_file(uuid).await;
-                    return Err(StatusCode::BAD_REQUEST);
-                },
+            if let Err(err) = file.write_all(&read).await {
+                error!("PUT /track/tu failed to write to file: {err}");
+                file.flush().await.expect("Failed to flush uploaded file: {}");
+                drop(file);
+                rm_file(uuid).await;
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }
         trace!("PUT /track/tu final flushing {uuid}");
@@ -167,6 +136,8 @@ async fn track_upload(
     // TODO: filesize limits
     //
     // TODO: maybe don't panic on filesystem errors(?)
+    //
+    // TODO: upload timeout if body stops streaming
     //
     // download the file
     while let Some(chunk) = payload.next().await {
@@ -216,7 +187,7 @@ async fn rm_file(uuid: Uuid) {
 async fn track_delete(
     State(state): State<MioState>,
     Query(id): Query<msgstructs::DeleteQuery>,
-    Extension(userid): Extension<Uuid>,
+    Extension(key): Extension<mio_entity::user::Model>,
 ) -> impl IntoResponse {
     todo!()
 }
