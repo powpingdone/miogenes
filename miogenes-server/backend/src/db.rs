@@ -22,7 +22,13 @@ impl WebOut for mio_entity::track::Model {
             cover_art: self.cover_art,
             artist: self.artist,
             sort_name: self.sort_name,
-            tags: self.tags.as_object().unwrap().iter().map(|(k, v)| (k.to_owned(), v.to_string())).collect(),
+            tags: self
+                .tags
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(k, v)| (k.to_owned(), v.to_string()))
+                .collect(),
         }
     }
 }

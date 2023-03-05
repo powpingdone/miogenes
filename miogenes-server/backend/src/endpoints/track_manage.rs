@@ -1,14 +1,12 @@
-use std::collections::VecDeque;
-use std::io::Read;
 use crate::MioState;
 use axum::extract::*;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::*;
-use base64::engine::GeneralPurpose;
 use futures::StreamExt;
 use log::*;
 use mio_common::*;
+use std::io::Read;
 use tokio::fs::{
     remove_file,
     File,
@@ -22,28 +20,6 @@ use uuid::Uuid;
 
 pub fn routes() -> Router<MioState> {
     Router::new().route("/tu", put(track_upload)).route("/td", put(track_delete))
-}
-
-// used for turning a recv into a Read trait object
-struct RecvReadWrapper {
-    inner: std::sync::mpsc::Receiver<u8>,
-}
-
-impl RecvReadWrapper {
-    pub fn new(inner: std::sync::mpsc::Receiver<u8>) -> Self {
-        Self { inner }
-    }
-}
-
-impl std::io::Read for RecvReadWrapper {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let mut ret_len = 0;
-        for (mutbuf, byte) in buf.iter_mut().zip(self.inner.iter()) {
-            *mutbuf = byte;
-            ret_len += 1;
-        }
-        Ok(ret_len)
-    }
 }
 
 async fn track_upload(
@@ -92,11 +68,34 @@ async fn track_upload(
     let (tx_byte, mut rx_byte) = tokio::sync::mpsc::unbounded_channel();
     let inner_decode = tokio::task::spawn_blocking({
         move || {
+            use base64::prelude::*;
+            use base64::read::DecoderReader;
+            
+            // used for turning a recv into a Read trait object
+            struct RecvReadWrapper {
+                inner: std::sync::mpsc::Receiver<u8>,
+            }
+
+            impl RecvReadWrapper {
+                pub fn new(inner: std::sync::mpsc::Receiver<u8>) -> Self {
+                    Self { inner }
+                }
+            }
+
+            impl std::io::Read for RecvReadWrapper {
+                fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                    let mut ret_len = 0;
+                    for (mutbuf, byte) in buf.iter_mut().zip(self.inner.iter()) {
+                        *mutbuf = byte;
+                        ret_len += 1;
+                    }
+                    Ok(ret_len)
+                }
+            }
+
             // this task takes in the base64 encoded body and decodes it. it does so by wrapping the rx_b64
             // in a Read trait wrapper struct, and streaming the output via the Read::read function. it then
             // buffers the bytes to write out in a 1MB block and sends it off. the remainder is then sent
-            use base64::prelude::*;
-            use base64::read::DecoderReader;
 
             // 1MB blocks
             const BUFFER_SIZE: usize = 0x10000;
@@ -110,7 +109,7 @@ async fn track_upload(
                     buf.clear();
                 }
             }
-            if buf.len() > 0 {
+            if !buf.is_empty() {
                 tx_byte.send(buf).unwrap();
             }
         }

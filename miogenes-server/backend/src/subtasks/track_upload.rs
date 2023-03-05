@@ -5,12 +5,14 @@ use gstreamer_app::AppSink;
 use gstreamer_pbutils::prelude::*;
 use gstreamer_pbutils::DiscovererResult;
 use log::*;
+use mio_migration::IntoCondition;
 use path_absolutize::Absolutize;
-use sea_orm::TransactionTrait;
+use sea_orm::*;
 use sha2::{
     Digest,
     Sha256,
 };
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::Path;
@@ -199,10 +201,14 @@ fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error>
             },
         }
     }
-    mdata.overflow =
-        Some(
-            serde_json::to_string(&set.into_iter().map(|(a, b)| (a.to_string(), b)).collect::<HashMap<_, _>>())?,
-        );
+    if !set.is_empty() {
+        mdata.overflow =
+            Some(
+                serde_json::to_string(
+                    &set.into_iter().map(|(a, b)| (a.to_string(), b)).collect::<HashMap<_, _>>(),
+                )?,
+            );
+    }
     if mdata.title.is_none() {
         warn!("{orig_path}: this song has no \"title\" tag, using filename");
         mdata.title = Some(orig_path.to_owned())
@@ -311,27 +317,134 @@ async fn insert_into_db(
     id: Uuid,
     userid: Uuid,
     metadata: Metadata,
-    orig_filename: String
+    orig_filename: String,
 ) -> Result<(), anyhow::Error> {
     use mio_entity::*;
-    todo!();
-    //db.transaction(|txn| Box::pin(async move {
-    //    debug!("{orig_filename}: Begin transaction");
 
-    //    trace!("{orig_filename}: Filling track");
-    //    let mut track = track::ActiveModel {
-    //        id: todo!(),
-    //        title: todo!(),
-    //        sort_name: todo!(),
-    //        tags: todo!(),
-    //        audio_hash: todo!(),
-    //        orig_fname: todo!(),
-    //        album: todo!(),
-    //        artist: todo!(),
-    //        cover_art: todo!(),
-    //        owner: todo!(),
-    //    };
+    db.transaction::<_, _, DbErr>(|txn| Box::pin(async move {
+        // transfer ownership
+        let hold = metadata;
+        let metadata = &hold;
 
-    //    Ok(())
-    //})).await.map_err(|err| anyhow::Error::new(err))
+        // insert cover art, compare based on imghash
+        debug!("{orig_filename}: Filling cover art");
+        let (cover_art_new_row, cover_art_id) = create_model_and_id(txn, &metadata.imghash, || {
+            cover_art::Column::ImgHash.eq(metadata.imghash.unwrap().to_vec())
+        }, || {
+            cover_art::ActiveModel {
+                id: NotSet,
+                webm_blob: Set(metadata.img.to_owned().unwrap()),
+                img_hash: Set(metadata.imghash.unwrap().to_vec()),
+            }
+        }, cover_art::Column::Id).await?;
+
+        // insert artist, compare based on artist name
+        debug!("{orig_filename}: Filling artist");
+        let (artist_new_row, artist_id) = create_model_and_id(txn, &metadata.artist, || {
+            artist::Column::Name.eq(metadata.artist.as_ref().unwrap())
+        }, || {
+            artist::ActiveModel {
+                id: NotSet,
+                name: Set(metadata.artist.to_owned().unwrap()),
+                sort_name: Set(None),
+            }
+        }, artist::Column::Id).await?;
+
+        // insert album, compare based on album title
+        //
+        // TODO: also join based on album artist
+        debug!("{orig_filename}: Filling album");
+        let (album_new_row, album_id) = create_model_and_id(txn, &metadata.album, || {
+            album::Column::Title.eq(metadata.album.as_ref().unwrap())
+        }, || {
+            album::ActiveModel {
+                id: NotSet,
+                title: Set(metadata.album.to_owned().unwrap()),
+            }
+        }, album::Column::Id).await?;
+
+        // finally, insert track. compare based on audio_hash
+        //
+        // TODO: if track_new_row doesnt exist, throw an error, meaning that the track already existed
+        debug!("{orig_filename}: Filling track");
+        let (track_new_row, track_id) = create_model_and_id(txn, Some(()), || {
+            track::Column::AudioHash.eq(metadata.audiohash.unwrap().to_vec())
+        }, || track::ActiveModel {
+            id: Set(id),
+            title: Set(metadata.title.to_owned().unwrap()),
+            sort_name: Set(None),
+            tags: {
+                Set(if metadata.overflow.is_some() {
+                    metadata.overflow.to_owned().unwrap().into()
+                } else {
+                    "{}".to_owned().into()
+                })
+            },
+            audio_hash: Set(metadata.audiohash.unwrap().to_vec()),
+            orig_fname: Set(orig_filename),
+            album: Set(album_id),
+            artist: Set(artist_id),
+            cover_art: Set(cover_art_id),
+            owner: Set(userid),
+        }, track::Column::Id).await?;
+        Ok(())
+    })).await.map_err(anyhow::Error::new)
+}
+
+// This abomination of traits, generics, and params is a generic function to
+// possibly return a new model, and possibly return the id that the track will link
+// to.
+async fn create_model_and_id<
+    DBModel,
+    IsSome,
+    ActiveModelType,
+    IdColumn,
+    ActiveModelFunc,
+    FilterFunc,
+    FilterFuncRet,
+>(
+    txn: &DatabaseTransaction,
+    mdatainp: impl Borrow<Option<IsSome>>,
+    filter: FilterFunc,
+    active_model: ActiveModelFunc,
+    id_column: IdColumn,
+) -> Result<(Option<<DBModel as EntityTrait>::Model>, Option<Uuid>), DbErr>
+where
+    DBModel: EntityTrait<Column = IdColumn>,
+    <<DBModel as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType: From<Uuid>,
+    ActiveModelFunc: FnOnce() -> ActiveModelType,
+    ActiveModelType: ActiveModelTrait<Entity = DBModel> + ActiveModelBehavior + Send,
+    FilterFunc: FnOnce() -> FilterFuncRet,
+    FilterFuncRet: IntoCondition,
+    <DBModel as EntityTrait>::Model: IntoActiveModel<ActiveModelType>,
+    IdColumn: Copy {
+    if mdatainp.borrow().is_some() {
+        trace!("CMAI borrowed data is real");
+        let id = DBModel::find().filter(filter()).one(txn).await?;
+        if id.is_none() {
+            trace!("CMAI no item found, bound by filter");
+            let mut ret = active_model();
+            let gen_id = if ret.is_not_set(id_column) {
+                let gen_id = loop {
+                    let uuid = Uuid::new_v4();
+                    if DBModel::find_by_id(uuid).one(txn).await?.is_none() {
+                        break uuid;
+                    }
+                };
+                trace!("CMAI uuid generated: {gen_id}");
+                ret.set(id_column, gen_id.into());
+                gen_id
+            } else {
+                trace!("CMAI uuid already set");
+                ret.get(id_column).unwrap().unwrap()
+            };
+            Ok((Some(ret.insert(txn).await?), Some(gen_id)))
+        } else {
+            trace!("CMAI item found, bound by filter");
+            Ok((None, Some(id.unwrap().get(id_column).unwrap())))
+        }
+    } else {
+        trace!("CMAI no borrowed data");
+        Ok((None, None))
+    }
 }
