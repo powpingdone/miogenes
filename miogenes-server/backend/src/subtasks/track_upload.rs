@@ -337,6 +337,11 @@ async fn insert_into_db(
                 img_hash: Set(metadata.imghash.unwrap().to_vec()),
             }
         }, cover_art::Column::Id).await?;
+        if cover_art_new_row.is_some() {
+            trace!("{orig_filename}: new cover art generated: {cover_art_new_row:?}");
+        } else {
+            trace!("{orig_filename}: cover art already exists: {cover_art_id:?}");
+        }
 
         // insert artist, compare based on artist name
         debug!("{orig_filename}: Filling artist");
@@ -349,6 +354,11 @@ async fn insert_into_db(
                 sort_name: Set(None),
             }
         }, artist::Column::Id).await?;
+        if artist_new_row.is_some() {
+            trace!("{orig_filename}: new artist generated: {artist_new_row:?}");
+        } else {
+            trace!("{orig_filename}: artist already exists: {artist_id:?}");
+        }
 
         // insert album, compare based on album title
         //
@@ -362,6 +372,11 @@ async fn insert_into_db(
                 title: Set(metadata.album.to_owned().unwrap()),
             }
         }, album::Column::Id).await?;
+        if album_new_row.is_some() {
+            trace!("{orig_filename}: new album generated: {album_new_row:?}");
+        } else {
+            trace!("{orig_filename}: album already exists: {album_id:?}");
+        }
 
         // finally, insert track. compare based on audio_hash
         //
@@ -381,12 +396,18 @@ async fn insert_into_db(
                 })
             },
             audio_hash: Set(metadata.audiohash.unwrap().to_vec()),
-            orig_fname: Set(orig_filename),
+            orig_fname: Set(orig_filename.clone()),
             album: Set(album_id),
             artist: Set(artist_id),
             cover_art: Set(cover_art_id),
             owner: Set(userid),
         }, track::Column::Id).await?;
+        if track_new_row.is_some() {
+            trace!("{orig_filename}: track generated: {track_new_row:?}");
+        }
+        else {
+            trace!("{orig_filename}: conflicting uuid found: {track_id:?}");
+        }
         Ok(())
     })).await.map_err(anyhow::Error::new)
 }

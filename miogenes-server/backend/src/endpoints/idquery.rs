@@ -26,13 +26,15 @@ async fn get_albums(
     Ok::<_, StatusCode>((
         StatusCode::OK,
         Json(retstructs::Albums {
-            albums: Album::find()
-                .filter(album::Column::Id.eq(key.id))
+            albums: 
+            Album::find()
+                .find_with_related(Track)
+                .filter(track::Column::Owner.eq(key.id))
                 .all(&state.db)
                 .await
                 .map_err(db_err)?
                 .into_iter()
-                .map(|x| x.id)
+                .map(|(x, _)| x.id)
                 .collect(),
         }),
     ))

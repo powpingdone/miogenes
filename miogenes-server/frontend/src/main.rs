@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_router::*;
-use uuid::*;
 use log::*;
+use uuid::*;
 
 mod mainpage;
 mod routepts;
@@ -12,7 +12,7 @@ fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
     let curr_token = use_ref(cx, || *token);
 
     // app routes
-    cx.render(rsx!{
+    cx.render(rsx! {
         Router {
             {
                 if curr_token.read().is_none() {
@@ -48,7 +48,7 @@ fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
 fn Redir(cx: Scope) -> Element {
     let rtr = use_router(cx);
     rtr.navigate_to("/home");
-    cx.render(rsx!{
+    cx.render(rsx! {
         div {}
     })
 }
@@ -58,9 +58,8 @@ fn main() {
 
     // load token if set. parse out uuid from str
     //
-    // this target_arch directive is only here for r-a because r-a thinks this is a
-    // amd64 project. this is similar for all of the stuff interacting with
-    // wasm_cookies
+    // this target_arch directive is only here for r-a because r-a thinks this is a amd64
+    // project. this is similar for all of the stuff interacting with wasm_cookies
     #[cfg(not(target_arch = "wasm32"))]
     let token: Option<Uuid> = None;
     #[cfg(target_arch = "wasm32")]
@@ -70,16 +69,20 @@ fn main() {
             Err(err) => {
                 debug!("Failed to parse out token: {err}");
                 None
-            },
+            }
         },
         Some(Err(err)) => {
             debug!("wasm_cookies decoding failed: {err}");
             None
-        },
+        }
         None => {
             debug!("No token found.");
             None
-        },
+        }
     };
-    dioxus_web::launch_with_props(app_main, app_mainProps { token }, dioxus_web::Config::default());
+    dioxus_web::launch_with_props(
+        app_main,
+        app_mainProps { token },
+        dioxus_web::Config::default(),
+    );
 }

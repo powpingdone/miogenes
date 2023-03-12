@@ -1,8 +1,5 @@
 use crate::tasks;
-use chrono::{
-    Duration,
-    Utc,
-};
+use chrono::{Duration, Utc};
 use dioxus::prelude::*;
 use dioxus_router::*;
 use futures::*;
@@ -24,22 +21,26 @@ pub fn Login(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
             while let Some((user, pass)) = rx.next().await {
                 match tasks::get_token(user, pass).await {
                     Ok(good) => {
-                        token.set(Some(good.0));
+                        token.set(Some(good.token));
                         rtr.navigate_to("/home");
 
                         // set cookie
                         #[cfg(target_arch = "wasm32")]
-                        wasm_cookies::set("Token", &good.0.to_string(), &CookieOptions {
-                            expires: Some((Utc::now() + Duration::days(2)).to_rfc2822().into()),
-                            ..CookieOptions::default()
-                        })
-                    },
+                        wasm_cookies::set(
+                            "Token",
+                            &good.token.to_string(),
+                            &CookieOptions {
+                                expires: Some((Utc::now() + Duration::days(2)).to_rfc2822().into()),
+                                ..CookieOptions::default()
+                            },
+                        )
+                    }
                     Err(err) => err_str.set(err),
                 }
             }
         }
     });
-    cx.render(rsx!{
+    cx.render(rsx! {
         div {
             p {
                 "Username"
@@ -103,7 +104,7 @@ pub fn Signup(cx: Scope) -> Element {
             }
         }
     });
-    cx.render(rsx!{
+    cx.render(rsx! {
         div {
             p {
                 "Username"

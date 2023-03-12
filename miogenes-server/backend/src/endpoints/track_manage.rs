@@ -66,6 +66,7 @@ async fn track_upload(
     // base64 decoder
     let (tx_b64, rx_b64) = std::sync::mpsc::channel();
     let (tx_byte, mut rx_byte) = tokio::sync::mpsc::unbounded_channel();
+    let (tx_wait, rx_wait) = tokio::sync::oneshot::channel();
     let inner_decode = tokio::task::spawn_blocking({
         move || {
             use base64::prelude::*;
@@ -93,6 +94,9 @@ async fn track_upload(
                 }
             }
 
+            // wait for avail slot
+            let permit = rx_wait.blocking_recv().unwrap();
+
             // this task takes in the base64 encoded body and decodes it. it does so by wrapping the rx_b64
             // in a Read trait wrapper struct, and streaming the output via the Read::read function. it then
             // buffers the bytes to write out in a 1MB block and sends it off. the remainder is then sent
@@ -112,6 +116,7 @@ async fn track_upload(
             if !buf.is_empty() {
                 tx_byte.send(buf).unwrap();
             }
+            drop(permit);
         }
     });
 
@@ -138,6 +143,8 @@ async fn track_upload(
     //
     // TODO: upload timeout if body stops streaming
     //
+    // wait, then send unblocker
+    tx_wait.send(state.lim.acquire_owned().await.unwrap()).unwrap();
     // download the file
     while let Some(chunk) = payload.next().await {
         match chunk {

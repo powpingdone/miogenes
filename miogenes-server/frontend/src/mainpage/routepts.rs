@@ -5,10 +5,11 @@ use dioxus::{
 use dioxus_router::*;
 use gloo_net::http::Request;
 use js_sys::{
-    JsString,
     ArrayBuffer,
+    JsString,
     Uint8Array,
 };
+use mio_common::*;
 use std::sync::Arc;
 use uuid::*;
 use wasm_bindgen::{
@@ -21,7 +22,6 @@ use web_sys::{
     FileReader,
     HtmlInputElement,
 };
-use mio_common::*;
 
 #[inline_props]
 #[allow(non_snake_case)]
@@ -40,10 +40,16 @@ pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
 #[allow(non_snake_case)]
 pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
     let fut = use_future(&cx, (token,), |(token,)| async move {
-        Request::get(&format!("/api/load/albums"))
-            .header("Authorization", &format!("Bearer {}", token.read().unwrap()))
-            .send()
-            .await
+        let r =
+            Request::get(&format!("/api/load/albums"))
+                .header("Authorization", &format!("Bearer {}", token.read().unwrap()))
+                .send()
+                .await;
+        if let Ok(ret) = r {
+            format!("{:?}", ret.json::<retstructs::Albums>().await)
+        } else {
+            format!("{r:?}")
+        }
     });
     cx.render(rsx!{
         div {
