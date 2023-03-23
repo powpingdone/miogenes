@@ -56,10 +56,13 @@ async fn track_upload(
     }
 
     // get original filename
-    let orig_filename = sanitize_filename::sanitize(fname.unwrap_or_else(|| {
+    let orig_filename = sanitize_filename::sanitize_with_options(fname.unwrap_or_else(|| {
         trace!("PUT /track/tu generated fname with uuid");
         uuid.to_string()
-    }));
+    }), sanitize_filename::Options {
+        windows: true,
+        ..Default::default()
+    });
     debug!("PUT /track/tu filename and uuid used: \"{orig_filename}\" -> \"{real_fname}\": {uuid}");
 
     // TODO: filesize limits
