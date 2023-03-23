@@ -1,4 +1,4 @@
-use crate::DATA_DIR;
+use axum::http::StatusCode;
 use glib::SendValue;
 use gstreamer::glib;
 use gstreamer_app::AppSink;
@@ -16,16 +16,9 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::Path;
-use tokio::sync::mpsc::{
-    unbounded_channel,
-    UnboundedReceiver,
-};
-use tokio::task::JoinHandle;
-use tokio::time::{
-    timeout,
-    Duration,
-};
 use uuid::*;
+
+use crate::*;
 
 // metadata parsed from the individual file
 #[derive(Default)]
@@ -39,78 +32,35 @@ struct Metadata {
     audiohash: Option<[u8; 32]>,
 }
 
-// TODO: upload process time limits TODO: size limits
-pub async fn track_upload_server(state: crate::MioState, mut rx: UnboundedReceiver<(Uuid, Uuid, String)>) {
-    debug!("starting track_upload_server");
-    let (tx_gc, mut rx_gc) = unbounded_channel();
-
-    // joiner, this cleans up the join handles along with any errors that might have been
-    // propagated
-    let gc = tokio::spawn({
-        async move {
-            let mut queue: Vec<JoinHandle<_>> = vec![];
-            loop {
-                match timeout(Duration::from_secs(10), rx_gc.recv()).await {
-                    Ok(recv) => {
-                        if recv.is_none() {
-                            // if it returns none, this means the channel closed
-                            debug!("closing channel");
-                            break;
-                        }
-                        trace!("recv'd task");
-                        queue.push(recv.unwrap());
-                    },
-                    Err(_) => {
-                        if !queue.is_empty() {
-                            trace!("GC activate");
-                            let prev_len = queue.len();
-                            queue.retain(|task| !task.is_finished());
-                            trace!("cleaned {}", prev_len - queue.len());
-                        }
-                    },
-                }
-            }
+// TODO: upload process time limits
+//
+// TODO: size limits
+pub async fn track_upload_process(
+    state: MioState,
+    id: Uuid,
+    userid: Uuid,
+    orig_filename: String,
+) -> Result<(), StatusCode> {
+    // process metadata
+    let permit = state.lim.acquire().await.unwrap();
+    let mdata = tokio::task::spawn_blocking({
+        let orig_filename = orig_filename.clone();
+        move || {
+            get_metadata(format!("{}{}", DATA_DIR.get().unwrap(), id), orig_filename)
         }
-    });
-
-    // recviver that schedules the processing tasks
-    while let Some((id, userid, orig_filename)) = rx.recv().await {
-        trace!("sending task {id}");
-        tx_gc.send(tokio::spawn({
-            let db = state.db.clone();
-            let permit = state.lim.clone();
-            async move {
-                let permit = permit.acquire().await.unwrap();
-
-                // TODO: possibly log "Starting task..."
-                let mdata = tokio::task::spawn_blocking({
-                    let orig_filename = orig_filename.clone();
-                    move || {
-                        get_metadata(format!("{}{}", DATA_DIR.get().unwrap(), id).as_str(), orig_filename.as_str())
-                    }
-                }).await.expect("join failure");
-                drop(permit);
-                if let Err(err) = mdata {
-                    error!("ERROR processing {orig_filename}: {err}");
-
-                    // TODO: handle error
-                    return;
-                }
-                if let Err(err) = insert_into_db(db, id, userid, mdata.unwrap(), orig_filename.clone()).await {
-                    error!("ERROR querying the database for {orig_filename}: {err}");
-                    panic!("querying the database failed");
-                }
-            }
-        })).unwrap();
-    }
-    gc.await.unwrap();
+    }).await.expect("join failure").map_err(|e| {
+        Into::<StatusCode>::into(MioInnerError::TrackProcessingError(Level::Debug, e, StatusCode::BAD_REQUEST))
+    })?;
+    drop(permit);
+    // insert into the database
+    insert_into_db(state.db, id, userid, mdata, orig_filename).await.map_err(tr_conv_code)
 }
 
-fn get_metadata(fname: &str, orig_path: &str) -> Result<Metadata, anyhow::Error> {
+fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Error> {
     // TODO: make this timeout configurable
     let discover = gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(10))?;
     trace!("{orig_path}: creating discoverer");
-    let fname = glib::filename_to_uri(Path::new(fname).absolutize()?, None)?;
+    let fname = glib::filename_to_uri(Path::new(&fname).absolutize()?, None)?;
     trace!("{orig_path}: new uri created: '{fname}'");
     debug!("{orig_path}: begin discovery");
     let data = discover.discover_uri(&fname)?;
@@ -318,10 +268,10 @@ async fn insert_into_db(
     userid: Uuid,
     metadata: Metadata,
     orig_filename: String,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), TransactionError<MioInnerError>> {
     use mio_entity::*;
 
-    db.transaction::<_, _, DbErr>(|txn| Box::pin(async move {
+    db.transaction::<_, _, MioInnerError>(|txn| Box::pin(async move {
         // transfer ownership
         let hold = metadata;
         let metadata = &hold;
@@ -380,7 +330,8 @@ async fn insert_into_db(
 
         // finally, insert track. compare based on audio_hash
         //
-        // TODO: if track_new_row doesnt exist, throw an error, meaning that the track already existed
+        // TODO: if track_new_row doesnt exist, throw an error, meaning that the track
+        // already existed
         debug!("{orig_filename}: Filling track");
         let (track_new_row, track_id) = create_model_and_id(txn, Some(()), || {
             track::Column::AudioHash.eq(metadata.audiohash.unwrap().to_vec())
@@ -404,17 +355,16 @@ async fn insert_into_db(
         }, track::Column::Id).await?;
         if track_new_row.is_some() {
             trace!("{orig_filename}: track generated: {track_new_row:?}");
-        }
-        else {
+        } else {
             trace!("{orig_filename}: conflicting uuid found: {track_id:?}");
         }
         Ok(())
-    })).await.map_err(anyhow::Error::new)
+    })).await
 }
 
 // This abomination of traits, generics, and params is a generic function to
-// possibly return a new model, and possibly return the id that the track will link
-// to.
+// possibly return a new model, and possibly return the id that the track will
+// link to.
 async fn create_model_and_id<
     DBModel,
     IsSome,

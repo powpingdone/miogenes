@@ -6,7 +6,6 @@ use axum::routing::*;
 use futures::StreamExt;
 use log::*;
 use mio_common::*;
-use std::io::Read;
 use tokio::fs::{
     remove_file,
     File,
@@ -63,124 +62,38 @@ async fn track_upload(
     }));
     debug!("PUT /track/tu filename and uuid used: \"{orig_filename}\" -> \"{real_fname}\": {uuid}");
 
-    // base64 decoder
-    let (tx_b64, rx_b64) = std::sync::mpsc::channel();
-    let (tx_byte, mut rx_byte) = tokio::sync::mpsc::unbounded_channel();
-    let (tx_wait, rx_wait) = tokio::sync::oneshot::channel();
-    let inner_decode = tokio::task::spawn_blocking({
-        move || {
-            use base64::prelude::*;
-            use base64::read::DecoderReader;
-            
-            // used for turning a recv into a Read trait object
-            struct RecvReadWrapper {
-                inner: std::sync::mpsc::Receiver<u8>,
-            }
-
-            impl RecvReadWrapper {
-                pub fn new(inner: std::sync::mpsc::Receiver<u8>) -> Self {
-                    Self { inner }
-                }
-            }
-
-            impl std::io::Read for RecvReadWrapper {
-                fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-                    let mut ret_len = 0;
-                    for (mutbuf, byte) in buf.iter_mut().zip(self.inner.iter()) {
-                        *mutbuf = byte;
-                        ret_len += 1;
-                    }
-                    Ok(ret_len)
-                }
-            }
-
-            // wait for avail slot
-            let permit = rx_wait.blocking_recv().unwrap();
-
-            // this task takes in the base64 encoded body and decodes it. it does so by wrapping the rx_b64
-            // in a Read trait wrapper struct, and streaming the output via the Read::read function. it then
-            // buffers the bytes to write out in a 1MB block and sends it off. the remainder is then sent
-
-            // 1MB blocks
-            const BUFFER_SIZE: usize = 0x10000;
-            let reader = RecvReadWrapper::new(rx_b64);
-            let decoder = DecoderReader::new(reader, &BASE64_URL_SAFE_NO_PAD);
-            let mut buf = Vec::with_capacity(BUFFER_SIZE);
-            for x in decoder.bytes() {
-                buf.push(x.unwrap());
-                if buf.len() >= BUFFER_SIZE {
-                    tx_byte.send(buf.clone()).unwrap();
-                    buf.clear();
-                }
-            }
-            if !buf.is_empty() {
-                tx_byte.send(buf).unwrap();
-            }
-            drop(permit);
-        }
-    });
-
-    // file writer
-    let inner_write = tokio::spawn(async move {
-        // simple: write the vec sent over by inner_decode
-        while let Some(read) = rx_byte.recv().await {
-            if let Err(err) = file.write_all(&read).await {
-                error!("PUT /track/tu failed to write to file: {err}");
-                file.flush().await.expect("Failed to flush uploaded file: {}");
-                drop(file);
-                rm_file(uuid).await;
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        }
-        trace!("PUT /track/tu final flushing {uuid}");
-        file.shutdown().await.expect("Failed to shutdown uploaded file: {}");
-        Ok(())
-    });
-
     // TODO: filesize limits
     //
     // TODO: maybe don't panic on filesystem errors(?)
     //
     // TODO: upload timeout if body stops streaming
     //
-    // wait, then send unblocker
-    tx_wait.send(state.lim.acquire_owned().await.unwrap()).unwrap();
     // download the file
     while let Some(chunk) = payload.next().await {
         match chunk {
             Ok(chunk) => {
-                for x in chunk {
-                    if tx_b64.send(x).is_err() {
-                        error!("PUT /track/tu failed to send byte during streaming chunk, something else failed...");
-                        drop(tx_b64);
-                        inner_decode.await.unwrap();
-                        inner_write.await.unwrap()?;
-                        rm_file(uuid).await;
-                        return Err(StatusCode::BAD_REQUEST);
-                    }
+                if let Err(err) = file.write_all(&chunk).await {
+                    error!("PUT /track/tu failed to write to file: {err}");
+                    file.flush().await.expect("Failed to flush uploaded file: {}");
+                    drop(file);
+                    rm_file(uuid).await;
+                    return Err(StatusCode::INTERNAL_SERVER_ERROR);
                 }
             },
             // on err just delete the file
             Err(err) => {
                 // delete failed upload, as well as all other uploads per this req
                 error!("PUT /track/tu failure during streaming chunk: {err}");
-                drop(tx_b64);
-                inner_decode.await.unwrap();
-                inner_write.await.unwrap()?;
                 rm_file(uuid).await;
                 return Err(StatusCode::BAD_REQUEST);
             },
         }
     }
-    trace!("PUT /track/tu out of chunks");
-    drop(tx_b64);
-    trace!("PUT /track/tu closing decode");
-    inner_decode.await.unwrap();
-    trace!("PUT /track/tu closing write");
-    inner_write.await.unwrap()?;
+    trace!("PUT /track/tu out of chunks, final flushing {uuid}");
+    file.shutdown().await.expect("Failed to shutdown uploaded file: {}");
 
     // set off tasks to process files
-    state.proc_tracks_tx.send((uuid, key.id, orig_filename)).unwrap();
+    crate::subtasks::track_upload::track_upload_process(state, uuid, key.id, orig_filename).await?;
     Ok((StatusCode::OK, Json(retstructs::UploadReturn { uuid: vec![uuid] })))
 }
 

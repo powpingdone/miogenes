@@ -1,16 +1,13 @@
 use dioxus::{
-    html::input_data::MouseButton,
     prelude::*,
 };
 use dioxus_router::*;
 use gloo_net::http::Request;
 use js_sys::{
     ArrayBuffer,
-    JsString,
     Uint8Array,
 };
 use mio_common::*;
-use std::sync::Arc;
 use uuid::*;
 use wasm_bindgen::{
     prelude::*,
@@ -19,7 +16,6 @@ use wasm_bindgen::{
 use wasm_bindgen_futures::*;
 use web_sys::{
     Blob,
-    FileReader,
     HtmlInputElement,
 };
 
@@ -81,8 +77,14 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                         spawn_local({
                             let token = token.read().unwrap();
                             async move {
-                                use base64::prelude::*;
-
+                                let blob =
+                                    Uint8Array::new(
+                                        JsFuture::from(blob.array_buffer())
+                                            .await
+                                            .unwrap()
+                                            .dyn_ref::<ArrayBuffer>()
+                                            .unwrap(),
+                                    );
                                 let req =
                                     Request::put(
                                         &format!(
@@ -95,18 +97,13 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                                                 } },
                                             ).unwrap()
                                         ),
-                                    ).header("Authorization", &format!("Bearer {}", token)).body(
-                                        // maybe i could use atob?
-                                        BASE64_URL_SAFE_NO_PAD.encode(
-                                            Uint8Array::new(
-                                                JsFuture::from(blob.array_buffer())
-                                                    .await
-                                                    .unwrap()
-                                                    .dyn_ref::<ArrayBuffer>()
-                                                    .unwrap(),
-                                            ).to_vec(),
-                                        ),
-                                    ).send().await;
+                                    )
+                                        .header("Content-Length", &blob.length().to_string())
+                                        .header("Content-Type", "application/octet-stream")
+                                        .header("Authorization", &format!("Bearer {}", token))
+                                        .body(blob)
+                                        .send()
+                                        .await;
                                 log::trace!("{req:?}");
                             }
                         });

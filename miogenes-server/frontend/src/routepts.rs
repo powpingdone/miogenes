@@ -22,8 +22,7 @@ pub fn Login(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                 match tasks::get_token(user, pass).await {
                     Ok(good) => {
                         token.set(Some(good.token));
-                        rtr.navigate_to("/home");
-
+                        
                         // set cookie
                         #[cfg(target_arch = "wasm32")]
                         wasm_cookies::set(
@@ -33,7 +32,9 @@ pub fn Login(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                                 expires: Some((Utc::now() + Duration::days(2)).to_rfc2822().into()),
                                 ..CookieOptions::default()
                             },
-                        )
+                        );
+                        
+                        rtr.navigate_to("/home");
                     }
                     Err(err) => err_str.set(err),
                 }

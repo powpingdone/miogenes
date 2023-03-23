@@ -1,92 +1,43 @@
-use axum::http::{Request, StatusCode};
+use axum::http::{
+    Request,
+    StatusCode,
+};
 use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::*;
 use log::*;
-use mio_migration::{Migrator, MigratorTrait};
+use mio_migration::{
+    Migrator,
+    MigratorTrait,
+};
 use once_cell::sync::OnceCell;
-use sea_orm::{Database, DatabaseConnection, DbErr, TransactionError};
+use sea_orm::{
+    Database,
+    DatabaseConnection,
+};
 use std::sync::Arc;
-use thiserror::Error;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::Semaphore;
-use tower_http::services::{ServeDir, ServeFile};
-use uuid::Uuid;
+use tower_http::services::{
+    ServeDir,
+    ServeFile,
+};
 
 mod endpoints;
-
-use endpoints::*;
-
 mod subtasks;
-
-use subtasks::*;
-
 mod db;
 mod user;
+mod error;
+
+pub(crate) use crate::error::*;
+use endpoints::*;
 
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 
-// transaction errors used in the server
-#[derive(Debug, Error)]
-pub enum MioInnerError {
-    #[error("could not find: `{1}`")]
-    NotFound(Level, anyhow::Error),
-    #[error("DATABASE ERROR: `{1}`")]
-    DbError(Level, anyhow::Error),
-    #[error("user challenge failure: `{1}`")]
-    UserChallengedFail(Level, anyhow::Error, StatusCode),
-    #[error("user creation failure: `{1}`")]
-    UserCreationFail(Level, anyhow::Error, StatusCode),
-}
-
-impl From<sea_orm::DbErr> for MioInnerError {
-    fn from(err: sea_orm::DbErr) -> Self {
-        MioInnerError::DbError(Level::Error, anyhow::Error::new(err))
-    }
-}
-
-#[allow(clippy::from_over_into)]
-impl Into<StatusCode> for MioInnerError {
-    fn into(self) -> StatusCode {
-        // log errors
-        log!(
-            match self {
-                MioInnerError::NotFound(lvl, _)
-                | MioInnerError::DbError(lvl, _)
-                | MioInnerError::UserChallengedFail(lvl, _, _)
-                | MioInnerError::UserCreationFail(lvl, _, _) => lvl,
-            },
-            "{self}"
-        );
-
-        // return status
-        match self {
-            MioInnerError::NotFound(..) => StatusCode::NOT_FOUND,
-            MioInnerError::DbError(..) => StatusCode::INTERNAL_SERVER_ERROR,
-            MioInnerError::UserChallengedFail(_, _, code) => code,
-            MioInnerError::UserCreationFail(_, _, code) => code,
-        }
-    }
-}
-
-pub fn db_err(err: DbErr) -> StatusCode {
-    MioInnerError::from(err).into()
-}
-
-// change a transaction error to a StatusCode
-pub fn tr_conv_code(err: TransactionError<MioInnerError>) -> StatusCode {
-    match err {
-        TransactionError::Connection(err) => db_err(err),
-        TransactionError::Transaction(err) => err.into(),
-    }
-}
-
 #[derive(Clone)]
 pub struct MioState {
     db: DatabaseConnection,
-    proc_tracks_tx: UnboundedSender<(Uuid, Uuid, String)>,
     lim: Arc<Semaphore>,
 }
 
@@ -94,11 +45,12 @@ async fn version() -> impl IntoResponse {
     use konst::primitive::parse_u16;
     use konst::result::unwrap_ctx;
 
-    const VSTR: mio_common::Vers = mio_common::Vers::new(
-        unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_MAJOR"))),
-        unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_MINOR"))),
-        unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_PATCH"))),
-    );
+    const VSTR: mio_common::Vers =
+        mio_common::Vers::new(
+            unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_MAJOR"))),
+            unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_MINOR"))),
+            unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_PATCH"))),
+        );
     (StatusCode::OK, Json(VSTR))
 }
 
@@ -111,10 +63,8 @@ async fn main() -> anyhow::Result<()> {
     trace!("main: creating state");
     let db = Database::connect("sqlite:file:./files/db?mode=rwc").await?;
     Migrator::up(&db, None).await?;
-    let (proc_tracks_tx, proc_tracks_rx) = unbounded_channel();
     let state = MioState {
         db,
-        proc_tracks_tx,
         lim: Arc::new(Semaphore::const_new({
             let cpus = num_cpus::get();
             if cpus <= 1 {
@@ -127,38 +77,34 @@ async fn main() -> anyhow::Result<()> {
 
     // spin subtasks
     trace!("main: spinning subtasks");
-    let subtasks = [tokio::spawn({
-        let state = state.clone();
-        async move { track_upload::track_upload_server(state, proc_tracks_rx).await }
-    })];
+    let subtasks: Vec<tokio::task::JoinHandle<()>> = vec![];
     trace!("main: building router");
 
     // TODO: this needs to be not static
     static STATIC_DIR: &str = "./dist";
-    let router = Router::new()
-        .nest(
-            "/api",
-            Router::new()
-                .route("/ver", get(version))
-                .route("/search", get(search::search))
-                .nest("/track", track_manage::routes())
-                .nest("/query", query::routes())
-                .nest("/load", idquery::routes()),
-        )
-        .route_layer(
-            middleware::from_extractor_with_state::<user::Authenticate, _>(state.db.clone()),
-        )
-        .nest_service("/assets", ServeDir::new(STATIC_DIR))
-        .nest(
-            "/l",
-            Router::new()
-                .route("/login", get(user::login).post(user::refresh_token))
-                .route("/logout", post(user::logout))
-                .route("/signup", post(user::signup)),
-        )
-        .layer(axum::middleware::from_fn(log_req))
-        .fallback_service(ServeFile::new(&format!("{STATIC_DIR}/index.html")))
-        .with_state(state);
+    let router =
+        Router::new()
+            .nest(
+                "/api",
+                Router::new()
+                    .route("/ver", get(version))
+                    .route("/search", get(search::search))
+                    .nest("/track", track_manage::routes())
+                    .nest("/query", query::routes())
+                    .nest("/load", idquery::routes()),
+            )
+            .route_layer(middleware::from_extractor_with_state::<user::Authenticate, _>(state.db.clone()))
+            .nest_service("/assets", ServeDir::new(STATIC_DIR))
+            .nest(
+                "/l",
+                Router::new()
+                    .route("/login", get(user::login).post(user::refresh_token))
+                    .route("/logout", post(user::logout))
+                    .route("/signup", post(user::signup)),
+            )
+            .layer(axum::middleware::from_fn(log_req))
+            .fallback_service(ServeFile::new(&format!("{STATIC_DIR}/index.html")))
+            .with_state(state);
 
     // TODO: bind to user settings
     static BINDING: &str = "127.0.0.1:8081";
