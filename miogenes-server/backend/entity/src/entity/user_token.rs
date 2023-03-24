@@ -17,7 +17,7 @@ pub enum Relation {
         from = "Column::Id",
         to = "super::user::Column::Id",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "NoAction",
     )]
     User,
 }
@@ -28,4 +28,4 @@ impl Related<super::user::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}
+impl ActiveModelBehavior for ActiveModel { }

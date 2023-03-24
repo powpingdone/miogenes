@@ -1,11 +1,25 @@
 use dioxus::prelude::*;
 use dioxus_router::*;
 use log::*;
+use once_cell::sync::{
+    Lazy,
+    OnceCell,
+};
 use uuid::*;
 
 mod mainpage;
 mod routepts;
 mod tasks;
+
+static BASE_URL: Lazy<OnceCell<String>> = Lazy::new(|| {
+    let cell = OnceCell::new();
+    cell.set({
+        let url = web_sys::window().unwrap().location().origin().unwrap().to_string();
+        trace!("base url is {url}");
+        url
+    }).unwrap();
+    cell
+});
 
 #[inline_props]
 fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
@@ -26,8 +40,9 @@ fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
                             routepts::Signup {}
                         }
                         Route {
-                            to: ""
-                            Redirect {to : "/"}
+                            to: "" Redirect {
+                                to: "/"
+                            }
                         }
                     }
                 } else {

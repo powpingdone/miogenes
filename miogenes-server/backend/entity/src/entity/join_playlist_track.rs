@@ -17,7 +17,7 @@ pub enum Relation {
         from = "Column::TrackId",
         to = "super::track::Column::Id",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "NoAction",
     )]
     Track,
     #[sea_orm(
@@ -25,7 +25,7 @@ pub enum Relation {
         from = "Column::PlaylistId",
         to = "super::playlist::Column::Id",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "NoAction",
     )]
     Playlist,
 }
@@ -42,4 +42,4 @@ impl Related<super::playlist::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}
+impl ActiveModelBehavior for ActiveModel { }

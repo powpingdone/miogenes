@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::Path;
 use uuid::*;
-
 use crate::*;
 
 // metadata parsed from the individual file
@@ -52,6 +51,7 @@ pub async fn track_upload_process(
         Into::<StatusCode>::into(MioInnerError::TrackProcessingError(Level::Debug, e, StatusCode::BAD_REQUEST))
     })?;
     drop(permit);
+
     // insert into the database
     insert_into_db(state.db, id, userid, mdata, orig_filename).await.map_err(tr_conv_code)
 }

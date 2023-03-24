@@ -7,15 +7,15 @@ use thiserror::Error;
 // Internal server errors, depending on the issue
 #[derive(Debug, Error)]
 pub enum MioInnerError {
-    #[error("could not find: `{1}`")]
+    #[error("could not find: `{1}`. \nTRACE:\n{}", .1.backtrace())]
     NotFound(Level, anyhow::Error),
-    #[error("DATABASE ERROR: `{1}`")]
+    #[error("DATABASE ERROR: `{1}`. \nTRACE:\n{}", .1.backtrace())]
     DbError(Level, anyhow::Error),
-    #[error("user challenge failure: `{1}`")]
+    #[error("user challenge failure: `{1}`. \nTRACE:\n{}", .1.backtrace())]
     UserChallengedFail(Level, anyhow::Error, StatusCode),
-    #[error("user creation failure: `{1}`")]
+    #[error("user creation failure: `{1}`. \nTRACE:\n{}", .1.backtrace())]
     UserCreationFail(Level, anyhow::Error, StatusCode),
-    #[error("track processing error: `{1}`")]
+    #[error("track processing error: `{1}`. \nTRACE:\n{}", .1.backtrace())]
     TrackProcessingError(Level, anyhow::Error, StatusCode),
 }
 
@@ -26,7 +26,7 @@ impl From<sea_orm::DbErr> for MioInnerError {
     }
 }
 
-// actual logic that does the StatusCode and logging 
+// actual logic that does the StatusCode and logging
 #[allow(clippy::from_over_into)]
 impl Into<StatusCode> for MioInnerError {
     fn into(self) -> StatusCode {

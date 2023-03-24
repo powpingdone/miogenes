@@ -2,7 +2,6 @@ use axum::extract::State;
 use mio_common::*;
 use mio_entity::*;
 use sea_orm::*;
-
 use crate::*;
 
 // TODO: turn these endpoints into a stream
@@ -15,49 +14,45 @@ use crate::*;
 //
 // 3. does axum read out the stream as fast as possible?
 pub fn routes() -> Router<MioState> {
-    Router::new()
-        .route("/albums", get(get_albums))
-        .route("/playlists", get(get_playlists))
+    Router::new().route("/albums", get(get_albums)).route("/playlists", get(get_playlists))
 }
 
 async fn get_albums(
     State(state): State<MioState>,
     Extension(key): Extension<mio_entity::user::Model>,
 ) -> impl IntoResponse {
-    Ok::<_, StatusCode>((
-        StatusCode::OK,
-        Json(retstructs::Albums {
-            albums: 
-            Album::find()
-                .find_with_related(Track)
-                .filter(track::Column::Owner.eq(key.id))
-                .all(&state.db)
-                .await
-                .map_err(db_err)?
-                .into_iter()
-                .map(|(x, _)| x.id)
-                .collect(),
-        }),
-    ))
+    Ok::<_, StatusCode>(
+        (
+            StatusCode::OK,
+            Json(
+                retstructs::Albums {
+                    albums: Album::find()
+                        .join(JoinType::Join, album::Relation::Track.def())
+                        .filter(track::Column::Owner.eq(key.id))
+                        .all(&state.db)
+                        .await
+                        .map_err(db_err)?
+                        .into_iter()
+                        .map(|x| x.id)
+                        .collect(),
+                },
+            ),
+        ),
+    )
 }
 
 async fn get_playlists(
     State(state): State<MioState>,
     Extension(key): Extension<mio_entity::user::Model>,
 ) -> impl IntoResponse {
-    Ok::<_, StatusCode>((
-        StatusCode::OK,
-        Json(retstructs::Playlists {
-            lists: {
-                Playlist::find()
-                    .filter(playlist::Column::Owner.eq(key.id))
-                    .all(&state.db)
-                    .await
-                    .map_err(db_err)?
-                    .into_iter()
-                    .map(|x| x.id)
-                    .collect()
-            },
-        }),
-    ))
+    Ok::<_, StatusCode>((StatusCode::OK, Json(retstructs::Playlists { lists: {
+        Playlist::find()
+            .filter(playlist::Column::Owner.eq(key.id))
+            .all(&state.db)
+            .await
+            .map_err(db_err)?
+            .into_iter()
+            .map(|x| x.id)
+            .collect()
+    } })))
 }
