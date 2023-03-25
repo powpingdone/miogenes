@@ -2,24 +2,16 @@ use dioxus::{
     prelude::*,
 };
 use dioxus_router::*;
-use js_sys::{
-    ArrayBuffer,
-    Uint8Array,
-};
-use mio_common::*;
 use uuid::*;
 use wasm_bindgen::{
-    prelude::*,
     JsCast,
 };
-use wasm_bindgen_futures::*;
 use web_sys::{
-    Blob,
     HtmlInputElement,
 };
-use reqwest::Client;
 use log::*;
-use crate::BASE_URL;
+use crate::mainpage::tasks::*;
+
 
 #[inline_props]
 #[allow(non_snake_case)]
@@ -37,9 +29,18 @@ pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
 #[inline_props]
 #[allow(non_snake_case)]
 pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
-    let fetch_albums = use_future(&cx, (token,), |(token,)| fetch_albums(token.read().unwrap()));
+    // semi hack: because we cannot pass a UseFuture to a coroutine (lifetime
+    // shenatigans and whatnot), pass a tiny bit of state around to restart on change
+    let reset_albums = use_state::<u8>(&cx, || 0);
+    let fetch_albums = use_future(&cx, (token, reset_albums), |(token, _)| fetch_albums(token.read().unwrap()));
+    let server_upload =
+        use_coroutine(&cx, |rx| upload_to_server(rx, reset_albums.to_owned(), token.read().unwrap()));
     cx.render(rsx!{
         p {
+            div {
+                hidden: true,
+                reset_albums.to_string()
+            }
             format!("{:?}", fetch_albums.value())
         }
         input {
@@ -64,93 +65,10 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                         .files()
                         .unwrap();
                 for pos in 0 .. files.length() {
-                    let file = files.item(pos).unwrap();
-                    let fname = file.name();
-                    let blob: Blob = file.into();
-                    spawn_local({
-                        let token = token.read().unwrap();
-                        async move {
-                            let blob =
-                                Uint8Array::new(
-                                    JsFuture::from(blob.array_buffer())
-                                        .await
-                                        .unwrap()
-                                        .dyn_ref::<ArrayBuffer>()
-                                        .unwrap(),
-                                ).to_vec();
-                            let client = Client::new();
-                            let req =
-                                client
-                                    .put(BASE_URL.get().unwrap().to_owned() + "/api/track/tu")
-                                    .query(&msgstructs::TrackUploadQuery { fname: if fname != "" {
-                                        Some(fname)
-                                    } else {
-                                        None
-                                    } })
-                                    .header("Content-Length", &blob.len().to_string())
-                                    .header("Content-Type", "application/octet-stream")
-                                    .header("Authorization", &format!("Bearer {}", token))
-                                    .body(blob)
-                                    .send()
-                                    .await;
-                            log::trace!("{req:?}");
-                        }
-                    });
-                    fetch_albums.restart();
+                    server_upload.send(files.item(pos).unwrap());
                 }
             },
             "Send over."
         }
     })
-}
-
-async fn fetch_albums(token: Uuid) -> Vec<retstructs::Album> {
-    // fetch initial ids
-    let client = Client::new();
-    let req =
-        client
-            .get(BASE_URL.get().unwrap().to_owned() + "/api/load/albums")
-            .bearer_auth(token)
-            .send()
-            .await
-            .unwrap()
-            .json::<retstructs::Albums>()
-            .await
-            .unwrap();
-    let ls = tokio::task::LocalSet::new();
-    ls.run_until(async move {
-        // then fetch the album metadatas
-        let fetch = req.albums.into_iter().map(|uuid| {
-            let client = client.clone();
-            tokio::task::spawn_local(async move {
-                let req =
-                    client
-                        .get(BASE_URL.get().unwrap().to_owned() + "/api/query/ai")
-                        .query(&msgstructs::IdInfoQuery { id: uuid })
-                        .bearer_auth(token)
-                        .send()
-                        .await;
-                if let Err(err) = req {
-                    error!("error fetching album {uuid}: {err:?}");
-                    return None;
-                }
-                match req.unwrap().json::<retstructs::Album>().await {
-                    Ok(ret) => Some(ret),
-                    Err(err) => {
-                        error!("error serializing album {uuid}: {err:?}");
-                        None
-                    },
-                }
-            })
-        }).collect::<Vec<_>>();
-
-        // finally, collect the albums
-        let mut albums = vec![];
-        for task in fetch {
-            if let Ok(Some(ret)) = task.await {
-                albums.push(ret);
-            }
-        }
-        albums
-    }).await
 }

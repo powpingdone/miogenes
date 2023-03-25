@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use axum::extract::State;
 use mio_common::*;
 use mio_entity::*;
@@ -34,6 +35,10 @@ async fn get_albums(
                         .map_err(db_err)?
                         .into_iter()
                         .map(|x| x.id)
+                        // TODO: this doesn't seem to return unique uuids, but it returns duplicates based
+                        // on how many tracks exist. This hack makes it only unique uuids
+                        .collect::<HashSet<_>>()
+                        .into_iter()
                         .collect(),
                 },
             ),

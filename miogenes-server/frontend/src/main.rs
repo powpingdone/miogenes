@@ -12,6 +12,7 @@ mod routepts;
 mod tasks;
 
 static BASE_URL: Lazy<OnceCell<String>> = Lazy::new(|| {
+    // TODO: configure base url from server
     let cell = OnceCell::new();
     cell.set({
         let url = web_sys::window().unwrap().location().origin().unwrap().to_string();
