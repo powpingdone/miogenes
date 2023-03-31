@@ -22,19 +22,28 @@ use reqwest::{
 use log::*;
 use crate::BASE_URL;
 
-pub async fn upload_to_server(mut rx: UnboundedReceiver<web_sys::File>, restart_task: UseState<u8>, token: Uuid) {
+pub async fn upload_to_server(
+    mut rx: UnboundedReceiver<Vec<web_sys::File>>,
+    restart_task: UseState<u8>,
+    token: Uuid,
+) {
     let ls = tokio::task::LocalSet::new();
     loop {
-        let recv = rx.next().await.unwrap();
         ls.run_until({
             async {
-                let mut upload_tasks =
-                    vec![(recv.name(), tokio::task::spawn_local(upload_to_server_inner_task(recv, token)))];
-                while let Ok(Some(file)) = rx.try_next() {
-                    upload_tasks.push(
-                        (file.name(), tokio::task::spawn_local(upload_to_server_inner_task(file, token))),
-                    );
-                }
+                let upload_tasks =
+                    rx
+                        .next()
+                        .await
+                        .unwrap()
+                        .into_iter()
+                        .map(
+                            |file| (
+                                file.name(),
+                                tokio::task::spawn_local(upload_to_server_inner_task(file, token)),
+                            ),
+                        )
+                        .collect::<Vec<_>>();
                 for (fname, task) in upload_tasks.into_iter() {
                     match task.await {
                         Ok(Ok(code)) if code == StatusCode::OK => {
@@ -54,6 +63,10 @@ pub async fn upload_to_server(mut rx: UnboundedReceiver<web_sys::File>, restart_
                 }
             }
         }).await;
+
+        // overflowing_add is used here to indicate that this _will_ overflow. this is
+        // only used when doing debugging because debugging enables int overflow checking
+        // otherwise, this optimizes out to the exact same thing as x + 1
         restart_task.modify(|x| x.overflowing_add(1).0);
     }
 }

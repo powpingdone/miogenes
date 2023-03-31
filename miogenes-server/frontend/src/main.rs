@@ -15,7 +15,7 @@ static BASE_URL: Lazy<OnceCell<String>> = Lazy::new(|| {
     // TODO: configure base url from server
     let cell = OnceCell::new();
     cell.set({
-        let url = web_sys::window().unwrap().location().origin().unwrap().to_string();
+        let url = web_sys::window().unwrap().location().origin().unwrap();
         trace!("base url is {url}");
         url
     }).unwrap();
@@ -41,9 +41,8 @@ fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
                             routepts::Signup {}
                         }
                         Route {
-                            to: "" Redirect {
-                                to: "/"
-                            }
+                            to: "",
+                            Redirect { to: "/" }
                         }
                     }
                 } else {

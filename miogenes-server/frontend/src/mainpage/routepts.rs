@@ -12,7 +12,6 @@ use web_sys::{
 use log::*;
 use crate::mainpage::tasks::*;
 
-
 #[inline_props]
 #[allow(non_snake_case)]
 pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
@@ -51,7 +50,6 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
         button {
             // TODO: move this into it's own function
             onclick: move | evt | {
-                log::trace!("onclick");
                 evt.stop_propagation();
                 let files =
                     web_sys::window()
@@ -64,11 +62,15 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                         .unwrap()
                         .files()
                         .unwrap();
-                for pos in 0 .. files.length() {
-                    server_upload.send(files.item(pos).unwrap());
-                }
+                server_upload.send((0 .. files.length()).map(|x| files.item(x).unwrap()).collect());
             },
             "Send over."
         }
     })
+}
+
+#[inline_props]
+#[allow(non_snake_case)]
+pub fn AlbumArt(cx: Scope, token: UseRef<Option<Uuid>>, cover_art: Uuid) -> Element {
+    None
 }
