@@ -2,6 +2,7 @@ use dioxus::{
     prelude::*,
 };
 use dioxus_router::*;
+use reqwest::StatusCode;
 use uuid::*;
 use wasm_bindgen::{
     JsCast,
@@ -72,5 +73,26 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
 #[inline_props]
 #[allow(non_snake_case)]
 pub fn AlbumArt(cx: Scope, token: UseRef<Option<Uuid>>, cover_art: Uuid) -> Element {
+    let fetch = use_future(&cx, (token, cover_art), |(token, cover_art)| async move {
+        let cl = reqwest::Client::new();
+        let resp =
+            cl
+                .get(crate::BASE_URL.get().unwrap().to_owned() + "/api/query/ca")
+                .bearer_auth(token.read().unwrap())
+                .query(&mio_common::msgstructs::IdInfoQuery { id: cover_art })
+                .send()
+                .await;
+        match resp {
+            Ok(resp) if resp.status() == StatusCode::OK => {
+                todo!()
+            },
+            Ok(resp) => {
+                todo!()
+            },
+            Err(err) => {
+                todo!()
+            },
+        }
+    });
     None
 }
