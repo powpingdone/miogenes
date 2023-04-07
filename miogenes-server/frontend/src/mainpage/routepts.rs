@@ -2,6 +2,7 @@ use dioxus::{
     prelude::*,
 };
 use dioxus_router::*;
+use mio_common::retstructs;
 use reqwest::StatusCode;
 use uuid::*;
 use wasm_bindgen::{
@@ -84,13 +85,13 @@ pub fn AlbumArt(cx: Scope, token: UseRef<Option<Uuid>>, cover_art: Uuid) -> Elem
                 .await;
         match resp {
             Ok(resp) if resp.status() == StatusCode::OK => {
-                todo!()
+                Ok(resp.json::<retstructs::CoverArt>().await.unwrap().data)
             },
             Ok(resp) => {
-                todo!()
+                Err(todo!())
             },
             Err(err) => {
-                todo!()
+                Err(todo!())
             },
         }
     });

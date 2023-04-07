@@ -1,26 +1,13 @@
 use dioxus::prelude::*;
 use dioxus_router::*;
 use log::*;
-use once_cell::sync::{
-    Lazy,
-    OnceCell,
-};
 use uuid::*;
 
 mod mainpage;
 mod routepts;
 mod tasks;
-
-static BASE_URL: Lazy<OnceCell<String>> = Lazy::new(|| {
-    // TODO: configure base url from server
-    let cell = OnceCell::new();
-    cell.set({
-        let url = web_sys::window().unwrap().location().origin().unwrap();
-        trace!("base url is {url}");
-        url
-    }).unwrap();
-    cell
-});
+mod static_assets;
+pub(crate) use static_assets::*;
 
 #[inline_props]
 fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
