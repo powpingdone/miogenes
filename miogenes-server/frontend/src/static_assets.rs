@@ -1,79 +1,48 @@
-use std::task::Poll;
-use std::pin::Pin;
-use std::task::Context;
-use std::future::Future;
-use futures::{
-    Stream,
-    FutureExt,
-};
 use log::*;
-use once_cell::sync::{
-    Lazy as SyncLazy,
-    OnceCell as SyncOnceCell,
+use std::sync::LazyLock;
+use tokio::sync::{
+    OnceCell as AsyncOnceCell,
 };
+use std::sync::OnceLock;
+use uuid::Uuid;
 
-pub static BASE_URL: SyncLazy<SyncOnceCell<String>> = SyncLazy::new(|| {
+pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
     // TODO: configure base url from server
-    let cell = SyncOnceCell::new();
-    cell.set({
-        let url = web_sys::window().unwrap().location().origin().unwrap();
-        trace!("base url is {url}");
-        url
-    }).unwrap();
-    cell
+    let url = web_sys::window().unwrap().location().origin().unwrap();
+    trace!("base url is {url}");
+    url
 });
-type ReqFut = dyn Future<Output = Result<reqwest::Response, reqwest::Error>>;
 
+// TODO: setup lazy fetch for static images
+//
 // Struct to lazily fetch a static image.
-struct StaticImg {
+struct _StaticImg {
     url: &'static str,
-    cl: Option<reqwest::Client>,
-    cell: Option<&'static Vec<u8>>,
-    fetch: Option<Pin<Box<ReqFut>>>,
+    cell: AsyncOnceCell<Vec<u8>>,
+    auth: OnceLock<Uuid>,
 }
 
-impl StaticImg {
+impl _StaticImg {
     const fn new(url: &'static str) -> Self {
         Self {
             url,
-            cl: None,
-            cell: None,
-            fetch: None,
+            cell: AsyncOnceCell::const_new(),
+            auth: OnceLock::new(),
         }
     }
-}
 
-impl Stream for StaticImg {
-    type Item = &'static Vec<u8>;
+    pub fn set_auth(&self, auth: Uuid) -> Result<(), Uuid> {
+        self.auth.set(auth)
+    }
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // if we have actually completed
-        if self.cell.is_some() {
-            return Poll::Ready(self.cell);
-        }
+    pub async fn fetch(&'static mut self) -> Result<&Vec<u8>, anyhow::Error> {
+        self.cell.get_or_try_init(|| async {
+            let cl = reqwest::Client::new();
 
-        // init client
-        if self.cl.is_none() {
-            self.cl = Some({
-                reqwest::Client::new()
-            });
-        }
-        // init fetch
-        if let Some(ref cl) = self.cl {
-            if self.fetch.is_none() {
-                self.fetch = Some(Box::pin(cl.get({
-                    let mut url = BASE_URL.get().unwrap().to_owned();
-                    url.push_str(&self.url);
-                    url
-                }).send()));
-            }
-        }
-        if let Some(ref mut fetch) = self.fetch {
-            match fetch.poll_unpin(cx) {
-                Poll::Pending => return Poll::Pending,
-                Poll::Ready(ret) => todo!(),
-            }
-        }
-        todo!()
+            // TODO: figure out url for this
+            //
+            // TODO: auth?
+            Ok(cl.get(BASE_URL.to_owned() + "/api/theme/wait").send().await?.bytes().await?.to_vec())
+        }).await
     }
 }

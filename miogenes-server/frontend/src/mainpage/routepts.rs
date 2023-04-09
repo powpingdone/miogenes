@@ -36,13 +36,32 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
     let fetch_albums = use_future(&cx, (token, reset_albums), |(token, _)| fetch_albums(token.read().unwrap()));
     let server_upload =
         use_coroutine(&cx, |rx| upload_to_server(rx, reset_albums.to_owned(), token.read().unwrap()));
+    let curr_token = token;
     cx.render(rsx!{
         p {
             div {
                 hidden: true,
                 reset_albums.to_string()
             }
-            format!("{:?}", fetch_albums.value())
+            {
+                match fetch_albums.value() {
+                    Some(albums) => {
+                        let albums = albums.iter().map(|x| rsx!{
+                            AlbumArt {
+                                token: curr_token.clone(),
+                                cover_art: x.id,
+                            }
+                        });
+
+                        rsx!{
+                            albums
+                        }
+                    },
+                    None => rsx!{
+                        div {}
+                    },
+                }
+            }
         }
         input {
             r#type: "file",
@@ -71,21 +90,30 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
     })
 }
 
+const B64ENC: base64::engine::general_purpose::GeneralPurpose = base64::engine::general_purpose::STANDARD;
+
 #[inline_props]
 #[allow(non_snake_case)]
 pub fn AlbumArt(cx: Scope, token: UseRef<Option<Uuid>>, cover_art: Uuid) -> Element {
+    use base64::Engine;
+
     let fetch = use_future(&cx, (token, cover_art), |(token, cover_art)| async move {
         let cl = reqwest::Client::new();
         let resp =
             cl
-                .get(crate::BASE_URL.get().unwrap().to_owned() + "/api/query/ca")
+                .get(crate::BASE_URL.to_owned() + "/api/query/ca")
                 .bearer_auth(token.read().unwrap())
                 .query(&mio_common::msgstructs::IdInfoQuery { id: cover_art })
                 .send()
                 .await;
         match resp {
             Ok(resp) if resp.status() == StatusCode::OK => {
-                Ok(resp.json::<retstructs::CoverArt>().await.unwrap().data)
+                Ok(
+                    format!(
+                        "data:image/webp;base64,{}",
+                        B64ENC.encode(resp.json::<retstructs::CoverArt>().await.unwrap().data)
+                    ),
+                )
             },
             Ok(resp) => {
                 Err(todo!())
@@ -95,5 +123,13 @@ pub fn AlbumArt(cx: Scope, token: UseRef<Option<Uuid>>, cover_art: Uuid) -> Elem
             },
         }
     });
-    None
+    cx.render(rsx!{
+        img { src: {
+            match fetch.value() {
+                Some(Ok(ret)) => ret,
+                Some(Err(_)) => todo!(),
+                None => "",
+            }
+        } }
+    })
 }

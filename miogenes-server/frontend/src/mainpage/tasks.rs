@@ -81,7 +81,7 @@ pub async fn upload_to_server_inner_task(file: web_sys::File, token: Uuid) -> Re
     let client = Client::new();
     let req =
         client
-            .put(BASE_URL.get().unwrap().to_owned() + "/api/track/tu")
+            .put(BASE_URL.to_owned() + "/api/track/tu")
             .query(&msgstructs::TrackUploadQuery { fname: if fname != "" {
                 Some(fname)
             } else {
@@ -103,7 +103,7 @@ pub async fn fetch_albums(token: Uuid) -> Vec<retstructs::Album> {
     let client = Client::new();
     let req =
         client
-            .get(BASE_URL.get().unwrap().to_owned() + "/api/load/albums")
+            .get(BASE_URL.to_owned() + "/api/load/albums")
             .bearer_auth(token)
             .send()
             .await
@@ -119,7 +119,7 @@ pub async fn fetch_albums(token: Uuid) -> Vec<retstructs::Album> {
             tokio::task::spawn_local(async move {
                 let req =
                     client
-                        .get(BASE_URL.get().unwrap().to_owned() + "/api/query/ai")
+                        .get(BASE_URL.to_owned() + "/api/query/ai")
                         .query(&msgstructs::IdInfoQuery { id: uuid })
                         .bearer_auth(token)
                         .send()

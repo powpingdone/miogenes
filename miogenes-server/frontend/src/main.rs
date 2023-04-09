@@ -1,3 +1,4 @@
+#![feature(lazy_cell)]
 use dioxus::prelude::*;
 use dioxus_router::*;
 use log::*;
