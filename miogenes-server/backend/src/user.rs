@@ -20,7 +20,11 @@ use axum::headers::authorization::{
     Basic,
     Bearer,
 };
-use axum::headers::Authorization;
+use axum::headers::{
+    Authorization,
+    Cookie,
+    SetCookie,
+};
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -57,20 +61,44 @@ where
     type Rejection = StatusCode;
 
     async fn from_request_parts(req: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        // get user token
-        let auth = Uuid::parse_str(req.extract::<TypedHeader<Authorization<Bearer>>>().await.map_err(|err| -> StatusCode {
-            MioInnerError::UserChallengedFail(
-                Level::Debug,
-                anyhow!("auth header failure: {err}"),
-                StatusCode::BAD_REQUEST,
-            ).into()
-        })?.token()).map_err(|err| -> StatusCode {
-            MioInnerError::UserChallengedFail(
-                Level::Debug,
-                anyhow!("could not parse token: {err}"),
-                StatusCode::BAD_REQUEST,
-            ).into()
-        })?;
+        // get user token from either a Authorization Bearer header or from cookies
+        let auth = {
+            // auth header
+            let authheader: Result<TypedHeader<Authorization<Bearer>>, _> = req.extract().await;
+            let cookies: Result<TypedHeader<Cookie>, _> = req.extract().await;
+            let raw_token = if let Ok(auth_bearer) = authheader.as_ref() {
+                auth_bearer.token()
+            } else if let Ok(cookies) = cookies.as_ref() {
+                cookies.get("Token").ok_or_else(|| -> StatusCode {
+                    MioInnerError::UserChallengedFail(
+                        Level::Debug,
+                        anyhow!("'Token' does not exist in cookies"),
+                        StatusCode::BAD_REQUEST,
+                    ).into()
+                })?
+            } else {
+                return Err(
+                    MioInnerError::UserChallengedFail(
+                        Level::Debug,
+                        anyhow!(
+                            "failed to get token as both auth and cookie were in err: (auth: {}, cookie: {})",
+                            authheader.unwrap_err(),
+                            cookies.unwrap_err()
+                        ),
+                        StatusCode::BAD_REQUEST,
+                    ).into(),
+                );
+            };
+            Uuid::parse_str(raw_token).map_err(|err| -> StatusCode {
+                MioInnerError::UserChallengedFail(
+                    Level::Debug,
+                    anyhow!("could not parse token: {err}"),
+                    StatusCode::BAD_REQUEST,
+                ).into()
+            })?
+        };
+
+        // get user from db
         let user = state.transaction(|txn| {
             Box::pin(async move {
                 // check for existence and validity of token

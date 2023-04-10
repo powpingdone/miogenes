@@ -25,7 +25,6 @@ use crate::BASE_URL;
 pub async fn upload_to_server(
     mut rx: UnboundedReceiver<Vec<web_sys::File>>,
     restart_task: UseState<u8>,
-    token: Uuid,
 ) {
     let ls = tokio::task::LocalSet::new();
     loop {
@@ -40,7 +39,7 @@ pub async fn upload_to_server(
                         .map(
                             |file| (
                                 file.name(),
-                                tokio::task::spawn_local(upload_to_server_inner_task(file, token)),
+                                tokio::task::spawn_local(upload_to_server_inner_task(file)),
                             ),
                         )
                         .collect::<Vec<_>>();
@@ -71,7 +70,7 @@ pub async fn upload_to_server(
     }
 }
 
-pub async fn upload_to_server_inner_task(file: web_sys::File, token: Uuid) -> Result<StatusCode, anyhow::Error> {
+pub async fn upload_to_server_inner_task(file: web_sys::File) -> Result<StatusCode, anyhow::Error> {
     let fname = file.name();
     let blob: Blob = file.into();
     let blob =
@@ -81,7 +80,7 @@ pub async fn upload_to_server_inner_task(file: web_sys::File, token: Uuid) -> Re
     let client = Client::new();
     let req =
         client
-            .put(BASE_URL.to_owned() + "/api/track/tu")
+            .put(format!("{}/api/track/tu", BASE_URL.get().unwrap()))
             .query(&msgstructs::TrackUploadQuery { fname: if fname != "" {
                 Some(fname)
             } else {
@@ -89,22 +88,20 @@ pub async fn upload_to_server_inner_task(file: web_sys::File, token: Uuid) -> Re
             } })
             .header("Content-Length", &blob.len().to_string())
             .header("Content-Type", "application/octet-stream")
-            .bearer_auth(token)
             .body(blob)
             .send()
             .await?;
     Ok(req.status())
 }
 
-pub async fn fetch_albums(token: Uuid) -> Vec<retstructs::Album> {
+pub async fn fetch_albums() -> Vec<retstructs::Album> {
     // TODO: caching
     //
     // fetch initial ids
     let client = Client::new();
     let req =
         client
-            .get(BASE_URL.to_owned() + "/api/load/albums")
-            .bearer_auth(token)
+            .get(format!("{}/api/load/albums", BASE_URL.get().unwrap()))
             .send()
             .await
             .unwrap()
@@ -119,9 +116,8 @@ pub async fn fetch_albums(token: Uuid) -> Vec<retstructs::Album> {
             tokio::task::spawn_local(async move {
                 let req =
                     client
-                        .get(BASE_URL.to_owned() + "/api/query/ai")
+                        .get(format!("{}/api/query/ai", BASE_URL.get().unwrap()))
                         .query(&msgstructs::IdInfoQuery { id: uuid })
-                        .bearer_auth(token)
                         .send()
                         .await;
                 if let Err(err) = req {

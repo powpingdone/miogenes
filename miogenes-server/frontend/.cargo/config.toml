@@ -1,12 +1,3 @@
-cargo-features = ["per-package-target"]
-
-[package]
-forced-target = "wasm32-unknown-unknown"
-default-target = "wasm32-unknown-unknown"
 
 [build]
 target = "wasm32-unknown-unknown"
-rustflags = '-Ctarget-feature=+atomics,+bulk-memory'
-
-[unstable]
-build-std = ['std', 'panic_abort']

@@ -106,21 +106,19 @@ async fn cover_art(
     Ok::<_, StatusCode>(
         (
             StatusCode::OK,
-            Json(
-                CoverArt::find_by_id(cover_art)
-                    .join(JoinType::Join, cover_art::Relation::Track.def())
-                    .filter(track::Column::Owner.eq(key.id))
-                    .one(&state.db)
-                    .await
-                    .map_err(db_err)?
-                    .ok_or_else(|| {
-                        Into::<StatusCode>::into(
-                            MioInnerError::NotFound(Level::Debug, anyhow!("could not find cover art {cover_art}")),
-                        )
-                    })?
-                    .web_out(&state.db)
-                    .await,
-            ),
+            CoverArt::find_by_id(cover_art)
+                .join(JoinType::Join, cover_art::Relation::Track.def())
+                .filter(track::Column::Owner.eq(key.id))
+                .one(&state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| {
+                    Into::<StatusCode>::into(
+                        MioInnerError::NotFound(Level::Debug, anyhow!("could not find cover art {cover_art}")),
+                    )
+                })?
+                .web_out(&state.db)
+                .await,
         ),
     )
 }

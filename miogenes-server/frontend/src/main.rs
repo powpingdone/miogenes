@@ -1,4 +1,3 @@
-#![feature(lazy_cell)]
 use dioxus::prelude::*;
 use dioxus_router::*;
 use log::*;
@@ -8,6 +7,7 @@ mod mainpage;
 mod routepts;
 mod tasks;
 mod static_assets;
+
 pub(crate) use static_assets::*;
 
 #[inline_props]
@@ -78,5 +78,5 @@ fn main() {
             None
         },
     };
-    dioxus_web::launch_with_props(app_main, app_mainProps { token }, dioxus_web::Config::default());
+    dioxus_web::launch_with_props(app_main, app_mainProps { token }, dioxus_web::Config::default())
 }

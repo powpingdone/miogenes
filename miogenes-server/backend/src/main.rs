@@ -1,6 +1,7 @@
 use axum::http::{
     Request,
     StatusCode,
+    HeaderName,
 };
 use axum::middleware::Next;
 use axum::response::IntoResponse;
@@ -16,12 +17,14 @@ use sea_orm::{
     Database,
     DatabaseConnection,
 };
+use tower::ServiceBuilder;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tower_http::services::{
     ServeDir,
     ServeFile,
 };
+use tower_http::set_header::SetResponseHeaderLayer;
 
 mod endpoints;
 mod subtasks;
@@ -104,6 +107,13 @@ async fn main() -> anyhow::Result<()> {
             )
             .layer(axum::middleware::from_fn(log_req))
             .fallback_service(ServeFile::new(&format!("{STATIC_DIR}/index.html")))
+            //.layer(ServiceBuilder::new().map_response(|mut resp: axum::response::Response| {
+            //    let headers = resp.headers_mut();
+            //    headers.append("Cross-Origin-Opener-Policy", "same-origin".parse().unwrap());
+            //    headers.append("Cross-Origin-Resource-Policy", "same-origin".parse().unwrap());
+            //    headers.append("Cross-Origin-Embedder-Policy", "require-corp".parse().unwrap());
+            //    resp
+            //}))
             .with_state(state);
 
     // TODO: bind to user settings

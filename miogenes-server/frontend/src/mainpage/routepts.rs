@@ -2,8 +2,7 @@ use dioxus::{
     prelude::*,
 };
 use dioxus_router::*;
-use mio_common::retstructs;
-use reqwest::StatusCode;
+use mio_common::retstructs::Album;
 use uuid::*;
 use wasm_bindgen::{
     JsCast,
@@ -11,17 +10,18 @@ use wasm_bindgen::{
 use web_sys::{
     HtmlInputElement,
 };
-use log::*;
 use crate::mainpage::tasks::*;
 
 #[inline_props]
 #[allow(non_snake_case)]
 pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
+    // TODO: on req fail, check if it's a failure related to auth, and if so, delete
+    // the Token cookie and refresh the page
     cx.render(rsx!{
         Router {
             Route {
                 to: "/",
-                HomePage { token: token.clone() }
+                HomePage {}
             }
         }
     })
@@ -29,14 +29,12 @@ pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
 
 #[inline_props]
 #[allow(non_snake_case)]
-pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
+pub fn HomePage(cx: Scope) -> Element {
     // semi hack: because we cannot pass a UseFuture to a coroutine (lifetime
     // shenatigans and whatnot), pass a tiny bit of state around to restart on change
     let reset_albums = use_state::<u8>(&cx, || 0);
-    let fetch_albums = use_future(&cx, (token, reset_albums), |(token, _)| fetch_albums(token.read().unwrap()));
-    let server_upload =
-        use_coroutine(&cx, |rx| upload_to_server(rx, reset_albums.to_owned(), token.read().unwrap()));
-    let curr_token = token;
+    let fetch_albums = use_future(&cx, reset_albums, |_| fetch_albums());
+    let server_upload = use_coroutine(&cx, |rx| upload_to_server(rx, reset_albums.to_owned()));
     cx.render(rsx!{
         p {
             div {
@@ -47,10 +45,7 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
                 match fetch_albums.value() {
                     Some(albums) => {
                         let albums = albums.iter().map(|x| rsx!{
-                            AlbumArt {
-                                token: curr_token.clone(),
-                                cover_art: x.id,
-                            }
+                            CoverArt { album: x }
                         });
 
                         rsx!{
@@ -90,46 +85,54 @@ pub fn HomePage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
     })
 }
 
-const B64ENC: base64::engine::general_purpose::GeneralPurpose = base64::engine::general_purpose::STANDARD;
-
 #[inline_props]
 #[allow(non_snake_case)]
-pub fn AlbumArt(cx: Scope, token: UseRef<Option<Uuid>>, cover_art: Uuid) -> Element {
-    use base64::Engine;
-
-    let fetch = use_future(&cx, (token, cover_art), |(token, cover_art)| async move {
+pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
+    // TODO: album with no tracks?
+    //
+    // TODO: albums can have multiple different cover arts
+    let track_id = album.tracks[0];
+    let fetch = use_future(cx, (), |()| async move {
         let cl = reqwest::Client::new();
-        let resp =
+        let ret =
             cl
-                .get(crate::BASE_URL.to_owned() + "/api/query/ca")
-                .bearer_auth(token.read().unwrap())
-                .query(&mio_common::msgstructs::IdInfoQuery { id: cover_art })
-                .send()
-                .await;
-        match resp {
-            Ok(resp) if resp.status() == StatusCode::OK => {
-                Ok(
+                .get(
                     format!(
-                        "data:image/webp;base64,{}",
-                        B64ENC.encode(resp.json::<retstructs::CoverArt>().await.unwrap().data)
+                        "{}/api/query/ti?{}",
+                        crate::BASE_URL.get().unwrap(),
+                        serde_urlencoded::to_string(&mio_common::msgstructs::IdInfoQuery { id: track_id }).unwrap()
                     ),
                 )
-            },
-            Ok(resp) => {
-                Err(todo!())
-            },
-            Err(err) => {
-                Err(todo!())
-            },
+                .send()
+                .await
+                .unwrap()
+                .json::<mio_common::retstructs::Track>()
+                .await
+                .unwrap();
+        if let Some(id) = ret.cover_art {
+            Some(
+                format!(
+                    "{}/api/query/ca?{}",
+                    crate::BASE_URL.get().unwrap(),
+                    serde_urlencoded::to_string(&mio_common::msgstructs::IdInfoQuery { id }).unwrap()
+                ),
+            )
+        } else {
+            None
         }
     });
     cx.render(rsx!{
-        img { src: {
+        {
             match fetch.value() {
-                Some(Ok(ret)) => ret,
-                Some(Err(_)) => todo!(),
-                None => "",
+                Some(Some(url)) => {
+                    rsx!{
+                        img { src: url.as_str() }
+                    }
+                },
+                _ => rsx!{
+                    div {}
+                },
             }
-        } }
+        }
     })
 }

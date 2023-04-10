@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use axum::body::Bytes;
 use mio_common::retstructs;
 use mio_entity::*;
 use sea_orm::*;
@@ -22,7 +24,10 @@ impl WebOut for mio_entity::track::Model {
             cover_art: self.cover_art,
             artist: self.artist,
             sort_name: self.sort_name,
-            tags: self.tags.as_object().unwrap().iter().map(|(k, v)| (k.to_owned(), v.to_string())).collect(),
+            tags: match self.tags.as_object() {
+                Some(tags) => tags.iter().map(|(k, v)| (k.to_owned(), v.to_string())).collect(),
+                None => HashMap::new(),
+            },
         }
     }
 }
@@ -49,13 +54,10 @@ impl WebOut for mio_entity::album::Model {
 
 #[async_trait::async_trait]
 impl WebOut for mio_entity::cover_art::Model {
-    type WebOut = retstructs::CoverArt;
+    type WebOut = Bytes;
 
     async fn web_out(self, _: &DatabaseConnection) -> Self::WebOut {
-        retstructs::CoverArt {
-            id: self.id,
-            data: self.webm_blob,
-        }
+        Bytes::from(self.webm_blob)
     }
 }
 
