@@ -91,18 +91,15 @@ pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
     // TODO: album with no tracks?
     //
     // TODO: albums can have multiple different cover arts
+    //
+    // TODO: blank image for no album art/not loaded
     let track_id = album.tracks[0];
     let fetch = use_future(cx, (), |()| async move {
         let cl = reqwest::Client::new();
         let ret =
             cl
-                .get(
-                    format!(
-                        "{}/api/query/ti?{}",
-                        crate::BASE_URL.get().unwrap(),
-                        serde_urlencoded::to_string(&mio_common::msgstructs::IdInfoQuery { id: track_id }).unwrap()
-                    ),
-                )
+                .get(format!("{}/api/query/ti?", crate::BASE_URL.get().unwrap()))
+                .query(&mio_common::msgstructs::IdInfoQuery { id: track_id })
                 .send()
                 .await
                 .unwrap()

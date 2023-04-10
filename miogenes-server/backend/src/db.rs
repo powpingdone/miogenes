@@ -24,6 +24,7 @@ impl WebOut for mio_entity::track::Model {
             cover_art: self.cover_art,
             artist: self.artist,
             sort_name: self.sort_name,
+            // TODO: is tags even working?
             tags: match self.tags.as_object() {
                 Some(tags) => tags.iter().map(|(k, v)| (k.to_owned(), v.to_string())).collect(),
                 None => HashMap::new(),
