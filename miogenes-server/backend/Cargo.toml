@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "mio_backend"
+name = "mio-backend"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -17,9 +17,9 @@ gstreamer-pbutils = { version = "0.20", features = ["v1_20"] }
 image = { version = "0.24", features = ["webp-encoder"] }
 konst = "0.3"
 log = "0.4"
-mio_common = { path = "../common" }
-mio_migration = { path = "./migration" }
-mio_entity = { path = "./entity" }
+mio-common = { path = "../common" }
+mio-migration = { path = "./migration" }
+mio-entity = { path = "./entity" }
 num_cpus = "1.15"
 once_cell = { version = "1.17", features = ["parking_lot"] }
 path-absolutize = "3.0"

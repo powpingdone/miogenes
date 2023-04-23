@@ -94,11 +94,11 @@ pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
     //
     // TODO: blank image for no album art/not loaded
     let track_id = album.tracks[0];
-    let fetch = use_future(cx, (), |()| async move {
+    let fetch = use_future(cx, (), |_| async move {
         let cl = reqwest::Client::new();
         let ret =
             cl
-                .get(format!("{}/api/query/ti?", crate::BASE_URL.get().unwrap()))
+                .get(format!("{}/api/query/ti", crate::BASE_URL.get().unwrap()))
                 .query(&mio_common::msgstructs::IdInfoQuery { id: track_id })
                 .send()
                 .await
@@ -132,4 +132,11 @@ pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
             }
         }
     })
+}
+
+#[inline_props]
+#[allow(non_snake_case)]
+pub fn Album<'a>(cx: Scope, album: &'a Album) -> Element {
+    
+    cx.render(rsx!{div{}})
 }

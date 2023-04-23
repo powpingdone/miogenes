@@ -17,14 +17,12 @@ use sea_orm::{
     Database,
     DatabaseConnection,
 };
-use tower::ServiceBuilder;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tower_http::services::{
     ServeDir,
     ServeFile,
 };
-use tower_http::set_header::SetResponseHeaderLayer;
 
 mod endpoints;
 mod subtasks;

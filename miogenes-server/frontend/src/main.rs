@@ -11,11 +11,13 @@ mod static_assets;
 pub(crate) use static_assets::*;
 
 #[inline_props]
-fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
+pub fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
     let curr_token = use_ref(cx, || *token);
 
     // app routes
     cx.render(rsx!{
+        div {
+            class: "bg-base-100",
         Router {
             {
                 if curr_token.read().is_none() {
@@ -47,6 +49,7 @@ fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
                 }
             }
         }
+    }
     })
 }
 

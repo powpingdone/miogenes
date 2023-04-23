@@ -41,43 +41,62 @@ pub fn Login(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
     });
     cx.render(rsx!{
         div {
-            p {
-                "Username"
-            }
-            input {
-                value: "{username}",
-                oninput: move |evt| {
-                    username.set(evt.value.clone())
-                },
-            }
-            p {
-                "Password"
-            }
-            input {
-                value: "{password}",
-                r#type: "password",
-                oninput: move |evt| {
-                    password.set(evt.value.clone())
-                },
-            }
+            class: "flex justify-center items-center h-screen",
             div {
-                input {
-                    r#type: "button",
-                    value: "Login",
-                    onclick: move |_| {
-                        login_routine.send((username.get().clone(), password.get().clone()))
-                    },
+                class: "card shadow-xl bg-base-200 w-96",
+                div {
+                    class: "card-body flex flex-col gap-8 justify-around items-center",
+                    div {
+                        p {
+                            "Username"
+                        }
+                        input {
+                            class: "input input-bordered bg-base-300",
+                            value: "{username}",
+                            oninput: move |evt| {
+                                username.set(evt.value.clone())
+                            },
+                        }
+                    }
+                    div {
+                        p {
+                            "Password"
+                        }
+                        input {
+                            class: "input input-bordered bg-base-300",
+                            value: "{password}",
+                            r#type: "password",
+                            oninput: move |evt| {
+                                password.set(evt.value.clone())
+                            },
+                        }
+                    }
+                    div {
+                        class: "flex justify-center items-center",
+                        div {
+                            class: "btn-group btn-group-vertical lg:btn-group-horizontal",
+                            input {
+                                class: "btn btn-primary",
+                                r#type: "button",
+                                value: "Login",
+                                onclick: move |_| {
+                                    login_routine.send((username.get().clone(), password.get().clone()))
+                                },
+                            }
+                            input {
+                                class: "btn btn-secondary",
+                                r#type: "button",
+                                value: "Signup",
+                                onclick: move |_| {
+                                    rtr.navigate_to("/signup")
+                                },
+                            }
+                        }
+                    }
+                    p {
+                        format!("{}", err_str.read())
+                    }
                 }
-                input {
-                    r#type: "button",
-                    value: "Signup",
-                    onclick: move |_| {
-                        rtr.navigate_to("/signup")
-                    },
-                }
-            }
-            p {
-                format!("{}", err_str.read())
             }
         }
     })
@@ -105,50 +124,68 @@ pub fn Signup(cx: Scope) -> Element {
     });
     cx.render(rsx!{
         div {
-            p {
-                "Username"
-            }
-            input {
-                value: "{username}",
-                oninput: move |evt| {
-                    username.set(evt.value.clone())
-                },
-            }
-            p {
-                "Password"
-            }
-            input {
-                value: "{password}",
-                r#type: "password",
-                oninput: move |evt| {
-                    password.set(evt.value.clone())
-                },
-            }
-            p {
-                "Retype Password"
-            }
-            input {
-                value: "{password_check}",
-                r#type: "password",
-                oninput: move |evt| {
-                    password_check.set(evt.value.clone())
-                },
-            }
+            class: "flex justify-center items-center h-screen",
             div {
-                input {
-                    r#type: "button",
-                    value: "Signup",
-                    onclick: move |_| {
-                        if password.current() == password_check.current() {
-                            signup_routine.send((username.get().clone(), password.get().clone()))
-                        } else {
-                            err_str.set("passwords do not match".to_owned())
+                class: "card shadow-xl bg-base-200 w-96",
+                div {
+                    class: "card-body flex flex-col gap-8 justify-around items-center",
+                    div {
+                        p {
+                            "Username"
                         }
-                    },
+                        input {
+                            class: "input input-bordered bg-base-300",
+                            value: "{username}",
+                            oninput: move |evt| {
+                                username.set(evt.value.clone())
+                            },
+                        }
+                    }
+                    div {
+                        p {
+                            "Password"
+                        }
+                        input {
+                            class: "input input-bordered bg-base-300",
+                            value: "{password}",
+                            r#type: "password",
+                            oninput: move |evt| {
+                                password.set(evt.value.clone())
+                            },
+                        }
+                    }
+                    div {
+                        p {
+                            "Retype Password"
+                        }
+                        input {
+                            class: "input input-bordered bg-base-300",
+                            value: "{password_check}",
+                            r#type: "password",
+                            oninput: move |evt| {
+                                password_check.set(evt.value.clone())
+                            },
+                        }
+                    }
+                    div {
+                        class: "flex justify-center items-center",
+                        input {
+                            class: "btn btn-primary",
+                            r#type: "button",
+                            value: "Signup",
+                            onclick: move |_| {
+                                if password.current() == password_check.current() {
+                                    signup_routine.send((username.get().clone(), password.get().clone()))
+                                } else {
+                                    err_str.set("passwords do not match".to_owned())
+                                }
+                            },
+                        }
+                    }
+                    p {
+                        format!("{}", err_str.read())
+                    }
                 }
-            }
-            p {
-                format!("{}", err_str.read())
             }
         }
     })
