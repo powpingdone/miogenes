@@ -18,38 +18,38 @@ pub fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
     cx.render(rsx!{
         div {
             class: "bg-base-100",
-        Router {
-            {
-                if curr_token.read().is_none() {
-                    rsx!{
-                        Route {
-                            to: "/",
-                            routepts::Login { token: curr_token.clone() }
+            Router {
+                {
+                    if curr_token.read().is_none() {
+                        rsx!{
+                            Route {
+                                to: "/",
+                                routepts::Login { token: curr_token.clone() }
+                            }
+                            Route {
+                                to: "/signup",
+                                routepts::Signup {}
+                            }
+                            Route {
+                                to: "",
+                                Redirect { to: "/" }
+                            }
                         }
-                        Route {
-                            to: "/signup",
-                            routepts::Signup {}
-                        }
-                        Route {
-                            to: "",
-                            Redirect { to: "/" }
-                        }
-                    }
-                } else {
-                    rsx!{
-                        Route {
-                            to: "/home",
-                            mainpage::MainPage { token: curr_token.clone() }
-                        }
-                        Route {
-                            to: "",
-                            Redirect { to: "/home" }
+                    } else {
+                        rsx!{
+                            Route {
+                                to: "/home",
+                                mainpage::MainPage { token: curr_token.clone() }
+                            }
+                            Route {
+                                to: "",
+                                Redirect { to: "/home" }
+                            }
                         }
                     }
                 }
             }
         }
-    }
     })
 }
 
@@ -59,8 +59,8 @@ fn main() {
     // load token if set. parse out uuid from str
     //
     // this target_arch directive is only here for r-a because r-a thinks this is a
-    // amd64 project. this is similar for all of the stuff interacting with
-    // wasm_cookies
+    // amd64 project. this is similar for all of the stuff interacting with wasm
+    // specific stuff
     #[cfg(not(target_arch = "wasm32"))]
     let token: Option<Uuid> = None;
     #[cfg(target_arch = "wasm32")]

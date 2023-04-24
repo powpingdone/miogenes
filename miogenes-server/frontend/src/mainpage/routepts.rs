@@ -87,6 +87,13 @@ pub fn HomePage(cx: Scope) -> Element {
 
 #[inline_props]
 #[allow(non_snake_case)]
+pub fn Album<'a>(cx: Scope, album: &'a Album) -> Element {
+    // TODO: full album widget render
+    cx.render(rsx!{div{}})
+}
+
+#[inline_props]
+#[allow(non_snake_case)]
 pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
     // TODO: album with no tracks?
     //
@@ -94,6 +101,7 @@ pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
     //
     // TODO: blank image for no album art/not loaded
     let track_id = album.tracks[0];
+    // returns link to album art
     let fetch = use_future(cx, (), |_| async move {
         let cl = reqwest::Client::new();
         let ret =
@@ -102,6 +110,7 @@ pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
                 .query(&mio_common::msgstructs::IdInfoQuery { id: track_id })
                 .send()
                 .await
+                // TODO: handle error
                 .unwrap()
                 .json::<mio_common::retstructs::Track>()
                 .await
@@ -118,6 +127,7 @@ pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
             None
         }
     });
+
     cx.render(rsx!{
         {
             match fetch.value() {
@@ -132,11 +142,4 @@ pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
             }
         }
     })
-}
-
-#[inline_props]
-#[allow(non_snake_case)]
-pub fn Album<'a>(cx: Scope, album: &'a Album) -> Element {
-    
-    cx.render(rsx!{div{}})
 }

@@ -1,4 +1,7 @@
 dist/
 target/
 files/
-frontend/target
+frontend/node_modules
+package-lock.json
+tailwind.css
+
