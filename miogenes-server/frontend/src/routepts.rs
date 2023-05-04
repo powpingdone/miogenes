@@ -41,63 +41,46 @@ pub fn Login(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
     });
     cx.render(rsx!{
         div {
-            class: "flex justify-center items-center h-screen",
-            div {
-                class: "card shadow-xl bg-base-200 w-96",
-                div {
-                    class: "card-body flex flex-col gap-8 justify-around items-center",
-                    div {
-                        p {
-                            "Username"
-                        }
-                        input {
-                            class: "input input-bordered bg-base-300",
-                            value: "{username}",
-                            oninput: move |evt| {
-                                username.set(evt.value.clone())
-                            },
-                        }
-                    }
-                    div {
-                        p {
-                            "Password"
-                        }
-                        input {
-                            class: "input input-bordered bg-base-300",
-                            value: "{password}",
-                            r#type: "password",
-                            oninput: move |evt| {
-                                password.set(evt.value.clone())
-                            },
-                        }
-                    }
-                    div {
-                        class: "flex justify-center items-center",
-                        div {
-                            class: "btn-group btn-group-vertical lg:btn-group-horizontal",
-                            input {
-                                class: "btn btn-primary",
-                                r#type: "button",
-                                value: "Login",
-                                onclick: move |_| {
-                                    login_routine.send((username.get().clone(), password.get().clone()))
-                                },
-                            }
-                            input {
-                                class: "btn btn-secondary",
-                                r#type: "button",
-                                value: "Signup",
-                                onclick: move |_| {
-                                    rtr.navigate_to("/signup")
-                                },
-                            }
-                        }
-                    }
-                    p {
-                        format!("{}", err_str.read())
-                    }
-                }
+            p {
+                "Username"
             }
+            input {
+                value: "{username}",
+                oninput: move |evt| {
+                    username.set(evt.value.clone())
+                },
+            }
+        }
+        div {
+            p {
+                "Password"
+            }
+            input {
+                value: "{password}",
+                r#type: "password",
+                oninput: move |evt| {
+                    password.set(evt.value.clone())
+                },
+            }
+        }
+        div {
+            input {
+                r#type: "button",
+                value: "Login",
+                onclick: move |_| {
+                    login_routine.send((username.get().clone(), password.get().clone()))
+                },
+            }
+            input {
+                r#type: "button",
+                value: "Signup",
+                onclick: move |_| {
+                    rtr.navigate_to("/signup")
+                },
+            }
+        }
+        p {
+            format!("{}", err_str.read())
         }
     })
 }
@@ -124,17 +107,13 @@ pub fn Signup(cx: Scope) -> Element {
     });
     cx.render(rsx!{
         div {
-            class: "flex justify-center items-center h-screen",
             div {
-                class: "card shadow-xl bg-base-200 w-96",
                 div {
-                    class: "card-body flex flex-col gap-8 justify-around items-center",
                     div {
                         p {
                             "Username"
                         }
                         input {
-                            class: "input input-bordered bg-base-300",
                             value: "{username}",
                             oninput: move |evt| {
                                 username.set(evt.value.clone())
@@ -146,7 +125,6 @@ pub fn Signup(cx: Scope) -> Element {
                             "Password"
                         }
                         input {
-                            class: "input input-bordered bg-base-300",
                             value: "{password}",
                             r#type: "password",
                             oninput: move |evt| {
@@ -159,7 +137,6 @@ pub fn Signup(cx: Scope) -> Element {
                             "Retype Password"
                         }
                         input {
-                            class: "input input-bordered bg-base-300",
                             value: "{password_check}",
                             r#type: "password",
                             oninput: move |evt| {
@@ -168,9 +145,7 @@ pub fn Signup(cx: Scope) -> Element {
                         }
                     }
                     div {
-                        class: "flex justify-center items-center",
                         input {
-                            class: "btn btn-primary",
                             r#type: "button",
                             value: "Signup",
                             onclick: move |_| {

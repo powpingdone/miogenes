@@ -1,9 +1,9 @@
 default: build
 
 build: 
-    cd frontend && tailwindcss -o tailwind.css && trunk build
+    cd frontend && trunk build
     cargo build -p mio-backend
 
 release:
-    cd frontend && NODE_ENV=production tailwindcss -c ./tailwind.config.js -o ./tailwind.css --minify && trunk build --release
+    cd frontend && trunk build --release
     cargo build -p mio-backend --release
