@@ -1,5 +1,7 @@
+use std::sync::Arc;
 use dioxus::{
     prelude::*,
+    html::track,
 };
 use dioxus_router::*;
 use mio_common::retstructs::Album;
@@ -89,7 +91,47 @@ pub fn HomePage(cx: Scope) -> Element {
 #[allow(non_snake_case)]
 pub fn Album<'a>(cx: Scope, album: &'a Album) -> Element {
     // TODO: full album widget render
-    cx.render(rsx!{div{}})
+    let fetch = use_future(cx, *album, |album| {
+        async move {
+            let set = tokio::task::LocalSet::new();
+            set.run_until(async move {
+                let client = reqwest::Client::new();
+                let tasks = Vec::with_capacity(album.tracks.len());
+                for track_id in album.tracks {
+                    tasks.push(tokio::task::spawn_local(async {
+                        client
+                            .get(format!("{}/api/query/ti", crate::BASE_URL.get().unwrap()))
+                            .query(&mio_common::msgstructs::IdInfoQuery { id: track_id })
+                            .send()
+                            .await
+                            // TODO: handle error
+                            .unwrap()
+                            .json::<mio_common::retstructs::Track>()
+                            .await
+                            .unwrap()
+                    }));
+                }
+                let ret = Vec::with_capacity(album.tracks.len());
+                for task in tasks {
+                    ret.push(task.await);
+                }
+            }).await
+        }
+    });
+    cx.render(rsx!{
+        div {
+            CoverArt { album: album }
+            AlbumTrackList { album: album }
+        }
+    })
+}
+
+#[inline_props]
+#[allow(non_snake_case)]
+pub fn AlbumTrackList<'a>(cx: Scope, album: &'a Album) -> Element {
+    cx.render(rsx!{
+        div {}
+    })
 }
 
 #[inline_props]
@@ -101,6 +143,7 @@ pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
     //
     // TODO: blank image for no album art/not loaded
     let track_id = album.tracks[0];
+
     // returns link to album art
     let fetch = use_future(cx, (), |_| async move {
         let cl = reqwest::Client::new();
@@ -127,7 +170,6 @@ pub fn CoverArt<'a>(cx: Scope, album: &'a Album) -> Element {
             None
         }
     });
-
     cx.render(rsx!{
         {
             match fetch.value() {
