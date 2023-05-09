@@ -29,6 +29,7 @@ use crate::{
     mainpage::tasks::*,
     static_assets::BASE_URL,
 };
+use log::*;
 
 #[inline_props]
 #[allow(non_snake_case)]
@@ -48,20 +49,19 @@ pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
 #[inline_props]
 #[allow(non_snake_case)]
 pub fn HomePage(cx: Scope) -> Element {
-    // semi hack: because we cannot pass a UseFuture to a coroutine (lifetime
-    // shenatigans and whatnot), pass a tiny bit of state around to restart on change
-    let reset_albums = use_state::<u8>(&cx, || 0);
-    let fetch_albums = use_future(&cx, reset_albums, |_| fetch_albums());
+    // hack: because we cannot pass a UseFuture to a coroutine (lifetime shenatigans
+    // and whatnot), pass a tiny bit of state around to restart on change
+    //
+    // along with this, it's used to id' the future. why? because value() returns _a_
+    // completed value, even if the future in question has been restarted
+    let reset_albums = use_state::<u64>(&cx, || 0);
+    let fetch_albums = use_future(&cx, reset_albums, |reset_albums| fetch_albums(reset_albums));
     let server_upload = use_coroutine(&cx, |rx| upload_to_server(rx, reset_albums.to_owned()));
     cx.render(rsx!{
         p {
-            div {
-                hidden: true,
-                reset_albums.to_string()
-            }
             {
                 match fetch_albums.value() {
-                    Some(albums) => {
+                    Some((task_num, albums)) if *task_num == *reset_albums.get() => {
                         let albums = albums.iter().map(|x| rsx!{
                             Album { album_data: x }
                         });
@@ -70,19 +70,21 @@ pub fn HomePage(cx: Scope) -> Element {
                             albums
                         }
                     },
-                    None => rsx!{
-                        div {}
+                    _ => rsx!{
+                        div {
+                            hidden: true,
+                            reset_albums.to_string()
+                        }
                     },
                 }
             }
         }
         input {
             r#type: "file",
-            id: "inp",
+            id: "file_upload",
             multiple: "false",
         }
         button {
-            // TODO: move this into it's own function
             onclick: move | evt | {
                 evt.stop_propagation();
                 let files =
@@ -90,7 +92,7 @@ pub fn HomePage(cx: Scope) -> Element {
                         .unwrap()
                         .document()
                         .unwrap()
-                        .get_element_by_id("inp")
+                        .get_element_by_id("file_upload")
                         .unwrap()
                         .dyn_ref::<HtmlInputElement>()
                         .unwrap()
@@ -159,7 +161,10 @@ pub fn AlbumTrackList<'a>(cx: Scope, tracks: &'a Vec<Track>) -> Element {
     // fetch all artist names
     //
     // TODO: Multiple albums with the same artists means that this is ideopent
-    let artists = use_future(cx, *tracks, |tracks| async move {
+    //
+    // TODO: Sort by trackid
+    let artists = use_future(cx, tracks.clone(), |tracks| async move {
+        // FIXME: this seems to remove duplicately uploaded tracks
         let unique = tracks.into_iter().filter_map(|x| x.artist).collect::<HashSet<_>>();
         let ls = tokio::task::LocalSet::new();
         ls.run_until(async move {
@@ -201,11 +206,17 @@ pub fn AlbumTrackList<'a>(cx: Scope, tracks: &'a Vec<Track>) -> Element {
                             match (track_data.disk, track_data.track) {
                                 (_, None) => "".to_owned(),
                                 (None, Some(track_num)) => format!("{track_num}. "),
-                                // space is omitted here for style 
+                                // space is omitted here for style
                                 (Some(disk), Some(track_num)) => format!("{disk}-{track_num}. "),
                             }
                         }, track_data.title, artists.value().and_then(|hmap| match track_data.artist {
-                            Some(artist) => Some(hmap[&artist].name.as_str()),
+                            Some(artist) => {
+                                if hmap.contains_key(&artist) {
+                                    Some(hmap[&artist].name.as_str())
+                                } else {
+                                    None
+                                }
+                            },
                             None => None,
                         }).unwrap_or("?"))
                     }

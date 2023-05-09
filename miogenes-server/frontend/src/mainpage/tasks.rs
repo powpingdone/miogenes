@@ -6,7 +6,10 @@ use js_sys::{
     ArrayBuffer,
     Uint8Array,
 };
-use mio_common::*;
+use mio_common::{
+    *,
+    retstructs::Album,
+};
 use uuid::*;
 use wasm_bindgen::{
     JsCast,
@@ -22,10 +25,7 @@ use reqwest::{
 use log::*;
 use crate::BASE_URL;
 
-pub async fn upload_to_server(
-    mut rx: UnboundedReceiver<Vec<web_sys::File>>,
-    restart_task: UseState<u8>,
-) {
+pub async fn upload_to_server(mut rx: UnboundedReceiver<Vec<web_sys::File>>, restart_task: UseState<u64>) {
     let ls = tokio::task::LocalSet::new();
     loop {
         ls.run_until({
@@ -36,12 +36,7 @@ pub async fn upload_to_server(
                         .await
                         .unwrap()
                         .into_iter()
-                        .map(
-                            |file| (
-                                file.name(),
-                                tokio::task::spawn_local(upload_to_server_inner_task(file)),
-                            ),
-                        )
+                        .map(|file| (file.name(), tokio::task::spawn_local(upload_to_server_inner_task(file))))
                         .collect::<Vec<_>>();
                 for (fname, task) in upload_tasks.into_iter() {
                     match task.await {
@@ -66,7 +61,7 @@ pub async fn upload_to_server(
         // overflowing_add is used here to indicate that this _will_ overflow. this is
         // only used when doing debugging because debugging enables int overflow checking
         // otherwise, this optimizes out to the exact same thing as x + 1
-        restart_task.modify(|x| x.overflowing_add(1).0);
+        restart_task.with_mut(|x| *x = x.overflowing_add(1).0);
     }
 }
 
@@ -94,20 +89,14 @@ pub async fn upload_to_server_inner_task(file: web_sys::File) -> Result<StatusCo
     Ok(req.status())
 }
 
-pub async fn fetch_albums() -> Vec<retstructs::Album> {
+pub async fn fetch_albums(task: UseState<u64>) -> (u64, Vec<Album>) {
     // TODO: caching
     //
     // fetch initial ids
     let client = Client::new();
-    let req =
-        client
-            .get(format!("{}/api/load/albums", BASE_URL.get().unwrap()))
-            .send()
-            .await
-            .unwrap()
-            .json::<retstructs::Albums>()
-            .await
-            .unwrap();
+    let req = client.get(format!("{}/api/load/albums", BASE_URL.get().unwrap())).send().await
+        // TODO: handle error
+        .unwrap().json::<retstructs::Albums>().await.unwrap();
     let ls = tokio::task::LocalSet::new();
     ls.run_until(async move {
         // then fetch the album metadatas
@@ -135,12 +124,12 @@ pub async fn fetch_albums() -> Vec<retstructs::Album> {
         }).collect::<Vec<_>>();
 
         // finally, collect the albums
-        let mut albums = vec![];
+        let mut ret = vec![];
         for task in fetch {
-            if let Ok(Some(ret)) = task.await {
-                albums.push(ret);
+            if let Ok(Some(item)) = task.await {
+                ret.push(item);
             }
         }
-        albums
+        (*task.get(), ret)
     }).await
 }
