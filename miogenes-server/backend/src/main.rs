@@ -83,6 +83,7 @@ async fn main() -> anyhow::Result<()> {
 
     // TODO: this needs to be not static
     static STATIC_DIR: &str = "./dist";
+    // setup the router
     let router =
         Router::new()
             .nest(
@@ -105,13 +106,6 @@ async fn main() -> anyhow::Result<()> {
             )
             .layer(axum::middleware::from_fn(log_req))
             .fallback_service(ServeFile::new(&format!("{STATIC_DIR}/index.html")))
-            //.layer(ServiceBuilder::new().map_response(|mut resp: axum::response::Response| {
-            //    let headers = resp.headers_mut();
-            //    headers.append("Cross-Origin-Opener-Policy", "same-origin".parse().unwrap());
-            //    headers.append("Cross-Origin-Resource-Policy", "same-origin".parse().unwrap());
-            //    headers.append("Cross-Origin-Embedder-Policy", "require-corp".parse().unwrap());
-            //    resp
-            //}))
             .with_state(state);
 
     // TODO: bind to user settings

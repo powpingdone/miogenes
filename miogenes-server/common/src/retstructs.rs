@@ -12,6 +12,8 @@ pub struct Track {
     pub cover_art: Option<Uuid>,
     pub artist: Option<Uuid>,
     pub title: String,
+    pub disk: Option<i32>,
+    pub track: Option<i32>,
     pub tags: HashMap<String, String>,
     pub sort_name: Option<String>,
 }

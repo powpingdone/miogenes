@@ -197,15 +197,17 @@ pub fn AlbumTrackList<'a>(cx: Scope, tracks: &'a Vec<Track>) -> Element {
                 // TODO: make this clickable
                 div {
                     p {
-                        format!(
-                            "{}. {} - {}",
-                            "TODO: track number",
-                            track_data.title,
-                            artists.value().and_then(|hmap| match track_data.artist {
-                                Some(artist) => Some(hmap[&artist].name.as_str()),
-                                None => None,
-                            }).unwrap_or("?")
-                        )
+                        format!("{}{} - {}", {
+                            match (track_data.disk, track_data.track) {
+                                (_, None) => "".to_owned(),
+                                (None, Some(track_num)) => format!("{track_num}. "),
+                                // space is omitted here for style 
+                                (Some(disk), Some(track_num)) => format!("{disk}-{track_num}. "),
+                            }
+                        }, track_data.title, artists.value().and_then(|hmap| match track_data.artist {
+                            Some(artist) => Some(hmap[&artist].name.as_str()),
+                            None => None,
+                        }).unwrap_or("?"))
                     }
                 }
             }

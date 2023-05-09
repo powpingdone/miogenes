@@ -17,6 +17,7 @@ pub fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
     // app routes
     cx.render(rsx!{
         div {
+            // TODO: if the curr_token is invalid, force nav to login
             Router {
                 {
                     if curr_token.read().is_none() {

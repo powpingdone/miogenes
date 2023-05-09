@@ -29,6 +29,7 @@ struct Metadata {
     img: Option<Vec<u8>>,
     imghash: Option<[u8; 32]>,
     audiohash: Option<[u8; 32]>,
+    disk_track: (Option<i32>, Option<i32>),
 }
 
 // TODO: upload process time limits
@@ -124,7 +125,7 @@ fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Er
 
                     // convert to webp
                     let dropped = image::load_from_memory(&img)?;
-                    let conv = dropped.as_rgb8().ok_or(anyhow::anyhow!("failed to convert to rgb8"))?;
+                    let conv = dropped.into_rgb8();
                     let mut hold = Cursor::new(vec![]);
                     conv.write_to(&mut hold, image::ImageFormat::WebP)?;
                     mdata.img = Some(hold.into_inner());
@@ -144,10 +145,47 @@ fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Er
                 mdata.album = proc_tag(data);
                 trace!("{orig_path}: album is {:?}", mdata.album)
             },
+            "album-disc-number" | "track-number" => {
+                let mut_info = if tag.as_str() == "album-disc-number" {
+                    &mut mdata.disk_track.0
+                } else {
+                    &mut mdata.disk_track.1
+                };
+                *mut_info = proc_tag(data).and_then(|inp| {
+                    match inp.parse() {
+                        Ok(ok) => Some(ok),
+                        Err(err) => {
+                            debug!("{orig_path}: error parsing int out {err}");
+                            None
+                        },
+                    }
+                });
+                trace!("{orig_path}: disk_track is {:?}", mdata.disk_track)
+            },
             _ => {
+                // generic handler
                 let data = proc_tag(data);
-                let ret = set.insert(tag.clone(), data.clone());
-                trace!("{orig_path}: KV inserted ({tag}, {data:?}), replaced ({tag}, {ret:?})")
+                if data.is_some() {
+                    let ret = set.insert(tag.clone(), data.clone());
+
+                    fn truncate(x: String) -> String {
+                        const LEN: usize = 80;
+                        if x.len() > LEN {
+                            let mut trunc = x.chars().take(LEN).collect::<String>();
+                            trunc.push_str("...");
+                            trunc
+                        } else {
+                            x
+                        }
+                    }
+
+                    let (data, ret) = ({
+                        truncate(format!("{data:?}"))
+                    }, {
+                        truncate(format!("{ret:?}"))
+                    });
+                    trace!("{orig_path}: KV inserted ({tag}, {data}), replaced ({tag}, {ret})");
+                }
             },
         }
     }
@@ -288,7 +326,7 @@ async fn insert_into_db(
             }
         }, cover_art::Column::Id).await?;
         if cover_art_new_row.is_some() {
-            trace!("{orig_filename}: new cover art generated: {cover_art_new_row:?}");
+            trace!("{orig_filename}: new cover art generated: {cover_art_id:?}");
         } else {
             trace!("{orig_filename}: cover art already exists: {cover_art_id:?}");
         }
@@ -352,6 +390,8 @@ async fn insert_into_db(
             artist: Set(artist_id),
             cover_art: Set(cover_art_id),
             owner: Set(userid),
+            disk: Set(metadata.disk_track.0),
+            track: Set(metadata.disk_track.1),
         }, track::Column::Id).await?;
         if track_new_row.is_some() {
             trace!("{orig_filename}: track generated: {track_new_row:?}");

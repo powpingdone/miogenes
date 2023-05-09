@@ -114,7 +114,9 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Track::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Track::Title).string().not_null())
                     .col(ColumnDef::new(Track::SortName).string().null())
-                    .col(ColumnDef::new(Track::Tags).json().not_null())
+                    .col(ColumnDef::new(Track::Disk).integer().null())
+                    .col(ColumnDef::new(Track::Track).integer().null())
+                    .col(ColumnDef::new(Track::Tags).string().not_null())
                     // noser
                     .col(ColumnDef::new(Track::AudioHash).binary_len(32).not_null())
                     .col(ColumnDef::new(Track::OrigFname).string().not_null())
@@ -273,6 +275,8 @@ enum Track {
     Title,
     Tags,
     SortName,
+    Disk,
+    Track,
     // noser
     AudioHash,
     OrigFname,
