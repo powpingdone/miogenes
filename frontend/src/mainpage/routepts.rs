@@ -1,5 +1,4 @@
 use std::{
-    sync::Arc,
     collections::{
         HashSet,
         HashMap,
@@ -15,7 +14,6 @@ use mio_common::{
         Album,
         Track,
     },
-    msgstructs::IdInfoQuery,
 };
 use futures::prelude::*;
 use uuid::*;
@@ -162,7 +160,7 @@ pub fn AlbumTrackList<'a>(cx: Scope, tracks: &'a Vec<Track>) -> Element {
     //
     // TODO: Multiple albums with the same artists means that this is ideopent
     //
-    // TODO: Sort by trackid
+    // TODO: Sort by disk and track num
     let artists = use_future(cx, tracks.clone(), |tracks| async move {
         // FIXME: this seems to remove duplicately uploaded tracks
         let unique = tracks.into_iter().filter_map(|x| x.artist).collect::<HashSet<_>>();
