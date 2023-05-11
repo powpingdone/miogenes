@@ -16,9 +16,13 @@ use tokio::io::{
     ErrorKind,
 };
 use uuid::Uuid;
+use std::path::MAIN_SEPARATOR;
 
 pub fn routes() -> Router<MioState> {
-    Router::new().route("/tu", put(track_upload)).route("/td", put(track_delete))
+    Router::new()
+        .route("/tu", put(track_upload))
+        .route("/td", put(track_delete))
+        .route("/stream", get(track_stream))
 }
 
 async fn track_upload(
@@ -32,9 +36,20 @@ async fn track_upload(
     let mut uuid;
     let mut file: File;
     let mut real_fname;
+
+    // create the dir if not exists
+    if let Err(err) =
+        tokio::fs::create_dir(format!("{}{MAIN_SEPARATOR}{}", crate::DATA_DIR.get().unwrap(), key.id)).await {
+        if err.kind() != ErrorKind::AlreadyExists {
+            error!("PUT /track/tu failed to create user directory: {err}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+    
+    // generate filename
     loop {
         uuid = Uuid::new_v4();
-        real_fname = format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid);
+        real_fname = format!("{}{MAIN_SEPARATOR}{}{MAIN_SEPARATOR}{}", crate::DATA_DIR.get().unwrap(), key.id, uuid);
 
         // check if file is already taken
         let check = OpenOptions::new().create_new(true).read(true).write(true).open(real_fname.clone()).await;
@@ -104,6 +119,35 @@ async fn track_upload(
 async fn rm_file(uuid: Uuid) {
     trace!("RM_FILES deleting {uuid}");
     remove_file(format!("{}{}", crate::DATA_DIR.get().unwrap(), uuid)).await.expect("unable to remove file: {}");
+}
+
+async fn track_stream(
+    State(_state): State<MioState>,
+    Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
+    Extension(mio_entity::user::Model { id: userid, username: _, password: _ }): Extension<mio_entity::user::Model>,
+) -> impl IntoResponse {
+    // TODO: transcode into something browser friendly, as the file on disk may not
+    // actually be consumable by the browser
+    //
+    // TODO: possibly make this a body stream? errors _will_ be an issue...
+    trace!("GET /track/stream requesting track {id} under user {userid}");
+
+    // read in file
+    let file =
+        tokio::fs::read(
+            format!("{}{MAIN_SEPARATOR}{}{MAIN_SEPARATOR}{}", crate::DATA_DIR.get().unwrap(), userid, id),
+        ).await;
+    if let Err(err) = file {
+        return if err.kind() == ErrorKind::NotFound {
+            debug!("GET /track/stream track {id} under user {userid} doesn't exist");
+            Err(StatusCode::NOT_FOUND)
+        } else {
+            error!("GET /track/stream error encountered while opening file: {err}");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        };
+    }
+    trace!("GET /track/stream sending back {} bytes from {id}", file.as_ref().unwrap().len());
+    Ok((StatusCode::OK, file.unwrap()))
 }
 
 async fn track_delete(

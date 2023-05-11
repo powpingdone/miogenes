@@ -54,6 +54,7 @@ pub fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
 }
 
 fn main() {
+    // TODO: CSS
     wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
 
     // load token if set. parse out uuid from str

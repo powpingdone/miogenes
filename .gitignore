@@ -190,3 +190,6 @@ Cargo.lock
 # project dirs
 dist/
 files/
+
+# vscode
+.vscode/
