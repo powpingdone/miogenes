@@ -6,7 +6,6 @@ use std::{
 };
 use dioxus::{
     prelude::*,
-    html::track,
 };
 use dioxus_router::*;
 use mio_common::{
@@ -15,7 +14,6 @@ use mio_common::{
         Track,
     },
 };
-use futures::prelude::*;
 use uuid::*;
 use wasm_bindgen::{
     JsCast,
@@ -108,38 +106,10 @@ pub fn HomePage(cx: Scope) -> Element {
 pub fn Album<'a>(cx: Scope, album_data: &'a Album) -> Element {
     // TODO: full album widget render
     let fetch = use_future(cx, *album_data, |album| {
-        async move {
-            let set = tokio::task::LocalSet::new();
-            set.run_until(async move {
-                let client = reqwest::Client::new();
-                let mut tasks = Vec::with_capacity(album.tracks.len());
-                for track_id in album.tracks.iter().cloned() {
-                    tasks.push(tokio::task::spawn_local({
-                        let client = client.clone();
-                        async move {
-                            client
-                                .get(format!("{}/api/query/ti", crate::BASE_URL.get().unwrap()))
-                                .query(&mio_common::msgstructs::IdInfoQuery { id: track_id })
-                                .send()
-                                .await
-                                // TODO: handle error
-                                .unwrap()
-                                .json::<mio_common::retstructs::Track>()
-                                .await
-                                .unwrap()
-                        }
-                    }));
-                }
-                let mut ret = Vec::with_capacity(album.tracks.len());
-                for task in tasks {
-                    ret.push(task.await.unwrap());
-                }
-                ret
-            }).await
-        }
+        album_track_fetch(album)
     });
     cx.render(match fetch.value() {
-        Some(tracks) => rsx!{
+        Some(Ok(tracks)) => rsx!{
             div {
                 CoverArt { tracks: tracks }
                 AlbumTrackList { tracks: tracks }

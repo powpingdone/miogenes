@@ -1,7 +1,6 @@
 use axum::http::{
     Request,
     StatusCode,
-    HeaderName,
 };
 use axum::middleware::Next;
 use axum::response::IntoResponse;

@@ -1,14 +1,20 @@
 use mio_common::*;
-use reqwest::{
-    Client,
-    StatusCode,
+use reqwest::StatusCode;
+use crate::{
+    BASE_URL,
+    static_assets::CLIENT,
 };
-use crate::BASE_URL;
 
 // get login token
 pub async fn get_token(user: String, pass: String) -> Result<msgstructs::UserToken, String> {
-    let client = Client::new();
-    let ret = client.get(format!("{}/l/login", BASE_URL.get().unwrap())).basic_auth(user, Some(pass)).send().await;
+    let ret =
+        CLIENT
+            .get()
+            .unwrap()
+            .get(format!("{}/l/login", BASE_URL.get().unwrap()))
+            .basic_auth(user, Some(pass))
+            .send()
+            .await;
     match ret {
         Ok(res) => {
             if res.status() == StatusCode::OK {
@@ -25,8 +31,14 @@ pub async fn get_token(user: String, pass: String) -> Result<msgstructs::UserTok
 }
 
 pub async fn signup_send(user: String, pass: String) -> Result<(), String> {
-    let client = Client::new();
-    let ret = client.post(format!("{}/l/signup", BASE_URL.get().unwrap())).basic_auth(user, Some(pass)).send().await;
+    let ret =
+        CLIENT
+            .get()
+            .unwrap()
+            .post(format!("{}/l/signup", BASE_URL.get().unwrap()))
+            .basic_auth(user, Some(pass))
+            .send()
+            .await;
     match ret {
         Ok(_) => Ok(()),
         Err(err) => Err(err.to_string()),

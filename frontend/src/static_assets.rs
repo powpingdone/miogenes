@@ -12,6 +12,12 @@ pub static BASE_URL: Lazy<OnceCell<String>> = Lazy::new(|| {
     cell.set(url).unwrap();
     cell
 });
+
+pub static CLIENT: Lazy<OnceCell<reqwest::Client>> = Lazy::new(|| {
+    let cell = OnceCell::new();
+    cell.set(reqwest::Client::new()).unwrap();
+    cell
+});
 // TODO: setup lazy fetch for static images/themes
 //
 // probably with an /api/theme/ endpoint

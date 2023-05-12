@@ -23,7 +23,10 @@ use reqwest::{
     StatusCode,
 };
 use log::*;
-use crate::BASE_URL;
+use crate::{
+    BASE_URL,
+    CLIENT,
+};
 
 pub async fn upload_to_server(mut rx: UnboundedReceiver<Vec<web_sys::File>>, restart_task: UseState<u64>) {
     let ls = tokio::task::LocalSet::new();
@@ -65,7 +68,7 @@ pub async fn upload_to_server(mut rx: UnboundedReceiver<Vec<web_sys::File>>, res
     }
 }
 
-pub async fn upload_to_server_inner_task(file: web_sys::File) -> Result<StatusCode, anyhow::Error> {
+async fn upload_to_server_inner_task(file: web_sys::File) -> Result<StatusCode, anyhow::Error> {
     let fname = file.name();
     let blob: Blob = file.into();
     let blob =
@@ -89,47 +92,80 @@ pub async fn upload_to_server_inner_task(file: web_sys::File) -> Result<StatusCo
     Ok(req.status())
 }
 
-pub async fn fetch_albums(task: UseState<u64>) -> (u64, Vec<Album>) {
+pub async fn fetch_albums(task: UseState<u64>) -> Result<(u64, Vec<Album>), anyhow::Error> {
     // TODO: caching
     //
     // fetch initial ids
-    let client = Client::new();
-    let req = client.get(format!("{}/api/load/albums", BASE_URL.get().unwrap())).send().await
-        // TODO: handle error
-        .unwrap().json::<retstructs::Albums>().await.unwrap();
+    let req =
+        CLIENT
+            .get()
+            .unwrap()
+            .get(format!("{}/api/load/albums", BASE_URL.get().unwrap()))
+            .send()
+            .await?
+            .json::<retstructs::Albums>()
+            .await?;
     let ls = tokio::task::LocalSet::new();
     ls.run_until(async move {
         // then fetch the album metadatas
         let fetch = req.albums.into_iter().map(|uuid| {
-            let client = client.clone();
-            tokio::task::spawn_local(async move {
-                let req =
-                    client
-                        .get(format!("{}/api/query/ai", BASE_URL.get().unwrap()))
-                        .query(&msgstructs::IdInfoQuery { id: uuid })
-                        .send()
-                        .await;
-                if let Err(err) = req {
-                    error!("error fetching album {uuid}: {err:?}");
-                    return None;
-                }
-                match req.unwrap().json::<retstructs::Album>().await {
-                    Ok(ret) => Some(ret),
-                    Err(err) => {
-                        error!("error serializing album {uuid}: {err:?}");
-                        None
-                    },
-                }
-            })
+            tokio::task::spawn_local(fetch_albums_inner(uuid))
         }).collect::<Vec<_>>();
 
         // finally, collect the albums
         let mut ret = vec![];
         for task in fetch {
-            if let Ok(Some(item)) = task.await {
+            if let Some(item) = task.await?? {
                 ret.push(item);
             }
         }
-        (*task.get(), ret)
+        Ok((*task.get(), ret))
     }).await
+}
+
+async fn fetch_albums_inner(id: Uuid) -> Result<Option<Album>, reqwest::Error> {
+    let req =
+        CLIENT
+            .get()
+            .unwrap()
+            .get(format!("{}/api/query/ai", BASE_URL.get().unwrap()))
+            .query(&msgstructs::IdInfoQuery { id })
+            .send()
+            .await;
+    if let Err(err) = req {
+        error!("error fetching album {id}: {err:?}");
+        return Ok(None);
+    }
+    Ok(Some(req.unwrap().json::<retstructs::Album>().await?))
+}
+
+pub async fn album_track_fetch(album: Album) -> Result<Vec<retstructs::Track>, anyhow::Error> {
+    let set = tokio::task::LocalSet::new();
+    set.run_until(async move {
+        let mut tasks = Vec::with_capacity(album.tracks.len());
+        for track_id in album.tracks.iter().cloned() {
+            tasks.push(tokio::task::spawn_local({
+                album_track_fetch_inner(track_id)
+            }));
+        }
+        let mut ret = Vec::with_capacity(album.tracks.len());
+        for task in tasks {
+            ret.push(task.await??);
+        }
+        Ok(ret)
+    }).await
+}
+
+async fn album_track_fetch_inner(id: Uuid) -> Result<retstructs::Track, anyhow::Error> {
+    Ok(
+        CLIENT
+            .get()
+            .unwrap()
+            .get(format!("{}/api/query/ti", crate::BASE_URL.get().unwrap()))
+            .query(&mio_common::msgstructs::IdInfoQuery { id })
+            .send()
+            .await?
+            .json::<mio_common::retstructs::Track>()
+            .await?,
+    )
 }
