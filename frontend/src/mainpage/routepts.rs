@@ -57,13 +57,18 @@ pub fn HomePage(cx: Scope) -> Element {
         p {
             {
                 match fetch_albums.value() {
-                    Some((task_num, albums)) if *task_num == *reset_albums.get() => {
+                    Some(Ok((task_num, albums))) if *task_num == *reset_albums.get() => {
                         let albums = albums.iter().map(|x| rsx!{
                             Album { album_data: x }
                         });
 
                         rsx!{
                             albums
+                        }
+                    },
+                    Some(Err(err)) => rsx!{
+                        p {
+                            "Error while getting albums: {err}"
                         }
                     },
                     _ => rsx!{
@@ -113,6 +118,11 @@ pub fn Album<'a>(cx: Scope, album_data: &'a Album) -> Element {
             div {
                 CoverArt { tracks: tracks }
                 AlbumTrackList { tracks: tracks }
+            }
+        },
+        Some(Err(err)) => rsx!{
+            p {
+                "Error while fetching album: {err}"
             }
         },
         None => rsx!{
