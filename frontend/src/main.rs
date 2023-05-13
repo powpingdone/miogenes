@@ -16,35 +16,33 @@ pub fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
 
     // app routes
     cx.render(rsx!{
-        div {
-            // TODO: if the curr_token is invalid, force nav to login
-            Router {
-                {
-                    if curr_token.read().is_none() {
-                        rsx!{
-                            Route {
-                                to: "/",
-                                routepts::Login { token: curr_token.clone() }
-                            }
-                            Route {
-                                to: "/signup",
-                                routepts::Signup {}
-                            }
-                            Route {
-                                to: "",
-                                Redirect { to: "/" }
-                            }
+        // TODO: if the curr_token is invalid, force nav to login
+        Router {
+            {
+                if curr_token.read().is_none() {
+                    rsx!{
+                        Route {
+                            to: "/",
+                            routepts::Login { token: curr_token.clone() }
                         }
-                    } else {
-                        rsx!{
-                            Route {
-                                to: "/home",
-                                mainpage::MainPage { token: curr_token.clone() }
-                            }
-                            Route {
-                                to: "",
-                                Redirect { to: "/home" }
-                            }
+                        Route {
+                            to: "/signup",
+                            routepts::Signup {}
+                        }
+                        Route {
+                            to: "",
+                            Redirect { to: "/" }
+                        }
+                    }
+                } else {
+                    rsx!{
+                        Route {
+                            to: "/home",
+                            mainpage::MainPage { token: curr_token.clone() }
+                        }
+                        Route {
+                            to: "",
+                            Redirect { to: "/home" }
                         }
                     }
                 }

@@ -22,7 +22,13 @@ use web_sys::{
     HtmlInputElement,
 };
 use crate::{
-    mainpage::tasks::*,
+    mainpage::{
+        tasks::*,
+        player::{
+            PlayerMsg,
+            Player,
+        },
+    },
     static_assets::BASE_URL,
 };
 use log::*;
@@ -33,10 +39,12 @@ pub fn MainPage(cx: Scope, token: UseRef<Option<Uuid>>) -> Element {
     // TODO: on req fail, check if it's a failure related to auth, and if so, delete
     // the Token cookie and refresh the page
     cx.render(rsx!{
-        Router {
-            Route {
-                to: "/",
-                HomePage {}
+        Player {
+            Router {
+                Route {
+                    to: "/",
+                    HomePage {}
+                }
             }
         }
     })
