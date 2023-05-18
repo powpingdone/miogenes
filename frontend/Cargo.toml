@@ -37,6 +37,7 @@ web-sys = { version = "0.3", features = [
   "ReadableStream",
   "FileReader",
   "HtmlAudioElement",
+  "HtmlMediaElement",
 ] }
 chrono = "0.4"
 wasm-cookies = "0.2"

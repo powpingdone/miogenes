@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use chrono::Duration;
 use dioxus::{
     prelude::*,
@@ -5,7 +6,9 @@ use dioxus::{
 use futures::StreamExt;
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
 use web_sys::HtmlAudioElement;
+use log::*;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PlayerMsg {
@@ -28,9 +31,11 @@ pub enum PlayerMsg {
     // Seek absolutely to a point in the song, inclusive between 0.0 and 1.0
     //
     // TODO: type or runtime check this to be between 0.0 and 1.0
-    SeekAbs(f32),
+    SeekAbs(f64),
     // Seek relatively in the song
     SeekRel(Duration),
+    // Audio element hit the end of the song
+    Ended,
 }
 
 // TODO: mobile layout
@@ -38,11 +43,20 @@ pub enum PlayerMsg {
 #[allow(non_snake_case)]
 pub fn Player<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
     // begin coroutine for actual audio player
-    use_coroutine(cx, |rx| player_inner(rx));
+    let player_inner = use_coroutine(cx, |rx| player_inner(rx));
     cx.render(rsx!{
         audio {
             id: "player-audio",
+            preload: "auto",
             hidden: true,
+            onended: |evt| {
+                evt.stop_propagation();
+                player_inner.send(PlayerMsg::Ended);
+            },
+            oncanplay: |evt| {
+                evt.stop_propagation();
+                player_inner.send(PlayerMsg::Play);
+            },
         }
         PlayerUI {}
         children
@@ -66,6 +80,7 @@ fn PlayerUI(cx: Scope) -> Element {
 #[inline_props]
 #[allow(non_snake_case)]
 fn PlayerFirstWidget(cx: Scope) -> Element {
+    let handle = use_coroutine_handle::<PlayerMsg>(cx).unwrap();
     cx.render(rsx!{
         div { class: "player-first-widget" }
     })
@@ -75,6 +90,7 @@ fn PlayerFirstWidget(cx: Scope) -> Element {
 #[inline_props]
 #[allow(non_snake_case)]
 fn PlayerLastWidget(cx: Scope) -> Element {
+    let handle = use_coroutine_handle::<PlayerMsg>(cx).unwrap();
     cx.render(rsx!{
         div { class: "player-last-widget" }
     })
@@ -143,5 +159,82 @@ async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
             .unwrap()
             .dyn_into()
             .unwrap();
-    while let Some(msg) = rx.next().await { }
+    let mut queue: VecDeque<Uuid> = VecDeque::new();
+    let mut position: usize = 0;
+    while let Some(msg) = rx.next().await {
+        match msg {
+            // track manipulation
+            PlayerMsg::Push(id) => {
+                queue.push_back(id);
+            },
+            PlayerMsg::Rem(poss_id) => {
+                if let Some(id) = poss_id {
+                    // adjust position
+                    if let Some(curr_pos) = queue.iter().position(|x| *x == id) {
+                        if curr_pos > position {
+                            // this does account for if the queue is at the end, as this would be a removal of
+                            // the last track. therefore, this will just stop playback
+                            position = position.saturating_sub(1);
+                        }
+                        queue = queue.into_iter().filter(|x| *x != id).collect();
+                    }
+                } else {
+                    // same thing as above. if the position == queue.len() -1, then set_player will
+                    // stop the currently playing track because it will have a None
+                    queue.pop_front();
+                }
+                set_player(&audio_element, queue.get(position).copied()).await;
+            },
+            PlayerMsg::ForcePlay(id) => {
+                queue.push_back(id);
+                position = queue.len() - 1;
+                set_player(&audio_element, queue.get(position).copied()).await;
+            },
+            PlayerMsg::Skip | PlayerMsg::Ended => {
+                position = position.saturating_add(1).clamp(0, queue.len() - 1);
+                set_player(&audio_element, queue.get(position).copied()).await;
+            },
+            PlayerMsg::SkipBack => {
+                position = position.saturating_sub(1);
+                set_player(&audio_element, queue.get(position).copied()).await;
+            },
+            // player manip
+            PlayerMsg::TogglePlayback => {
+                if audio_element.paused() {
+                    player_play(&audio_element).await;
+                } else {
+                    // MDN seems to not say anything about pause failing, but web-sys does. sooooooo
+                    // just unwrap it. possibly investigate why...
+                    audio_element.pause().unwrap();
+                }
+            },
+            PlayerMsg::Play => {
+                player_play(&audio_element).await;
+            },
+            PlayerMsg::Pause => {
+                audio_element.pause().unwrap();
+            },
+            PlayerMsg::SeekAbs(percentage) => {
+                audio_element.set_current_time(audio_element.duration() * percentage.clamp(0.0, 1.0));
+            },
+            PlayerMsg::SeekRel(time) => {
+                audio_element.set_current_time(audio_element.current_time() + time.num_seconds() as f64);
+            },
+        }
+    }
+}
+
+// This may panic, not because of the unwrap, but because of the playback possibly
+// erroring. The unwrap is used because of "weird" browsers that may not use the
+// promise.
+async fn player_play(audio_element: &HtmlAudioElement) {
+    match JsFuture::from(audio_element.play().unwrap()).await {
+        Ok(ok) => debug!("Return from 'play': {ok:?}"),
+        // TODO: handle errors like decoding errors
+        Err(err) => panic!("failed to begin playing task: {err:?}"),
+    }
+}
+
+async fn set_player(audio_element: &HtmlAudioElement, track: Option<Uuid>) {
+    todo!()
 }
