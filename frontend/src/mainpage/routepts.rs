@@ -5,7 +5,7 @@ use std::{
     },
 };
 use dioxus::{
-    prelude::*,
+    prelude::*, html::input_data::MouseButton,
 };
 use dioxus_router::*;
 use mio_common::{
@@ -182,29 +182,46 @@ pub fn AlbumTrackList<'a>(cx: Scope, tracks: &'a Vec<Track>) -> Element {
             ret
         }).await
     });
+    // send playback
+    let player = use_coroutine_handle::<PlayerMsg>(cx).unwrap();
     cx.render(rsx!{
         div {
             for track_data in tracks.iter() {
-                // TODO: make this clickable
                 div {
                     p {
-                        format!("{}{} - {}", {
+                        // TODO: css style onhover
+                        onclick:| evt | {
+                            evt.stop_propagation();
+                            if let Some(button) = evt.inner().trigger_button() {
+                                if button == MouseButton::Primary {
+                                    player.send(PlayerMsg::ForcePlay(track_data.id))
+                                }
+                            }
+                        },
+                        // text
+                        format!(
+                            "{}{} - {}",
+                            // track & disk num
                             match (track_data.disk, track_data.track) {
                                 (_, None) => "".to_owned(),
                                 (None, Some(track_num)) => format!("{track_num}. "),
                                 // space is omitted here for style
                                 (Some(disk), Some(track_num)) => format!("{disk}-{track_num}. "),
-                            }
-                        }, track_data.title, artists.value().and_then(|hmap| match track_data.artist {
-                            Some(artist) => {
-                                if hmap.contains_key(&artist) {
-                                    Some(hmap[&artist].name.as_str())
-                                } else {
-                                    None
-                                }
                             },
-                            None => None,
-                        }).unwrap_or("?"))
+                            // title
+                            track_data.title,
+                            // artist
+                            artists.value().and_then(|hmap| match track_data.artist {
+                                Some(artist) => {
+                                    if hmap.contains_key(&artist) {
+                                        Some(hmap[&artist].name.as_str())
+                                    } else {
+                                        None
+                                    }
+                                },
+                                None => None,
+                            }).unwrap_or("?")
+                        )
                     }
                 }
             }

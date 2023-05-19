@@ -4,11 +4,13 @@ use dioxus::{
     prelude::*,
 };
 use futures::StreamExt;
+use mio_common::msgstructs::IdInfoQuery;
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::HtmlAudioElement;
 use log::*;
+use crate::static_assets::BASE_URL;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PlayerMsg {
@@ -30,7 +32,7 @@ pub enum PlayerMsg {
     SkipBack,
     // Seek absolutely to a point in the song, inclusive between 0.0 and 1.0
     //
-    // TODO: type or runtime check this to be between 0.0 and 1.0
+    // TODO: typecheck this to be between 0.0 and 1.0
     SeekAbs(f64),
     // Seek relatively in the song
     SeekRel(Duration),
@@ -175,15 +177,21 @@ async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
                             // this does account for if the queue is at the end, as this would be a removal of
                             // the last track. therefore, this will just stop playback
                             position = position.saturating_sub(1);
+                            set_player(&audio_element, queue.get(position).copied()).await;
+                        } else if curr_pos == position {
+                            // this does also account for the queue at the end, as this may be none
+                            set_player(&audio_element, queue.get(position.saturating_add(1)).copied()).await;
                         }
                         queue = queue.into_iter().filter(|x| *x != id).collect();
                     }
                 } else {
                     // same thing as above. if the position == queue.len() -1, then set_player will
                     // stop the currently playing track because it will have a None
+                    if queue.len() - 1 == position {
+                        set_player(&audio_element, None).await;
+                    }
                     queue.pop_front();
                 }
-                set_player(&audio_element, queue.get(position).copied()).await;
             },
             PlayerMsg::ForcePlay(id) => {
                 queue.push_back(id);
@@ -191,7 +199,7 @@ async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
                 set_player(&audio_element, queue.get(position).copied()).await;
             },
             PlayerMsg::Skip | PlayerMsg::Ended => {
-                position = position.saturating_add(1).clamp(0, queue.len() - 1);
+                position = position.saturating_add(1);
                 set_player(&audio_element, queue.get(position).copied()).await;
             },
             PlayerMsg::SkipBack => {
@@ -228,13 +236,27 @@ async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
 // erroring. The unwrap is used because of "weird" browsers that may not use the
 // promise.
 async fn player_play(audio_element: &HtmlAudioElement) {
-    match JsFuture::from(audio_element.play().unwrap()).await {
-        Ok(ok) => debug!("Return from 'play': {ok:?}"),
+    // the Ok returned should only be js undefined. it can be safely ignored
+    if let Err(err) = JsFuture::from(audio_element.play().unwrap()).await {
         // TODO: handle errors like decoding errors
-        Err(err) => panic!("failed to begin playing task: {err:?}"),
+        panic!("failed to begin playing task: {err:?}");
     }
 }
 
 async fn set_player(audio_element: &HtmlAudioElement, track: Option<Uuid>) {
-    todo!()
+    match track {
+        Some(track) => {
+            audio_element.set_src(
+                &format!(
+                    "{}/api/track/stream?{}",
+                    BASE_URL.get().unwrap(),
+                    serde_urlencoded::to_string(IdInfoQuery { id: track }).unwrap()
+                ),
+            );
+        },
+        None => {
+            audio_element.pause().unwrap();
+            audio_element.set_src("");
+        },
+    }
 }
