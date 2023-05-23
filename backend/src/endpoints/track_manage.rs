@@ -45,7 +45,7 @@ async fn track_upload(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
-    
+
     // generate filename
     loop {
         uuid = Uuid::new_v4();

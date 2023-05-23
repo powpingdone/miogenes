@@ -8,7 +8,13 @@ mod routepts;
 mod tasks;
 mod static_assets;
 
+use wasm_bindgen::{
+    prelude::Closure,
+    JsCast,
+    JsValue,
+};
 pub(crate) use static_assets::*;
+use wasm_bindgen_futures::JsFuture;
 
 #[inline_props]
 pub fn app_main(cx: Scope, token: Option<Uuid>) -> Element {
@@ -81,4 +87,25 @@ fn main() {
         },
     };
     dioxus_web::launch_with_props(app_main, app_mainProps { token }, dioxus_web::Config::default())
+}
+
+pub async fn js_sleep(time: chrono::Duration) {
+    // use js promise since tokio doesnt actually have tokio::time due to wasm
+    JsFuture::from(js_sys::Promise::new({
+        // all this does is essentially what js does for sleeping via a promise, this is
+        // equiv to tokio::time::sleep(Duration::from_millis(10)).await
+        Box::new(|res: js_sys::Function, _| {
+            let x = Closure::once_into_js(move || res.call0(&JsValue::UNDEFINED));
+            let ret =
+                web_sys::window()
+                    .unwrap()
+                    .set_timeout_with_callback_and_timeout_and_arguments_0(
+                        x.as_ref().unchecked_ref(),
+                        time.num_milliseconds().clamp(i32::MIN.into(), i32::MAX.into()).try_into().unwrap(),
+                    );
+            if let Err(err) = ret {
+                panic!("encountered error while polling: {err:?}");
+            }
+        })
+    }.as_mut())).await.unwrap();
 }

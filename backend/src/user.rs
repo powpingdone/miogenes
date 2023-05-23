@@ -175,8 +175,8 @@ pub async fn login(
             let new_token = Uuid::new_v4();
 
             // TODO: let server host specify when logout tokens expire
-            // 
-            // TODO: add set token header 
+            //
+            // TODO: add set token header
             let expiry = Utc::now() + chrono::Duration::days(TIMEOUT_TIME_DAY);
             user_token::ActiveModel {
                 id: Set(new_token),

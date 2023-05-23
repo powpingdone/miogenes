@@ -82,6 +82,7 @@ async fn main() -> anyhow::Result<()> {
 
     // TODO: this needs to be not static
     static STATIC_DIR: &str = "./dist";
+
     // setup the router
     let router =
         Router::new()

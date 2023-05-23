@@ -1,16 +1,21 @@
-use std::collections::VecDeque;
+use crate::{static_assets::BASE_URL, js_sleep};
 use chrono::Duration;
-use dioxus::{
-    prelude::*,
-};
+use dioxus::prelude::*;
 use futures::StreamExt;
-use mio_common::msgstructs::IdInfoQuery;
-use uuid::Uuid;
-use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::HtmlAudioElement;
 use log::*;
-use crate::static_assets::BASE_URL;
+use mio_common::msgstructs::IdInfoQuery;
+use std::collections::VecDeque;
+use uuid::Uuid;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{
+    HtmlAudioElement,
+    HtmlInputElement,
+};
+use wasm_bindgen::{
+    prelude::Closure,
+    JsCast,
+    JsValue,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PlayerMsg {
@@ -45,7 +50,7 @@ pub enum PlayerMsg {
 #[allow(non_snake_case)]
 pub fn Player<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
     // begin coroutine for actual audio player
-    let player_inner = use_coroutine(cx, |rx| player_inner(rx));
+    let player_inner = use_coroutine(cx, player_inner);
     cx.render(rsx!{
         audio {
             id: "player-audio",
@@ -103,6 +108,34 @@ fn PlayerLastWidget(cx: Scope) -> Element {
 #[allow(non_snake_case)]
 fn PlayerControlWidget(cx: Scope) -> Element {
     let handle = use_coroutine_handle::<PlayerMsg>(cx).unwrap();
+
+    // update the seeker
+    let _seek_update = use_future(cx, (), |_| async move {
+        let seeker: HtmlInputElement =
+            web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id("song-duration")
+                .unwrap()
+                .dyn_into()
+                .unwrap();
+        let audio_element: HtmlAudioElement =
+            web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id("player-audio")
+                .unwrap()
+                .dyn_into()
+                .unwrap();
+        loop {
+            js_sleep(Duration::milliseconds(10)).await;
+            seeker.set_value({
+                (audio_element.current_time() / audio_element.duration()).to_string().as_ref()
+            });
+        }
+    });
     cx.render(rsx!{
         // TODO: icons for buttons
         //
@@ -146,6 +179,34 @@ fn PlayerControlWidget(cx: Scope) -> Element {
                     "Skip Song"
                 }
             }
+            div {
+                input {
+                    id: "song-duration",
+                    r#type: "range",
+                    min: "0.0",
+                    max: "1.0",
+                    step: "1e-7",
+                    oninput: |evt| {
+                        evt.stop_propagation();
+                        handle.send(PlayerMsg::SeekAbs(
+                            // this is dumb
+                            //
+                            // TODO: this also seems to crash when no song is playing
+                            web_sys::window()
+                                .unwrap()
+                                .document()
+                                .unwrap()
+                                .get_element_by_id("song-duration")
+                                .unwrap()
+                                .dyn_into::<HtmlInputElement>()
+                                .unwrap()
+                                .value()
+                                .parse()
+                                .unwrap(),
+                        ))
+                    },
+                }
+            }
         }
     })
 }
@@ -182,7 +243,7 @@ async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
                             // this does also account for the queue at the end, as this may be none
                             set_player(&audio_element, queue.get(position.saturating_add(1)).copied()).await;
                         }
-                        queue = queue.into_iter().filter(|x| *x != id).collect();
+                        queue.retain(|x| *x != id);
                     }
                 } else {
                     // same thing as above. if the position == queue.len() -1, then set_player will

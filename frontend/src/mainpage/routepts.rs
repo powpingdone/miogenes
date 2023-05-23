@@ -5,7 +5,8 @@ use std::{
     },
 };
 use dioxus::{
-    prelude::*, html::input_data::MouseButton,
+    prelude::*,
+    html::input_data::MouseButton,
 };
 use dioxus_router::*;
 use mio_common::{
@@ -182,6 +183,7 @@ pub fn AlbumTrackList<'a>(cx: Scope, tracks: &'a Vec<Track>) -> Element {
             ret
         }).await
     });
+
     // send playback
     let player = use_coroutine_handle::<PlayerMsg>(cx).unwrap();
     cx.render(rsx!{
