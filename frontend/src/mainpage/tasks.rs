@@ -78,7 +78,7 @@ async fn upload_to_server_inner_task(file: web_sys::File) -> Result<StatusCode, 
     let client = Client::new();
     let req =
         client
-            .put(format!("{}/api/track/tu", BASE_URL.get().unwrap()))
+            .put(format!("{}/api/track/tu", *BASE_URL))
             .query(&msgstructs::TrackUploadQuery { fname: if fname != "" {
                 Some(fname)
             } else {
@@ -98,9 +98,7 @@ pub async fn fetch_albums(task: UseState<u64>) -> Result<(u64, Vec<Album>), anyh
     // fetch initial ids
     let req =
         CLIENT
-            .get()
-            .unwrap()
-            .get(format!("{}/api/load/albums", BASE_URL.get().unwrap()))
+            .get(format!("{}/api/load/albums", *BASE_URL))
             .send()
             .await?
             .json::<retstructs::Albums>()
@@ -126,9 +124,7 @@ pub async fn fetch_albums(task: UseState<u64>) -> Result<(u64, Vec<Album>), anyh
 async fn fetch_albums_inner(id: Uuid) -> Result<Option<Album>, reqwest::Error> {
     let req =
         CLIENT
-            .get()
-            .unwrap()
-            .get(format!("{}/api/query/ai", BASE_URL.get().unwrap()))
+            .get(format!("{}/api/query/ai", *BASE_URL))
             .query(&msgstructs::IdInfoQuery { id })
             .send()
             .await;
@@ -159,9 +155,7 @@ pub async fn album_track_fetch(album: Album) -> Result<Vec<retstructs::Track>, a
 async fn album_track_fetch_inner(id: Uuid) -> Result<retstructs::Track, anyhow::Error> {
     Ok(
         CLIENT
-            .get()
-            .unwrap()
-            .get(format!("{}/api/query/ti", crate::BASE_URL.get().unwrap()))
+            .get(format!("{}/api/query/ti", *BASE_URL))
             .query(&mio_common::msgstructs::IdInfoQuery { id })
             .send()
             .await?

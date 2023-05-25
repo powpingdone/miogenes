@@ -152,6 +152,8 @@ pub fn AlbumTrackList<'a>(cx: Scope, tracks: &'a Vec<Track>) -> Element {
     // TODO: Sort by disk and track num
     let artists = use_future(cx, tracks.clone(), |tracks| async move {
         // FIXME: this seems to remove duplicately uploaded tracks
+        // 
+        // ...is that even an issue? 
         let unique = tracks.into_iter().filter_map(|x| x.artist).collect::<HashSet<_>>();
         let ls = tokio::task::LocalSet::new();
         ls.run_until(async move {
@@ -163,7 +165,7 @@ pub fn AlbumTrackList<'a>(cx: Scope, tracks: &'a Vec<Track>) -> Element {
                     (
                         artist_id,
                         client
-                            .get(format!("{}/api/query/ar", BASE_URL.get().unwrap()))
+                            .get(format!("{}/api/query/ar", *BASE_URL))
                             .query(&mio_common::msgstructs::IdInfoQuery { id: artist_id })
                             .send()
                             .await
@@ -247,7 +249,7 @@ pub fn CoverArt<'a>(cx: Scope, tracks: &'a Vec<Track>) -> Element {
                 |found| Some(
                     format!(
                         "{}/api/query/ca?{}",
-                        crate::BASE_URL.get().unwrap(),
+                        *BASE_URL,
                         serde_urlencoded::to_string(
                             &mio_common::msgstructs::IdInfoQuery { id: found.cover_art.unwrap() },
                         ).unwrap()

@@ -1,10 +1,28 @@
-use crate::{static_assets::BASE_URL, js_sleep};
+use crate::{
+    static_assets::{
+        BASE_URL,
+        CLIENT,
+    },
+    js_sleep,
+};
 use chrono::Duration;
 use dioxus::prelude::*;
-use futures::StreamExt;
+use futures::{
+    StreamExt,
+    channel::mpsc,
+};
 use log::*;
-use mio_common::msgstructs::IdInfoQuery;
-use std::collections::VecDeque;
+use mio_common::{
+    msgstructs::IdInfoQuery,
+    retstructs::{
+        Track,
+        Artist,
+    },
+};
+use std::{
+    collections::VecDeque,
+    borrow::Borrow,
+};
 use uuid::Uuid;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -12,9 +30,7 @@ use web_sys::{
     HtmlInputElement,
 };
 use wasm_bindgen::{
-    prelude::Closure,
     JsCast,
-    JsValue,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -36,8 +52,6 @@ pub enum PlayerMsg {
     // Skip backwards in the queue
     SkipBack,
     // Seek absolutely to a point in the song, inclusive between 0.0 and 1.0
-    //
-    // TODO: typecheck this to be between 0.0 and 1.0
     SeekAbs(f64),
     // Seek relatively in the song
     SeekRel(Duration),
@@ -50,7 +64,8 @@ pub enum PlayerMsg {
 #[allow(non_snake_case)]
 pub fn Player<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
     // begin coroutine for actual audio player
-    let player_inner = use_coroutine(cx, player_inner);
+    let curr_playing = use_state::<Option<Uuid>>(cx, || None);
+    let player_inner = use_coroutine(cx, |rx| player_inner(rx, curr_playing.to_owned()));
     cx.render(rsx!{
         audio {
             id: "player-audio",
@@ -65,18 +80,18 @@ pub fn Player<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
                 player_inner.send(PlayerMsg::Play);
             },
         }
-        PlayerUI {}
+        PlayerUI { current: curr_playing.to_owned() }
         children
     })
 }
 
 #[inline_props]
 #[allow(non_snake_case)]
-fn PlayerUI(cx: Scope) -> Element {
+fn PlayerUI(cx: Scope, current: UseState<Option<Uuid>>) -> Element {
     cx.render(rsx!{
         nav {
             class: "player-ui-wrap",
-            PlayerFirstWidget {}
+            PlayerFirstWidget { current: current.to_owned() }
             PlayerControlWidget {}
             PlayerLastWidget {}
         }
@@ -86,10 +101,109 @@ fn PlayerUI(cx: Scope) -> Element {
 // TODO: holder of track info, and (on desktop) side menu
 #[inline_props]
 #[allow(non_snake_case)]
-fn PlayerFirstWidget(cx: Scope) -> Element {
-    let handle = use_coroutine_handle::<PlayerMsg>(cx).unwrap();
+fn PlayerFirstWidget(cx: Scope, current: UseState<Option<Uuid>>) -> Element {
+    let curr_track = use_future(cx, &current.to_owned(), |current| async move {
+        if let Some(track_id) = current.get() {
+            // fetch trackinfo
+            //
+            // TODO: error handling
+            let track =
+                CLIENT
+                    .get(format!("{}/api/query/ti", *BASE_URL))
+                    .query(&IdInfoQuery { id: *track_id })
+                    .send()
+                    .await
+                    .unwrap()
+                    .json::<Track>()
+                    .await
+                    .unwrap();
+            let potent_coverart = track.cover_art.clone();
+            let artist = track.artist.clone();
+            Some((
+                track,
+                potent_coverart.and_then(|cover_art_id| {
+                    Some(
+                        format!(
+                            "{}/api/query/ca?{}",
+                            *BASE_URL,
+                            serde_urlencoded::to_string(&IdInfoQuery { id: cover_art_id }).unwrap()
+                        ),
+                    )
+                }),
+                // blah blah async issue
+                match artist {
+                    Some(id) => {
+                        Some(
+                            CLIENT
+                                .get(format!("{}/api/query/ar", *BASE_URL))
+                                .query(&IdInfoQuery { id })
+                                .send()
+                                .await
+                                .unwrap()
+                                .json::<Artist>()
+                                .await
+                                .unwrap(),
+                        )
+                    },
+                    None => None,
+                },
+            ))
+        } else {
+            None
+        }
+    });
     cx.render(rsx!{
-        div { class: "player-first-widget" }
+        div {
+            class: "player-first-widget",
+            {
+                // track info fetcher
+                match curr_track.value() {
+                    Some(Some((track_info, cover_art_url, artist_info))) => rsx!{
+                        {
+                            match cover_art_url {
+                                Some(url) => rsx!{
+                                    style {
+                                        r#"
+                                        .smol {{
+                                            height: 10px;
+                                            width: 10px;
+                                        }}
+                                        "#
+                                    },
+                                    img {
+                                        class: "smol",
+                                        src: url.as_str(),
+                                    }
+                                },
+                                None => rsx!{
+                                    // TODO: "no cover art"
+                                    p {
+                                        "no cover art"
+                                    }
+                                },
+                            }
+                        },
+                        p {
+                            format!(
+                                "{} - {}",
+                                track_info.title,
+                                artist_info.as_ref().and_then(|artist| Some(artist.name.as_str())).unwrap_or("?")
+                            )
+                        }
+                    },
+                    Some(None) => rsx!{
+                        p {
+                            "Nothing is currently playing"
+                        }
+                    },
+                    None => rsx!{
+                        p {
+                            "Loading..."
+                        }
+                    },
+                }
+            }
+        }
     })
 }
 
@@ -138,8 +252,6 @@ fn PlayerControlWidget(cx: Scope) -> Element {
     });
     cx.render(rsx!{
         // TODO: icons for buttons
-        //
-        // TODO: seeking widget
         div {
             class: "player-control-widget",
             div {
@@ -191,7 +303,8 @@ fn PlayerControlWidget(cx: Scope) -> Element {
                         handle.send(PlayerMsg::SeekAbs(
                             // this is dumb
                             //
-                            // TODO: this also seems to crash when no song is playing
+                            // TODO: this also seems to crash when no song is playing. i dont know where this
+                            // crashes, but it does. async rust very cool.
                             web_sys::window()
                                 .unwrap()
                                 .document()
@@ -212,7 +325,8 @@ fn PlayerControlWidget(cx: Scope) -> Element {
 }
 
 // TODO: impl functionality
-async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
+async fn player_inner(mut rx: mpsc::UnboundedReceiver<PlayerMsg>, curr_track_outer: UseState<Option<Uuid>>) {
+    // setup internal state
     let audio_element: HtmlAudioElement =
         web_sys::window()
             .unwrap()
@@ -224,6 +338,8 @@ async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
             .unwrap();
     let mut queue: VecDeque<Uuid> = VecDeque::new();
     let mut position: usize = 0;
+
+    // event loop.
     while let Some(msg) = rx.next().await {
         match msg {
             // track manipulation
@@ -238,10 +354,10 @@ async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
                             // this does account for if the queue is at the end, as this would be a removal of
                             // the last track. therefore, this will just stop playback
                             position = position.saturating_sub(1);
-                            set_player(&audio_element, queue.get(position).copied()).await;
+                            set_player(&audio_element, queue.get(position).copied(), &curr_track_outer).await;
                         } else if curr_pos == position {
                             // this does also account for the queue at the end, as this may be none
-                            set_player(&audio_element, queue.get(position.saturating_add(1)).copied()).await;
+                            set_player(&audio_element, queue.get(position.saturating_add(1)).copied(), &curr_track_outer).await;
                         }
                         queue.retain(|x| *x != id);
                     }
@@ -249,7 +365,7 @@ async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
                     // same thing as above. if the position == queue.len() -1, then set_player will
                     // stop the currently playing track because it will have a None
                     if queue.len() - 1 == position {
-                        set_player(&audio_element, None).await;
+                        set_player(&audio_element, None, &curr_track_outer).await;
                     }
                     queue.pop_front();
                 }
@@ -257,15 +373,15 @@ async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
             PlayerMsg::ForcePlay(id) => {
                 queue.push_back(id);
                 position = queue.len() - 1;
-                set_player(&audio_element, queue.get(position).copied()).await;
+                set_player(&audio_element, queue.get(position).copied(), &curr_track_outer).await;
             },
             PlayerMsg::Skip | PlayerMsg::Ended => {
                 position = position.saturating_add(1);
-                set_player(&audio_element, queue.get(position).copied()).await;
+                set_player(&audio_element, queue.get(position).copied(), &curr_track_outer).await;
             },
             PlayerMsg::SkipBack => {
                 position = position.saturating_sub(1);
-                set_player(&audio_element, queue.get(position).copied()).await;
+                set_player(&audio_element, queue.get(position).copied(), &curr_track_outer).await;
             },
             // player manip
             PlayerMsg::TogglePlayback => {
@@ -274,6 +390,8 @@ async fn player_inner(mut rx: UnboundedReceiver<PlayerMsg>) {
                 } else {
                     // MDN seems to not say anything about pause failing, but web-sys does. sooooooo
                     // just unwrap it. possibly investigate why...
+                    //
+                    // maybe this is a non standard extension?
                     audio_element.pause().unwrap();
                 }
             },
@@ -304,13 +422,14 @@ async fn player_play(audio_element: &HtmlAudioElement) {
     }
 }
 
-async fn set_player(audio_element: &HtmlAudioElement, track: Option<Uuid>) {
+async fn set_player(audio_element: &HtmlAudioElement, track: Option<Uuid>, outer_track: &UseState<Option<Uuid>>) {
+    outer_track.set(track);
     match track {
         Some(track) => {
             audio_element.set_src(
                 &format!(
                     "{}/api/track/stream?{}",
-                    BASE_URL.get().unwrap(),
+                    *BASE_URL,
                     serde_urlencoded::to_string(IdInfoQuery { id: track }).unwrap()
                 ),
             );

@@ -9,9 +9,7 @@ use crate::{
 pub async fn get_token(user: String, pass: String) -> Result<msgstructs::UserToken, String> {
     let ret =
         CLIENT
-            .get()
-            .unwrap()
-            .get(format!("{}/l/login", BASE_URL.get().unwrap()))
+            .get(format!("{}/l/login", *BASE_URL))
             .basic_auth(user, Some(pass))
             .send()
             .await;
@@ -33,9 +31,8 @@ pub async fn get_token(user: String, pass: String) -> Result<msgstructs::UserTok
 pub async fn signup_send(user: String, pass: String) -> Result<(), String> {
     let ret =
         CLIENT
-            .get()
-            .unwrap()
-            .post(format!("{}/l/signup", BASE_URL.get().unwrap()))
+            .post(format!("{}/l/signup", *BASE_URL
+        ))
             .basic_auth(user, Some(pass))
             .send()
             .await;
