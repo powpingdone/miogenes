@@ -10,6 +10,7 @@ use dioxus::prelude::*;
 use futures::{
     StreamExt,
     channel::mpsc,
+    io::Repeat,
 };
 use log::*;
 use mio_common::{
@@ -32,6 +33,20 @@ use web_sys::{
 use wasm_bindgen::{
     JsCast,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ShuffleType {
+    NoShuffle,
+    RandomNoRepeat,
+    PerfectlyRandom,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RepeatType {
+    NoRepeat,
+    RepeatQueue,
+    OneTrack,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PlayerMsg {
@@ -57,6 +72,12 @@ pub enum PlayerMsg {
     SeekRel(Duration),
     // Audio element hit the end of the song
     Ended,
+    // Toggle Shuffle
+    Shuffle(ShuffleType),
+    // Toggle repeat
+    Repeat(RepeatType),
+    // Volume
+    Volume(f64),
 }
 
 // TODO: mobile layout
@@ -162,6 +183,8 @@ fn PlayerFirstWidget(cx: Scope, current: UseState<Option<Uuid>>) -> Element {
                         {
                             match cover_art_url {
                                 Some(url) => rsx!{
+                                    // TODO: this is temp, only for the thing to make sure it doesnt take up the whole
+                                    // bar
                                     style {
                                         r#"
                                         .smol {{
@@ -324,88 +347,89 @@ fn PlayerControlWidget(cx: Scope) -> Element {
     })
 }
 
+struct PlayerState {
+    track_queue: VecDeque<Uuid>,
+    track_order: VecDeque<usize>,
+    curr_position: usize,
+    shuffle: ShuffleType,
+    repeat: RepeatType,
+    audio_element: HtmlAudioElement,
+}
+
 // TODO: impl functionality
 async fn player_inner(mut rx: mpsc::UnboundedReceiver<PlayerMsg>, curr_track_outer: UseState<Option<Uuid>>) {
     // setup internal state
-    let audio_element: HtmlAudioElement =
-        web_sys::window()
+    let mut state = PlayerState {
+        track_queue: VecDeque::new(),
+        track_order: VecDeque::new(),
+        curr_position: 0,
+        shuffle: ShuffleType::NoShuffle,
+        repeat: RepeatType::NoRepeat,
+        audio_element: web_sys::window()
             .unwrap()
             .document()
             .unwrap()
             .get_element_by_id("player-audio")
             .unwrap()
             .dyn_into()
-            .unwrap();
-    let mut queue: VecDeque<Uuid> = VecDeque::new();
-    let mut position: usize = 0;
-
-    // event loop.
+            .unwrap(),
+    };
     while let Some(msg) = rx.next().await {
         match msg {
             // track manipulation
             PlayerMsg::Push(id) => {
-                queue.push_back(id);
+                todo!()
             },
             PlayerMsg::Rem(poss_id) => {
                 if let Some(id) = poss_id {
-                    // adjust position
-                    if let Some(curr_pos) = queue.iter().position(|x| *x == id) {
-                        if curr_pos > position {
-                            // this does account for if the queue is at the end, as this would be a removal of
-                            // the last track. therefore, this will just stop playback
-                            position = position.saturating_sub(1);
-                            set_player(&audio_element, queue.get(position).copied(), &curr_track_outer).await;
-                        } else if curr_pos == position {
-                            // this does also account for the queue at the end, as this may be none
-                            set_player(&audio_element, queue.get(position.saturating_add(1)).copied(), &curr_track_outer).await;
-                        }
-                        queue.retain(|x| *x != id);
-                    }
+                    todo!()
                 } else {
-                    // same thing as above. if the position == queue.len() -1, then set_player will
-                    // stop the currently playing track because it will have a None
-                    if queue.len() - 1 == position {
-                        set_player(&audio_element, None, &curr_track_outer).await;
-                    }
-                    queue.pop_front();
+                    todo!()
                 }
             },
             PlayerMsg::ForcePlay(id) => {
-                queue.push_back(id);
-                position = queue.len() - 1;
-                set_player(&audio_element, queue.get(position).copied(), &curr_track_outer).await;
+                todo!()
             },
             PlayerMsg::Skip | PlayerMsg::Ended => {
-                position = position.saturating_add(1);
-                set_player(&audio_element, queue.get(position).copied(), &curr_track_outer).await;
+                state.curr_position = state.curr_position.saturating_add(1);
+                set_player(&state, &curr_track_outer);
             },
             PlayerMsg::SkipBack => {
-                position = position.saturating_sub(1);
-                set_player(&audio_element, queue.get(position).copied(), &curr_track_outer).await;
+                state.curr_position = state.curr_position.saturating_sub(1);
+                set_player(&state, &curr_track_outer);
+            },
+            PlayerMsg::Shuffle(toggle) => {
+                todo!()
+            },
+            PlayerMsg::Repeat(toggle) => {
+                todo!()
             },
             // player manip
             PlayerMsg::TogglePlayback => {
-                if audio_element.paused() {
-                    player_play(&audio_element).await;
+                if state.audio_element.paused() {
+                    player_play(&state.audio_element).await;
                 } else {
                     // MDN seems to not say anything about pause failing, but web-sys does. sooooooo
                     // just unwrap it. possibly investigate why...
                     //
                     // maybe this is a non standard extension?
-                    audio_element.pause().unwrap();
+                    state.audio_element.pause().unwrap();
                 }
             },
             PlayerMsg::Play => {
-                player_play(&audio_element).await;
+                player_play(&state.audio_element).await;
             },
             PlayerMsg::Pause => {
-                audio_element.pause().unwrap();
+                state.audio_element.pause().unwrap();
             },
             PlayerMsg::SeekAbs(percentage) => {
-                audio_element.set_current_time(audio_element.duration() * percentage.clamp(0.0, 1.0));
+                state.audio_element.set_current_time(state.audio_element.duration() * percentage.clamp(0.0, 1.0));
             },
             PlayerMsg::SeekRel(time) => {
-                audio_element.set_current_time(audio_element.current_time() + time.num_seconds() as f64);
+                state.audio_element.set_current_time(state.audio_element.current_time() + time.num_seconds() as f64);
+            },
+            PlayerMsg::Volume(curr) => {
+                state.audio_element.set_volume(curr.clamp(0.0, 1.0));
             },
         }
     }
@@ -422,11 +446,15 @@ async fn player_play(audio_element: &HtmlAudioElement) {
     }
 }
 
-async fn set_player(audio_element: &HtmlAudioElement, track: Option<Uuid>, outer_track: &UseState<Option<Uuid>>) {
+fn set_player( state: &PlayerState, outer_track: &UseState<Option<Uuid>>) {
+    // acquire track
+    let track = todo!();
+
+    // cause side effects
     outer_track.set(track);
     match track {
         Some(track) => {
-            audio_element.set_src(
+            state.audio_element.set_src(
                 &format!(
                     "{}/api/track/stream?{}",
                     *BASE_URL,
@@ -435,8 +463,8 @@ async fn set_player(audio_element: &HtmlAudioElement, track: Option<Uuid>, outer
             );
         },
         None => {
-            audio_element.pause().unwrap();
-            audio_element.set_src("");
+            state.audio_element.pause().unwrap();
+            state.audio_element.set_src("");
         },
     }
 }
