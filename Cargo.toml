@@ -1,6 +1,7 @@
 [workspace]
 members = [
-  "frontend",
+  "frontend/glue",
+  "frontend/rt",
   "common",
   "backend",
   "backend/migration",
@@ -10,6 +11,3 @@ resolver = "2"
 
 [profile.release]
 lto = true
-
-[profile.release.package.mio-frontend]
-opt-level = "s"
