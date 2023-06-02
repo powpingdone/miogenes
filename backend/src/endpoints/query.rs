@@ -5,9 +5,7 @@ use axum::response::IntoResponse;
 use axum::routing::*;
 use log::*;
 use mio_common::*;
-use mio_entity::*;
-use sea_orm::*;
-use crate::db::WebOut;
+use sqlx::Connection;
 use crate::*;
 
 pub fn routes() -> Router<MioState> {
@@ -21,131 +19,102 @@ pub fn routes() -> Router<MioState> {
 
 async fn track_info(
     State(state): State<MioState>,
-    Extension(key): Extension<mio_entity::user::Model>,
+    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
-    Ok::<_, StatusCode>(
-        (
-            StatusCode::OK,
-            Json(
-                Track::find_by_id(id)
-                    .filter(track::Column::Owner.eq(key.id))
-                    .one(&state.db)
-                    .await
-                    .map_err(db_err)?
-                    .ok_or_else(|| {
-                        Into::<StatusCode>::into(
-                            MioInnerError::NotFound(Level::Debug, anyhow!("could not find track {id}")),
-                        )
-                    })?
-                    .web_out(&state.db)
-                    .await,
-            ),
-        ),
-    )
+    Ok::<_, MioInnerError>((StatusCode::OK, Json({
+        let conn = state.db.acquire().await?;
+        sqlx::query_as!(retstructs::Track, "SELECT * FROM track WHERE id = ? AND owner = ?;", id, userid)
+            .fetch_optional(conn)
+            .await?
+            .ok_or_else(|| MioInnerError::NotFound(anyhow!("could not find track {id}")))?
+    })))
 }
 
 async fn album_info(
     State(state): State<MioState>,
-    Extension(key): Extension<mio_entity::user::Model>,
-    Query(msgstructs::IdInfoQuery { id: album }): Query<msgstructs::IdInfoQuery>,
+    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
-    Ok::<_, StatusCode>(
-        (
-            StatusCode::OK,
-            Json(
-                Album::find_by_id(album)
-                    .join(JoinType::Join, album::Relation::Track.def())
-                    .filter(track::Column::Owner.eq(key.id))
-                    .one(&state.db)
-                    .await
-                    .map_err(db_err)?
-                    .ok_or_else(|| {
-                        Into::<StatusCode>::into(
-                            MioInnerError::NotFound(Level::Debug, anyhow!("could not find album {album}")),
-                        )
-                    })?
-                    .web_out(&state.db)
-                    .await,
-            ),
-        ),
-    )
+    Ok::<_, MioInnerError>((StatusCode::OK, Json({
+        let conn = state.db.acquire().await?;
+        sqlx::query_as!(
+            retstructs::Album,
+            "
+            SELECT * FROM album 
+            JOIN track ON track.album = album.id 
+            WHERE album.id = ? AND track.owner = ?;
+            ",
+            id,
+            userid
+        )
+            .fetch_optional(conn)
+            .await?
+            .ok_or_else(|| MioInnerError::NotFound(anyhow!("could not find album {id}")))?
+    })))
 }
 
 async fn playlist_info(
     State(state): State<MioState>,
-    Extension(key): Extension<mio_entity::user::Model>,
-    Query(msgstructs::IdInfoQuery { id: playlist }): Query<msgstructs::IdInfoQuery>,
+    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
-    Ok::<_, StatusCode>(
-        (
-            StatusCode::OK,
-            Json(
-                Playlist::find_by_id(playlist)
-                    .filter(playlist::Column::Owner.eq(key.id))
-                    .one(&state.db)
-                    .await
-                    .map_err(db_err)?
-                    .ok_or_else(|| {
-                        Into::<StatusCode>::into(
-                            MioInnerError::NotFound(Level::Debug, anyhow!("could not find playlist {playlist}")),
-                        )
-                    })?
-                    .web_out(&state.db)
-                    .await,
-            ),
-        ),
-    )
+    Ok::<_, MioInnerError>((StatusCode::OK, Json(state.db.acquire().await?.transaction(|txn| Box::pin(async move {
+        retstructs::Playlist {
+            id,
+            tracks: sqlx::query!("SELECT track FROM JOIN_playlist_track WHERE playlist = ?;", id)
+                .fetch_all(&mut *txn)
+                .await?,
+            name: sqlx::query!("SELECT name FROM playlist WHERE id = ? AND owner = ?;", id, userid)
+                .fetch_optional(&mut *txn)
+                .await?
+                .ok_or_else(|| MioInnerError::NotFound(anyhow!("could not find playlist id {id}"))?),
+        }
+    })))))
 }
 
 async fn cover_art(
     State(state): State<MioState>,
-    Extension(key): Extension<mio_entity::user::Model>,
-    Query(msgstructs::IdInfoQuery { id: cover_art }): Query<msgstructs::IdInfoQuery>,
+    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
-    Ok::<_, StatusCode>(
-        (
-            StatusCode::OK,
-            CoverArt::find_by_id(cover_art)
-                .join(JoinType::Join, cover_art::Relation::Track.def())
-                .filter(track::Column::Owner.eq(key.id))
-                .one(&state.db)
-                .await
-                .map_err(db_err)?
-                .ok_or_else(|| {
-                    Into::<StatusCode>::into(
-                        MioInnerError::NotFound(Level::Debug, anyhow!("could not find cover art {cover_art}")),
-                    )
-                })?
-                .web_out(&state.db)
-                .await,
-        ),
-    )
+    Ok::<_, MioInnerError>((StatusCode::OK, Json({
+        let conn = state.db.acquire().await?;
+        sqlx::query_as!(
+            retstructs::CoverArt,
+            "
+            SELECT * FROM cover_art 
+            JOIN track ON track.cover_art = cover_art.id 
+            WHERE cover_art.id = ? AND track.owner = ?;
+            ",
+            id,
+            userid
+        )
+            .fetch_optional(conn)
+            .await?
+            .ok_or_else(|| MioInnerError::NotFound(anyhow!("could not find cover art {id}")))?
+    })))
 }
 
 async fn artist(
     State(state): State<MioState>,
-    Extension(key): Extension<mio_entity::user::Model>,
-    Query(msgstructs::IdInfoQuery { id: artist }): Query<msgstructs::IdInfoQuery>,
+    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
-    Ok::<_, StatusCode>(
-        (
-            StatusCode::OK,
-            Json(
-                Artist::find_by_id(artist)
-                    .join(JoinType::Join, artist::Relation::Track.def())
-                    .filter(track::Column::Owner.eq(key.id))
-                    .one(&state.db)
-                    .await
-                    .map_err(db_err)?
-                    .ok_or_else(|| {
-                        Into::<StatusCode>::into(
-                            MioInnerError::NotFound(Level::Debug, anyhow!("could not find artist {artist}")),
-                        )
-                    })?
-                    .web_out(&state.db)
-                    .await,
-            ),
-        ),
-    )
+    Ok::<_, MioInnerError>((StatusCode::OK, Json({
+        let conn = state.db.acquire().await?;
+        sqlx::query_as!(
+            retstructs::Artist,
+            "
+            SELECT * FROM artist 
+            JOIN track ON track.artist = artist.id 
+            WHERE artist.id = ? AND track.owner = ?;
+            ",
+            id,
+            userid
+        )
+            .fetch_optional(conn)
+            .await?
+            .ok_or_else(|| MioInnerError::NotFound(anyhow!("could not find artist {id}")))?
+    })))
 }

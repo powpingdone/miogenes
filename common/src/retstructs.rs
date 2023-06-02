@@ -1,7 +1,4 @@
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -35,7 +32,7 @@ pub struct Playlist {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct CoverArt {
     pub id: Uuid,
-    pub data: Vec<u8>,
+    pub webm_blob: Vec<u8>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -58,9 +55,4 @@ pub struct UploadReturn {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct Albums {
     pub albums: Vec<Uuid>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
-pub struct RetToken {
-    pub token: Uuid,
 }

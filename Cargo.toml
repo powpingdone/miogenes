@@ -1,11 +1,8 @@
 [workspace]
 members = [
   "frontend/glue",
-  "frontend/rt",
   "common",
   "backend",
-  "backend/migration",
-  "backend/entity",
 ]
 resolver = "2"
 

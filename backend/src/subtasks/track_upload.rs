@@ -5,9 +5,7 @@ use gstreamer_app::AppSink;
 use gstreamer_pbutils::prelude::*;
 use gstreamer_pbutils::DiscovererResult;
 use log::*;
-use mio_migration::IntoCondition;
 use path_absolutize::Absolutize;
-use sea_orm::*;
 use sha2::{
     Digest,
     Sha256,
@@ -48,8 +46,8 @@ pub async fn track_upload_process(
         move || {
             get_metadata(format!("{}{}", DATA_DIR.get().unwrap(), id), orig_filename)
         }
-    }).await.expect("join failure").map_err(|e| {
-        Into::<StatusCode>::into(MioInnerError::TrackProcessingError(Level::Debug, e, StatusCode::BAD_REQUEST))
+    }).await.expect("join failure").map_err(|err| {
+        Into::<StatusCode>::into(MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))
     })?;
     drop(permit);
 
@@ -301,14 +299,12 @@ fn proc_tag(data: SendValue) -> Option<String> {
 }
 
 async fn insert_into_db(
-    db: sea_orm::DatabaseConnection,
+    db: SqlitePool,
     id: Uuid,
     userid: Uuid,
     metadata: Metadata,
     orig_filename: String,
 ) -> Result<(), TransactionError<MioInnerError>> {
-    use mio_entity::*;
-
     db.transaction::<_, _, MioInnerError>(|txn| Box::pin(async move {
         // transfer ownership
         let hold = metadata;

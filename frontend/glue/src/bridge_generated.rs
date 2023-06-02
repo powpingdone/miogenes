@@ -21,6 +21,34 @@ use std::sync::Arc;
 
 // Section: wire functions
 
+fn wire_new_mio_client_impl() -> support::WireSyncReturn {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+        WrapInfo {
+            debug_name: "new_mio_client",
+            port: None,
+            mode: FfiCallMode::Sync,
+        },
+        move || Ok(new_mio_client()),
+    )
+}
+fn wire_test_set_url__method__MioClient_impl(
+    port_: MessagePort,
+    that: impl Wire2Api<MioClient> + UnwindSafe,
+    url: impl Wire2Api<String> + UnwindSafe,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap(
+        WrapInfo {
+            debug_name: "test_set_url__method__MioClient",
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_url = url.wire2api();
+            move |task_callback| MioClient::test_set_url(&api_that, api_url)
+        },
+    )
+}
 // Section: wrapper structs
 
 // Section: static checks
@@ -43,7 +71,21 @@ where
         (!self.is_null()).then(|| self.wire2api())
     }
 }
+
+impl Wire2Api<u8> for u8 {
+    fn wire2api(self) -> u8 {
+        self
+    }
+}
+
 // Section: impl IntoDart
+
+impl support::IntoDart for MioClient {
+    fn into_dart(self) -> support::DartAbi {
+        vec![self.0.into_dart()].into_dart()
+    }
+}
+impl support::IntoDartExceptPrimitive for MioClient {}
 
 // Section: executor
 

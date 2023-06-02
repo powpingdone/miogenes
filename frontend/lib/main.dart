@@ -13,7 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => MioTopLevelState(),
+      create: (_) => MioTopLevel(),
       child: MaterialApp(
         title: 'Miogenes',
         theme: ThemeData(
@@ -30,7 +30,7 @@ class MioEntryPoint extends StatefulWidget {
   const MioEntryPoint({super.key});
 
   @override
-  State<MioEntryPoint> createState() => _MioEntryPointState();
+  State<MioEntryPoint> createState() => _MioTopLevel();
 }
 
 // window state
@@ -38,17 +38,19 @@ enum CurrentViewport {
   login,
 }
 
-class MioTopLevelState extends ChangeNotifier {
+class MioTopLevel with ChangeNotifier {
   CurrentViewport viewport = CurrentViewport.login;
+  final MioClient _mioInternal = api.newMioClient();
+  MioClient get mioClient => _mioInternal;
 }
 
-class _MioEntryPointState extends State<MioEntryPoint> {
+class _MioTopLevel extends State<MioEntryPoint> {
   @override
   Widget build(BuildContext context) {
-    var mtls = context.watch<MioTopLevelState>();
+    var mtl = context.watch<MioTopLevel>();
 
     Widget body;
-    switch (mtls.viewport) {
+    switch (mtl.viewport) {
       case CurrentViewport.login:
         body = LoginPage();
         break;
@@ -66,27 +68,59 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  late TextEditingController _baseUrlController;
+  late TextEditingController _baseUrlController,
+      _usernameController,
+      _passwordController;
+  Future<void>? isValidUrl;
 
   @override
   void initState() {
     super.initState();
     _baseUrlController = TextEditingController();
+    _usernameController = TextEditingController();
+    _passwordController = TextEditingController();
   }
 
   @override
   void dispose() {
     super.dispose();
     _baseUrlController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final mtl = Provider.of<MioTopLevel>(context);
+    var mioState = mtl.mioClient;
+
     return Column(
       children: [
-        Text("Base Url:"),
+        const Text("Base Url:"),
         TextField(
           controller: _baseUrlController,
+          onSubmitted: (url) {
+            setState(() {
+              isValidUrl = mioState.testSetUrl(url: url);
+            });
+          },
+        ),
+        // Username and Password
+        FutureBuilder(
+          future: isValidUrl,
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              // build ui
+              return Text("Valid url!");
+            } else if (snapshot.hasError) {
+              return Text("Invalid url: ${snapshot.error.toString()}");
+            } else if (isValidUrl != null) {
+              return Text("Checking server...");
+            } else {
+              // do nothing
+              return Container();
+            }
+          },
         )
       ],
     );

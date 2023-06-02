@@ -10,7 +10,52 @@ import 'package:uuid/uuid.dart';
 
 import 'dart:ffi' as ffi;
 
-abstract class MioGlue {}
+abstract class MioGlue {
+  MioClient newMioClient({dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kNewMioClientConstMeta;
+
+  Future<void> testSetUrlMethodMioClient(
+      {required MioClient that, required String url, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kTestSetUrlMethodMioClientConstMeta;
+
+  DropFnType get dropOpaqueRwLockMioClientState;
+  ShareFnType get shareOpaqueRwLockMioClientState;
+  OpaqueTypeFinalizer get RwLockMioClientStateFinalizer;
+}
+
+@sealed
+class RwLockMioClientState extends FrbOpaque {
+  final MioGlue bridge;
+  RwLockMioClientState.fromRaw(int ptr, int size, this.bridge)
+      : super.unsafe(ptr, size);
+  @override
+  DropFnType get dropFn => bridge.dropOpaqueRwLockMioClientState;
+
+  @override
+  ShareFnType get shareFn => bridge.shareOpaqueRwLockMioClientState;
+
+  @override
+  OpaqueTypeFinalizer get staticFinalizer =>
+      bridge.RwLockMioClientStateFinalizer;
+}
+
+class MioClient {
+  final MioGlue bridge;
+  final RwLockMioClientState field0;
+
+  const MioClient({
+    required this.bridge,
+    required this.field0,
+  });
+
+  Future<void> testSetUrl({required String url, dynamic hint}) =>
+      bridge.testSetUrlMethodMioClient(
+        that: this,
+        url: url,
+      );
+}
 
 class MioGlueImpl implements MioGlue {
   final MioGluePlatform _platform;
@@ -21,13 +66,79 @@ class MioGlueImpl implements MioGlue {
   factory MioGlueImpl.wasm(FutureOr<WasmModule> module) =>
       MioGlueImpl(module as ExternalLibrary);
   MioGlueImpl.raw(this._platform);
+  MioClient newMioClient({dynamic hint}) {
+    return _platform.executeSync(FlutterRustBridgeSyncTask(
+      callFfi: () => _platform.inner.wire_new_mio_client(),
+      parseSuccessData: _wire2api_mio_client,
+      constMeta: kNewMioClientConstMeta,
+      argValues: [],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kNewMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "new_mio_client",
+        argNames: [],
+      );
+
+  Future<void> testSetUrlMethodMioClient(
+      {required MioClient that, required String url, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_String(url);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) => _platform.inner
+          .wire_test_set_url__method__MioClient(port_, arg0, arg1),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kTestSetUrlMethodMioClientConstMeta,
+      argValues: [that, url],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kTestSetUrlMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "test_set_url__method__MioClient",
+        argNames: ["that", "url"],
+      );
+
+  DropFnType get dropOpaqueRwLockMioClientState =>
+      _platform.inner.drop_opaque_RwLockMioClientState;
+  ShareFnType get shareOpaqueRwLockMioClientState =>
+      _platform.inner.share_opaque_RwLockMioClientState;
+  OpaqueTypeFinalizer get RwLockMioClientStateFinalizer =>
+      _platform.RwLockMioClientStateFinalizer;
+
   void dispose() {
     _platform.dispose();
   }
 // Section: wire2api
+
+  RwLockMioClientState _wire2api_RwLockMioClientState(dynamic raw) {
+    return RwLockMioClientState.fromRaw(raw[0], raw[1], this);
+  }
+
+  MioClient _wire2api_mio_client(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return MioClient(
+      bridge: this,
+      field0: _wire2api_RwLockMioClientState(arr[0]),
+    );
+  }
+
+  void _wire2api_unit(dynamic raw) {
+    return;
+  }
 }
 
 // Section: api2wire
+
+@protected
+int api2wire_u8(int raw) {
+  return raw;
+}
 
 // Section: finalizer
 
@@ -36,9 +147,53 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
 
 // Section: api2wire
 
+  @protected
+  wire_RwLockMioClientState api2wire_RwLockMioClientState(
+      RwLockMioClientState raw) {
+    final ptr = inner.new_RwLockMioClientState();
+    _api_fill_to_wire_RwLockMioClientState(raw, ptr);
+    return ptr;
+  }
+
+  @protected
+  ffi.Pointer<wire_uint_8_list> api2wire_String(String raw) {
+    return api2wire_uint_8_list(utf8.encoder.convert(raw));
+  }
+
+  @protected
+  ffi.Pointer<wire_MioClient> api2wire_box_autoadd_mio_client(MioClient raw) {
+    final ptr = inner.new_box_autoadd_mio_client_0();
+    _api_fill_to_wire_mio_client(raw, ptr.ref);
+    return ptr;
+  }
+
+  @protected
+  ffi.Pointer<wire_uint_8_list> api2wire_uint_8_list(Uint8List raw) {
+    final ans = inner.new_uint_8_list_0(raw.length);
+    ans.ref.ptr.asTypedList(raw.length).setAll(0, raw);
+    return ans;
+  }
 // Section: finalizer
 
+  late final OpaqueTypeFinalizer _RwLockMioClientStateFinalizer =
+      OpaqueTypeFinalizer(inner._drop_opaque_RwLockMioClientStatePtr);
+  OpaqueTypeFinalizer get RwLockMioClientStateFinalizer =>
+      _RwLockMioClientStateFinalizer;
 // Section: api_fill_to_wire
+
+  void _api_fill_to_wire_RwLockMioClientState(
+      RwLockMioClientState apiObj, wire_RwLockMioClientState wireObj) {
+    wireObj.ptr = apiObj.shareOrMove();
+  }
+
+  void _api_fill_to_wire_box_autoadd_mio_client(
+      MioClient apiObj, ffi.Pointer<wire_MioClient> wireObj) {
+    _api_fill_to_wire_mio_client(apiObj, wireObj.ref);
+  }
+
+  void _api_fill_to_wire_mio_client(MioClient apiObj, wire_MioClient wireObj) {
+    wireObj.field0 = api2wire_RwLockMioClientState(apiObj.field0);
+  }
 }
 
 // ignore_for_file: camel_case_types, non_constant_identifier_names, avoid_positional_boolean_parameters, annotate_overrides, constant_identifier_names
@@ -137,6 +292,104 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
   late final _init_frb_dart_api_dl = _init_frb_dart_api_dlPtr
       .asFunction<int Function(ffi.Pointer<ffi.Void>)>();
 
+  WireSyncReturn wire_new_mio_client() {
+    return _wire_new_mio_client();
+  }
+
+  late final _wire_new_mio_clientPtr =
+      _lookup<ffi.NativeFunction<WireSyncReturn Function()>>(
+          'wire_new_mio_client');
+  late final _wire_new_mio_client =
+      _wire_new_mio_clientPtr.asFunction<WireSyncReturn Function()>();
+
+  void wire_test_set_url__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> url,
+  ) {
+    return _wire_test_set_url__method__MioClient(
+      port_,
+      that,
+      url,
+    );
+  }
+
+  late final _wire_test_set_url__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_test_set_url__method__MioClient');
+  late final _wire_test_set_url__method__MioClient =
+      _wire_test_set_url__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>)>();
+
+  wire_RwLockMioClientState new_RwLockMioClientState() {
+    return _new_RwLockMioClientState();
+  }
+
+  late final _new_RwLockMioClientStatePtr =
+      _lookup<ffi.NativeFunction<wire_RwLockMioClientState Function()>>(
+          'new_RwLockMioClientState');
+  late final _new_RwLockMioClientState = _new_RwLockMioClientStatePtr
+      .asFunction<wire_RwLockMioClientState Function()>();
+
+  ffi.Pointer<wire_MioClient> new_box_autoadd_mio_client_0() {
+    return _new_box_autoadd_mio_client_0();
+  }
+
+  late final _new_box_autoadd_mio_client_0Ptr =
+      _lookup<ffi.NativeFunction<ffi.Pointer<wire_MioClient> Function()>>(
+          'new_box_autoadd_mio_client_0');
+  late final _new_box_autoadd_mio_client_0 = _new_box_autoadd_mio_client_0Ptr
+      .asFunction<ffi.Pointer<wire_MioClient> Function()>();
+
+  ffi.Pointer<wire_uint_8_list> new_uint_8_list_0(
+    int len,
+  ) {
+    return _new_uint_8_list_0(
+      len,
+    );
+  }
+
+  late final _new_uint_8_list_0Ptr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<wire_uint_8_list> Function(
+              ffi.Int32)>>('new_uint_8_list_0');
+  late final _new_uint_8_list_0 = _new_uint_8_list_0Ptr
+      .asFunction<ffi.Pointer<wire_uint_8_list> Function(int)>();
+
+  void drop_opaque_RwLockMioClientState(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _drop_opaque_RwLockMioClientState(
+      ptr,
+    );
+  }
+
+  late final _drop_opaque_RwLockMioClientStatePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+          'drop_opaque_RwLockMioClientState');
+  late final _drop_opaque_RwLockMioClientState =
+      _drop_opaque_RwLockMioClientStatePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  ffi.Pointer<ffi.Void> share_opaque_RwLockMioClientState(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _share_opaque_RwLockMioClientState(
+      ptr,
+    );
+  }
+
+  late final _share_opaque_RwLockMioClientStatePtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Void> Function(
+              ffi.Pointer<ffi.Void>)>>('share_opaque_RwLockMioClientState');
+  late final _share_opaque_RwLockMioClientState =
+      _share_opaque_RwLockMioClientStatePtr
+          .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Void>)>();
+
   void free_WireSyncReturn(
     WireSyncReturn ptr,
   ) {
@@ -153,6 +406,21 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
 }
 
 final class _Dart_Handle extends ffi.Opaque {}
+
+final class wire_RwLockMioClientState extends ffi.Struct {
+  external ffi.Pointer<ffi.Void> ptr;
+}
+
+final class wire_MioClient extends ffi.Struct {
+  external wire_RwLockMioClientState field0;
+}
+
+final class wire_uint_8_list extends ffi.Struct {
+  external ffi.Pointer<ffi.Uint8> ptr;
+
+  @ffi.Int32()
+  external int len;
+}
 
 typedef DartPostCObjectFnType = ffi.Pointer<
     ffi.NativeFunction<

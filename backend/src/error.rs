@@ -1,64 +1,76 @@
-use axum::http::StatusCode;
+use axum::{
+    http::{Response, StatusCode},
+    response::IntoResponse,
+    Json,
+};
 use log::*;
-use mio_migration::DbErr;
-use sea_orm::TransactionError;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 // Internal server errors, depending on the issue
 #[derive(Debug, Error)]
 pub enum MioInnerError {
-    #[error("could not find: `{1}`. \nTRACE:\n{}", .1.backtrace())]
-    NotFound(Level, anyhow::Error),
-    #[error("DATABASE ERROR: `{1}`. \nTRACE:\n{}", .1.backtrace())]
-    DbError(Level, anyhow::Error),
-    #[error("user challenge failure: `{1}`. \nTRACE:\n{}", .1.backtrace())]
-    UserChallengedFail(Level, anyhow::Error, StatusCode),
-    #[error("user creation failure: `{1}`. \nTRACE:\n{}", .1.backtrace())]
-    UserCreationFail(Level, anyhow::Error, StatusCode),
-    #[error("track processing error: `{1}`. \nTRACE:\n{}", .1.backtrace())]
-    TrackProcessingError(Level, anyhow::Error, StatusCode),
-}
-
-// DbErr -> MioInnerError, mostly for logging and StatusCode purposes
-impl From<sea_orm::DbErr> for MioInnerError {
-    fn from(err: sea_orm::DbErr) -> Self {
-        MioInnerError::DbError(Level::Error, anyhow::Error::new(err))
-    }
-}
-
-// actual logic that does the StatusCode and logging
-#[allow(clippy::from_over_into)]
-impl Into<StatusCode> for MioInnerError {
-    fn into(self) -> StatusCode {
-        // log errors
-        log!(match self {
-            MioInnerError::NotFound(lvl, _) |
-            MioInnerError::DbError(lvl, _) |
-            MioInnerError::UserChallengedFail(lvl, _, _) |
-            MioInnerError::UserCreationFail(lvl, _, _) |
-            MioInnerError::TrackProcessingError(lvl, _, _) => lvl,
-        }, "{self}");
-
-        // return status
-        match self {
-            MioInnerError::NotFound(..) => StatusCode::NOT_FOUND,
-            MioInnerError::DbError(..) => StatusCode::INTERNAL_SERVER_ERROR,
-            MioInnerError::UserChallengedFail(_, _, code) |
-            MioInnerError::UserCreationFail(_, _, code) |
-            MioInnerError::TrackProcessingError(_, _, code) => code,
-        }
-    }
+    #[error("could not find: `{0}`. \nTRACE:\n{}", .0.backtrace())]
+    NotFound(anyhow::Error),
+    #[error("DATABASE ERROR: `{0}`. \nTRACE:\n{}", .0.backtrace())]
+    DbError(anyhow::Error),
+    #[error("user challenge failure: `{0}`. \nTRACE:\n{}", .0.backtrace())]
+    UserChallengedFail(anyhow::Error, StatusCode),
+    #[error("user creation failure: `{0}`. \nTRACE:\n{}", .0.backtrace())]
+    UserCreationFail(anyhow::Error, StatusCode),
+    #[error("track processing error: `{0}`. \nTRACE:\n{}", .0.backtrace())]
+    TrackProcessingError(anyhow::Error, StatusCode),
 }
 
 // helper function for translating DbErrs to logged statuscodes
-pub fn db_err(err: DbErr) -> StatusCode {
-    MioInnerError::from(err).into()
+impl From<sqlx::Error> for MioInnerError {
+    fn from(value: sqlx::Error) -> Self {
+        MioInnerError::DbError(anyhow::Error::from(value))
+    }
 }
 
-// change a transaction error to a StatusCode
-pub fn tr_conv_code(err: TransactionError<MioInnerError>) -> StatusCode {
-    match err {
-        TransactionError::Connection(err) => db_err(err),
-        TransactionError::Transaction(err) => err.into(),
+impl IntoResponse for MioInnerError {
+    fn into_response(self) -> axum::response::Response {
+        #[derive(Serialize)]
+        struct Error {
+            error: String,
+        }
+
+        log::log!(
+            match self {
+                MioInnerError::NotFound(_) => Level::Debug,
+                MioInnerError::DbError(_) => Level::Error,
+                MioInnerError::UserChallengedFail(_, _) => Level::Info,
+                MioInnerError::UserCreationFail(_, _) => Level::Error,
+                MioInnerError::TrackProcessingError(_, _) => Level::Error,
+            },
+            "{}",
+            self
+        );
+
+        // return
+        (
+            match self {
+                MioInnerError::NotFound(_) => StatusCode::NOT_FOUND,
+                MioInnerError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                MioInnerError::UserChallengedFail(_, c)
+                | MioInnerError::UserCreationFail(_, c)
+                | MioInnerError::TrackProcessingError(_, c) => c,
+            },
+            Json(Error {
+                error: format!(
+                    "{}",
+                    match self {
+                        MioInnerError::NotFound(e)
+                        | MioInnerError::UserChallengedFail(e, _)
+                        | MioInnerError::UserCreationFail(e, _)
+                        | MioInnerError::TrackProcessingError(e, _) => e,
+                        MioInnerError::DbError(_) =>
+                            anyhow::anyhow!("Internal database error. Please check server log."),
+                    }
+                ),
+            }),
+        )
+            .into_response()
     }
 }

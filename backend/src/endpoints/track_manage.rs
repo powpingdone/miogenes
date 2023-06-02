@@ -27,7 +27,7 @@ pub fn routes() -> Router<MioState> {
 
 async fn track_upload(
     State(state): State<MioState>,
-    Extension(key): Extension<mio_entity::user::Model>,
+    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
     Query(msgstructs::TrackUploadQuery { fname }): Query<msgstructs::TrackUploadQuery>,
     mut payload: BodyStream,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
@@ -39,7 +39,7 @@ async fn track_upload(
 
     // create the dir if not exists
     if let Err(err) =
-        tokio::fs::create_dir(format!("{}{MAIN_SEPARATOR}{}", crate::DATA_DIR.get().unwrap(), key.id)).await {
+        tokio::fs::create_dir(format!("{}{MAIN_SEPARATOR}{}", crate::DATA_DIR.get().unwrap(), userid)).await {
         if err.kind() != ErrorKind::AlreadyExists {
             error!("PUT /track/tu failed to create user directory: {err}");
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
@@ -49,7 +49,7 @@ async fn track_upload(
     // generate filename
     loop {
         uuid = Uuid::new_v4();
-        real_fname = format!("{}{MAIN_SEPARATOR}{}{MAIN_SEPARATOR}{}", crate::DATA_DIR.get().unwrap(), key.id, uuid);
+        real_fname = format!("{}{MAIN_SEPARATOR}{}{MAIN_SEPARATOR}{}", crate::DATA_DIR.get().unwrap(), userid, uuid);
 
         // check if file is already taken
         let check = OpenOptions::new().create_new(true).read(true).write(true).open(real_fname.clone()).await;
@@ -111,7 +111,7 @@ async fn track_upload(
     file.shutdown().await.expect("Failed to shutdown uploaded file: {}");
 
     // set off tasks to process files
-    crate::subtasks::track_upload::track_upload_process(state, uuid, key.id, orig_filename).await?;
+    crate::subtasks::track_upload::track_upload_process(state, uuid, userid, orig_filename).await?;
     Ok((StatusCode::OK, Json(retstructs::UploadReturn { uuid: vec![uuid] })))
 }
 
@@ -124,7 +124,7 @@ async fn rm_file(uuid: Uuid) {
 async fn track_stream(
     State(_state): State<MioState>,
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
-    Extension(mio_entity::user::Model { id: userid, username: _, password: _ }): Extension<mio_entity::user::Model>,
+    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
 ) -> impl IntoResponse {
     // TODO: transcode into something browser friendly, as the file on disk may not
     // actually be consumable by the browser
@@ -153,7 +153,7 @@ async fn track_stream(
 async fn track_delete(
     State(state): State<MioState>,
     Query(id): Query<msgstructs::DeleteQuery>,
-    Extension(key): Extension<mio_entity::user::Model>,
+    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
 ) -> impl IntoResponse {
     todo!()
 }

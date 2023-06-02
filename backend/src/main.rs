@@ -7,38 +7,45 @@ use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::*;
 use log::*;
-use mio_migration::{
-    Migrator,
-    MigratorTrait,
-};
 use once_cell::sync::OnceCell;
-use sea_orm::{
-    Database,
-    DatabaseConnection,
+use sqlx::sqlite::SqliteConnectOptions;
+use sqlx::{
+    ConnectOptions,
+    SqlitePool,
 };
+use std::str::FromStr;
 use std::sync::Arc;
+use subtasks::secret::SecretHolder;
 use tokio::sync::Semaphore;
-use tower_http::services::{
-    ServeDir,
-    ServeFile,
-};
 
 mod endpoints;
-mod subtasks;
 mod db;
-mod user;
 mod error;
-
-pub(crate) use crate::error::*;
+mod subtasks;
+mod user;
 use endpoints::*;
 
-// TODO: use the user supplied dir
+pub(crate) use crate::error::*;
+
+// use endpoints::*; TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 
 #[derive(Clone)]
 pub struct MioState {
-    db: DatabaseConnection,
+    db: SqlitePool,
     lim: Arc<Semaphore>,
+    secret: SecretHolder,
+}
+
+// this is needed for weird axum state shenatigans
+trait MioStateRegen {
+    fn get_self(&self) -> MioState;
+}
+
+impl MioStateRegen for MioState {
+    fn get_self(&self) -> MioState {
+        self.clone()
+    }
 }
 
 async fn version() -> impl IntoResponse {
@@ -56,13 +63,16 @@ async fn version() -> impl IntoResponse {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // TODO: tracing
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("trace"));
     gstreamer::init()?;
 
     // create the main passing state
     trace!("main: creating state");
-    let db = Database::connect("sqlite:file:./files/db?mode=rwc").await?;
-    Migrator::up(&db, None).await?;
+    let settings = SqliteConnectOptions::from_str("sqlite://files/music.db").unwrap().create_if_missing(true);
+    let db = SqlitePool::connect_with(settings).await.expect("Could not load database: {}");
+    trace!("main: migrating database");
+    sqlx::migrate!().run(&db).await.unwrap();
     let state = MioState {
         db,
         lim: Arc::new(Semaphore::const_new({
@@ -73,39 +83,27 @@ async fn main() -> anyhow::Result<()> {
                 cpus - 1
             }
         })),
+        secret: SecretHolder::new().await,
     };
 
-    // spin subtasks
-    trace!("main: spinning subtasks");
-    let subtasks: Vec<tokio::task::JoinHandle<()>> = vec![];
-    trace!("main: building router");
-
-    // TODO: this needs to be not static
-    static STATIC_DIR: &str = "./dist";
-
     // setup the router
+    //
+    // TODO: this needs to be not static
+    trace!("main: building router");
     let router =
         Router::new()
             .nest(
                 "/api",
                 Router::new()
-                    .route("/ver", get(version))
                     .route("/search", get(search::search))
                     .nest("/track", track_manage::routes())
                     .nest("/query", query::routes())
                     .nest("/load", idquery::routes()),
             )
-            .route_layer(middleware::from_extractor_with_state::<user::Authenticate, _>(state.db.clone()))
-            .nest_service("/assets", ServeDir::new(STATIC_DIR))
-            .nest(
-                "/l",
-                Router::new()
-                    .route("/login", get(user::login).post(user::refresh_token))
-                    .route("/logout", post(user::logout))
-                    .route("/signup", post(user::signup)),
-            )
+            .route_layer(middleware::from_extractor_with_state::<user::Authenticate, _>(state.clone()))
+            .nest("/user", Router::new().route("/login", get(user::login)).route("/signup", post(user::signup)))
+            .route("/ver", get(version))
             .layer(axum::middleware::from_fn(log_req))
-            .fallback_service(ServeFile::new(&format!("{STATIC_DIR}/index.html")))
             .with_state(state);
 
     // TODO: bind to user settings
@@ -116,9 +114,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("server exited improperly: {}");
     trace!("main: cleaning up nicely");
-    for subtask in subtasks {
-        subtask.await.expect("could not join servers");
-    }
+    state.db.close().await;
     Ok(())
 }
 
