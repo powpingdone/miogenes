@@ -1,4 +1,5 @@
 use crate::MioState;
+use crate::error::MioInnerError;
 use axum::extract::*;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -6,6 +7,7 @@ use axum::routing::*;
 use futures::StreamExt;
 use log::*;
 use mio_common::*;
+use std::path::MAIN_SEPARATOR;
 use tokio::fs::{
     remove_file,
     File,
@@ -16,7 +18,7 @@ use tokio::io::{
     ErrorKind,
 };
 use uuid::Uuid;
-use std::path::MAIN_SEPARATOR;
+use anyhow::anyhow;
 
 pub fn routes() -> Router<MioState> {
     Router::new()
@@ -42,7 +44,12 @@ async fn track_upload(
         tokio::fs::create_dir(format!("{}{MAIN_SEPARATOR}{}", crate::DATA_DIR.get().unwrap(), userid)).await {
         if err.kind() != ErrorKind::AlreadyExists {
             error!("PUT /track/tu failed to create user directory: {err}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(
+                MioInnerError::TrackProcessingError(
+                    anyhow!("failed to begin uploading serverside"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ),
+            );
         }
     }
 
@@ -65,7 +72,12 @@ async fn track_upload(
                     continue;
                 }
                 error!("PUT /track/tu failed to open file: {err}");
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                return Err(
+                    MioInnerError::TrackProcessingError(
+                        anyhow!("failed to read serverside"),
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    ),
+                );
             },
         }
     }
@@ -95,7 +107,12 @@ async fn track_upload(
                     file.flush().await.expect("Failed to flush uploaded file: {}");
                     drop(file);
                     rm_file(uuid).await;
-                    return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                    return Err(
+                        MioInnerError::TrackProcessingError(
+                            anyhow!("failed to write serverside"),
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                        ),
+                    );
                 }
             },
             // on err just delete the file
@@ -103,7 +120,12 @@ async fn track_upload(
                 // delete failed upload, as well as all other uploads per this req
                 error!("PUT /track/tu failure during streaming chunk: {err}");
                 rm_file(uuid).await;
-                return Err(StatusCode::BAD_REQUEST);
+                return Err(
+                    MioInnerError::TrackProcessingError(
+                        anyhow!("failed to stream chunk: {err}"),
+                        StatusCode::BAD_REQUEST,
+                    ),
+                );
             },
         }
     }

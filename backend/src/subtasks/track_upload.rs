@@ -1,6 +1,9 @@
+use crate::db::uuid_serialize;
+use crate::*;
 use axum::http::StatusCode;
 use glib::SendValue;
 use gstreamer::glib;
+use gstreamer::glib::user_config_dir;
 use gstreamer_app::AppSink;
 use gstreamer_pbutils::prelude::*;
 use gstreamer_pbutils::DiscovererResult;
@@ -10,20 +13,22 @@ use sha2::{
     Digest,
     Sha256,
 };
+use sqlx::Connection;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::Path;
 use uuid::*;
-use crate::*;
 
 // metadata parsed from the individual file
 #[derive(Default)]
 struct Metadata {
     artist: Option<String>,
+    artist_sort: Option<String>,
     title: Option<String>,
     album: Option<String>,
-    overflow: Option<String>,
+    album_sort: Option<String>,
+    other_tags: Option<String>,
     img: Option<Vec<u8>>,
     imghash: Option<[u8; 32]>,
     audiohash: Option<[u8; 32]>,
@@ -38,21 +43,19 @@ pub async fn track_upload_process(
     id: Uuid,
     userid: Uuid,
     orig_filename: String,
-) -> Result<(), StatusCode> {
+) -> Result<(), MioInnerError> {
     // process metadata
     let permit = state.lim.acquire().await.unwrap();
     let mdata = tokio::task::spawn_blocking({
         let orig_filename = orig_filename.clone();
-        move || {
-            get_metadata(format!("{}{}", DATA_DIR.get().unwrap(), id), orig_filename)
-        }
+        move || get_metadata(format!("{}{}", DATA_DIR.get().unwrap(), id), orig_filename)
     }).await.expect("join failure").map_err(|err| {
-        Into::<StatusCode>::into(MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))
+        MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST)
     })?;
     drop(permit);
 
     // insert into the database
-    insert_into_db(state.db, id, userid, mdata, orig_filename).await.map_err(tr_conv_code)
+    insert_into_db(state.db, id, userid, mdata, orig_filename).await
 }
 
 fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Error> {
@@ -149,14 +152,12 @@ fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Er
                 } else {
                     &mut mdata.disk_track.1
                 };
-                *mut_info = proc_tag(data).and_then(|inp| {
-                    match inp.parse() {
-                        Ok(ok) => Some(ok),
-                        Err(err) => {
-                            debug!("{orig_path}: error parsing int out {err}");
-                            None
-                        },
-                    }
+                *mut_info = proc_tag(data).and_then(|inp| match inp.parse() {
+                    Ok(ok) => Some(ok),
+                    Err(err) => {
+                        debug!("{orig_path}: error parsing int out {err}");
+                        None
+                    },
                 });
                 trace!("{orig_path}: disk_track is {:?}", mdata.disk_track)
             },
@@ -188,7 +189,7 @@ fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Er
         }
     }
     if !set.is_empty() {
-        mdata.overflow =
+        mdata.other_tags =
             Some(
                 serde_json::to_string(
                     &set.into_iter().map(|(a, b)| (a.to_string(), b)).collect::<HashMap<_, _>>(),
@@ -304,154 +305,158 @@ async fn insert_into_db(
     userid: Uuid,
     metadata: Metadata,
     orig_filename: String,
-) -> Result<(), TransactionError<MioInnerError>> {
-    db.transaction::<_, _, MioInnerError>(|txn| Box::pin(async move {
-        // transfer ownership
-        let hold = metadata;
-        let metadata = &hold;
-
-        // insert cover art, compare based on imghash
-        debug!("{orig_filename}: Filling cover art");
-        let (cover_art_new_row, cover_art_id) = create_model_and_id(txn, &metadata.imghash, || {
-            cover_art::Column::ImgHash.eq(metadata.imghash.unwrap().to_vec())
-        }, || {
-            cover_art::ActiveModel {
-                id: NotSet,
-                webm_blob: Set(metadata.img.to_owned().unwrap()),
-                img_hash: Set(metadata.imghash.unwrap().to_vec()),
-            }
-        }, cover_art::Column::Id).await?;
-        if cover_art_new_row.is_some() {
-            trace!("{orig_filename}: new cover art generated: {cover_art_id:?}");
-        } else {
-            trace!("{orig_filename}: cover art already exists: {cover_art_id:?}");
-        }
-
-        // insert artist, compare based on artist name
-        debug!("{orig_filename}: Filling artist");
-        let (artist_new_row, artist_id) = create_model_and_id(txn, &metadata.artist, || {
-            artist::Column::Name.eq(metadata.artist.as_ref().unwrap())
-        }, || {
-            artist::ActiveModel {
-                id: NotSet,
-                name: Set(metadata.artist.to_owned().unwrap()),
-                sort_name: Set(None),
-            }
-        }, artist::Column::Id).await?;
-        if artist_new_row.is_some() {
-            trace!("{orig_filename}: new artist generated: {artist_new_row:?}");
-        } else {
-            trace!("{orig_filename}: artist already exists: {artist_id:?}");
-        }
-
-        // insert album, compare based on album title
-        //
-        // TODO: also join based on album artist
-        debug!("{orig_filename}: Filling album");
-        let (album_new_row, album_id) = create_model_and_id(txn, &metadata.album, || {
-            album::Column::Title.eq(metadata.album.as_ref().unwrap())
-        }, || {
-            album::ActiveModel {
-                id: NotSet,
-                title: Set(metadata.album.to_owned().unwrap()),
-            }
-        }, album::Column::Id).await?;
-        if album_new_row.is_some() {
-            trace!("{orig_filename}: new album generated: {album_new_row:?}");
-        } else {
-            trace!("{orig_filename}: album already exists: {album_id:?}");
-        }
-
-        // finally, insert track. compare based on audio_hash
-        //
-        // TODO: if track_new_row doesnt exist, throw an error, meaning that the track
-        // already existed
-        debug!("{orig_filename}: Filling track");
-        let (track_new_row, track_id) = create_model_and_id(txn, Some(()), || {
-            track::Column::AudioHash.eq(metadata.audiohash.unwrap().to_vec())
-        }, || track::ActiveModel {
-            id: Set(id),
-            title: Set(metadata.title.to_owned().unwrap()),
-            sort_name: Set(None),
-            tags: {
-                Set(if metadata.overflow.is_some() {
-                    metadata.overflow.to_owned().unwrap().into()
-                } else {
-                    "{}".to_owned().into()
-                })
-            },
-            audio_hash: Set(metadata.audiohash.unwrap().to_vec()),
-            orig_fname: Set(orig_filename.clone()),
-            album: Set(album_id),
-            artist: Set(artist_id),
-            cover_art: Set(cover_art_id),
-            owner: Set(userid),
-            disk: Set(metadata.disk_track.0),
-            track: Set(metadata.disk_track.1),
-        }, track::Column::Id).await?;
-        if track_new_row.is_some() {
-            trace!("{orig_filename}: track generated: {track_new_row:?}");
-        } else {
-            trace!("{orig_filename}: conflicting uuid found: {track_id:?}");
-        }
-        Ok(())
-    })).await
-}
-
-// This abomination of traits, generics, and params is a generic function to
-// possibly return a new model, and possibly return the id that the track will
-// link to.
-async fn create_model_and_id<
-    DBModel,
-    IsSome,
-    ActiveModelType,
-    IdColumn,
-    ActiveModelFunc,
-    FilterFunc,
-    FilterFuncRet,
->(
-    txn: &DatabaseTransaction,
-    mdatainp: impl Borrow<Option<IsSome>>,
-    filter: FilterFunc,
-    active_model: ActiveModelFunc,
-    id_column: IdColumn,
-) -> Result<(Option<<DBModel as EntityTrait>::Model>, Option<Uuid>), DbErr>
-where
-    DBModel: EntityTrait<Column = IdColumn>,
-    <<DBModel as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType: From<Uuid>,
-    ActiveModelFunc: FnOnce() -> ActiveModelType,
-    ActiveModelType: ActiveModelTrait<Entity = DBModel> + ActiveModelBehavior + Send,
-    FilterFunc: FnOnce() -> FilterFuncRet,
-    FilterFuncRet: IntoCondition,
-    <DBModel as EntityTrait>::Model: IntoActiveModel<ActiveModelType>,
-    IdColumn: Copy {
-    if mdatainp.borrow().is_some() {
-        trace!("CMAI borrowed data is real");
-        let id = DBModel::find().filter(filter()).one(txn).await?;
-        if id.is_none() {
-            trace!("CMAI no item found, bound by filter");
-            let mut ret = active_model();
-            let gen_id = if ret.is_not_set(id_column) {
-                let gen_id = loop {
-                    let uuid = Uuid::new_v4();
-                    if DBModel::find_by_id(uuid).one(txn).await?.is_none() {
-                        break uuid;
+) -> Result<(), MioInnerError> {
+    db.acquire().await?.transaction(|txn| {
+        Box::pin(async move {
+            // insert cover art, check against img_hash
+            let cover_art_id = {
+                if let Some(cover_hash) = metadata.imghash.as_ref() {
+                    let q = cover_hash.as_slice();
+                    match sqlx::query!("SELECT id FROM cover_art
+                            WHERE img_hash = ?;", q)
+                        .fetch_optional(&mut *txn)
+                        .await? {
+                        Some(x) => Some(uuid_serialize(&x.id)?),
+                        None => {
+                            let id = Uuid::new_v4();
+                            let webm_blob = metadata.img.unwrap();
+                            let img_hash_hold = metadata.imghash.unwrap();
+                            let img_hash = img_hash_hold.as_slice();
+                            sqlx::query!(
+                                "INSERT INTO cover_art
+                                    (id, webm_blob, img_hash)
+                                    VALUES (?, ?, ?);",
+                                id,
+                                webm_blob,
+                                img_hash
+                            )
+                                .execute(&mut *txn)
+                                .await?;
+                            trace!("{orig_filename}: new artist generated: {id}");
+                            Some(id)
+                        },
                     }
-                };
-                trace!("CMAI uuid generated: {gen_id}");
-                ret.set(id_column, gen_id.into());
-                gen_id
-            } else {
-                trace!("CMAI uuid already set");
-                ret.get(id_column).unwrap().unwrap()
+                } else {
+                    None
+                }
             };
-            Ok((Some(ret.insert(txn).await?), Some(gen_id)))
-        } else {
-            trace!("CMAI item found, bound by filter");
-            Ok((None, Some(id.unwrap().get(id_column).unwrap())))
-        }
-    } else {
-        trace!("CMAI no borrowed data");
-        Ok((None, None))
-    }
+
+            // insert artist, check on artist name
+            let artist_id = {
+                if let Some(q) = metadata.artist.as_ref() {
+                    match sqlx::query!("SELECT id FROM artist
+                            WHERE artist_name = ?;", q)
+                        .fetch_optional(&mut *txn)
+                        .await? {
+                        Some(x) => Some(uuid_serialize(&x.id)?),
+                        None => {
+                            let id = Uuid::new_v4();
+                            let artist_name = metadata.artist.unwrap();
+                            sqlx::query!(
+                                "INSERT INTO artist
+                                    (id, artist_name, sort_name)
+                                    VALUES (?, ?, ?);",
+                                id,
+                                artist_name,
+                                metadata.artist_sort
+                            )
+                                .execute(&mut *txn)
+                                .await?;
+                            trace!("{orig_filename}: new artist generated: {id}");
+                            Some(id)
+                        },
+                    }
+                } else {
+                    None
+                }
+            };
+
+            // insert album, check on album title
+            let album_id = {
+                if let Some(q) = metadata.album.as_ref() {
+                    match sqlx::query!("SELECT id FROM album
+                            WHERE title = ?;", q)
+                        .fetch_optional(&mut *txn)
+                        .await? {
+                        Some(x) => Some(uuid_serialize(&x.id)?),
+                        None => {
+                            let id = Uuid::new_v4();
+                            let title = metadata.album.unwrap();
+                            sqlx::query!(
+                                "INSERT INTO album
+                                    (id, title, sort_title)
+                                    VALUES (?, ?, ?);",
+                                id,
+                                title,
+                                metadata.album_sort
+                            )
+                                .execute(&mut *txn)
+                                .await?;
+                            trace!("{orig_filename}: new album generated: {id}");
+                            Some(id)
+                        },
+                    }
+                } else {
+                    None
+                }
+            };
+
+            // insert track, check on audiohash
+            let hold = metadata.audiohash.unwrap();
+            let audiohash = hold.as_slice();
+            match sqlx::query!(
+                "SELECT id FROM track
+                WHERE owner = ? AND audio_hash = ?;",
+                userid,
+                audiohash
+            )
+                .fetch_optional(&mut *txn)
+                .await? {
+                Some(x) => {
+                    return Err(
+                        MioInnerError::TrackProcessingError(
+                            anyhow::anyhow!(
+                                "this track already seems to be in conflict with {}, not uploading",
+                                uuid_serialize(&x.id)?
+                            ),
+                            StatusCode::CONFLICT,
+                        ),
+                    )
+                },
+                None => {
+                    let id = Uuid::new_v4();
+                    let ahold = metadata.audiohash.unwrap();
+                    let audiohash = ahold.as_slice(); 
+                    sqlx::query!(
+                        "INSERT INTO track 
+                            (id, 
+                            title, 
+                            disk, 
+                            track, 
+                            tags, 
+                            audio_hash, 
+                            orig_fname, 
+                            album, 
+                            artist, 
+                            cover_art, 
+                            owner) 
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?);",
+                        id,
+                        metadata.title,
+                        metadata.disk_track.0,
+                        metadata.disk_track.1,
+                        metadata.other_tags.unwrap(),
+                        audiohash,
+                        orig_filename,
+                        album_id,
+                        artist_id,
+                        cover_art_id,
+                        userid,
+                    );
+                    trace!("{orig_filename}: new track created: {id}")
+                },
+            }
+            Ok(())
+        })
+    }).await
 }

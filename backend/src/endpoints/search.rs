@@ -1,17 +1,11 @@
+use crate::*;
 use axum::extract::ws::WebSocket;
-use axum::extract::{
-    State,
-    WebSocketUpgrade,
-};
+use axum::extract::{State, WebSocketUpgrade};
 use axum::http::StatusCode;
 use axum::response::Response;
-use axum::{
-    response::IntoResponse,
-    *,
-};
+use axum::{response::IntoResponse, *};
 use log::*;
 use uuid::Uuid;
-use crate::*;
 
 pub async fn search(
     State(state): State<MioState>,

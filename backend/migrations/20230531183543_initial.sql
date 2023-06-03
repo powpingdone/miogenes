@@ -32,7 +32,6 @@ CREATE TABLE IF NOT EXISTS playlist (
 CREATE TABLE IF NOT EXISTS track (
     id BLOB PRIMARY KEY NOT NULL CHECK (length(id) == 16),
     title TEXT NOT NULL,
-    sort_name TEXT NULL,
     disk INTEGER NULL,
     track INTEGER NULL,
     -- extra tags, as json

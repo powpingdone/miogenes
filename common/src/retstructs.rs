@@ -9,10 +9,9 @@ pub struct Track {
     pub cover_art: Option<Uuid>,
     pub artist: Option<Uuid>,
     pub title: String,
-    pub disk: Option<i32>,
-    pub track: Option<i32>,
+    pub disk: Option<i64>,
+    pub track: Option<i64>,
     pub tags: HashMap<String, String>,
-    pub sort_name: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
