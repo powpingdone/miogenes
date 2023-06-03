@@ -1,6 +1,6 @@
 use super::*;
-// Section: wire functions
 
+// Section: wire functions
 #[no_mangle]
 pub extern "C" fn wire_new_mio_client() -> support::WireSyncReturn {
     wire_new_mio_client_impl()
@@ -16,7 +16,6 @@ pub extern "C" fn wire_test_set_url__method__MioClient(
 }
 
 // Section: allocate functions
-
 #[no_mangle]
 pub extern "C" fn new_RwLockMioClientState() -> wire_RwLockMioClientState {
     wire_RwLockMioClientState::new_with_null_ptr()
@@ -37,7 +36,6 @@ pub extern "C" fn new_uint_8_list_0(len: i32) -> *mut wire_uint_8_list {
 }
 
 // Section: related functions
-
 #[no_mangle]
 pub extern "C" fn drop_opaque_RwLockMioClientState(ptr: *const c_void) {
     unsafe {
@@ -54,24 +52,30 @@ pub extern "C" fn share_opaque_RwLockMioClientState(ptr: *const c_void) -> *cons
 }
 
 // Section: impl Wire2Api
-
 impl Wire2Api<RustOpaque<RwLock<MioClientState>>> for wire_RwLockMioClientState {
     fn wire2api(self) -> RustOpaque<RwLock<MioClientState>> {
-        unsafe { support::opaque_from_dart(self.ptr as _) }
+        unsafe {
+            support::opaque_from_dart(self.ptr as _)
+        }
     }
 }
+
 impl Wire2Api<String> for *mut wire_uint_8_list {
     fn wire2api(self) -> String {
         let vec: Vec<u8> = self.wire2api();
         String::from_utf8_lossy(&vec).into_owned()
     }
 }
+
 impl Wire2Api<MioClient> for *mut wire_MioClient {
     fn wire2api(self) -> MioClient {
-        let wrap = unsafe { support::box_from_leak_ptr(self) };
+        let wrap = unsafe {
+            support::box_from_leak_ptr(self)
+        };
         Wire2Api::<MioClient>::wire2api(*wrap).into()
     }
 }
+
 impl Wire2Api<MioClient> for wire_MioClient {
     fn wire2api(self) -> MioClient {
         MioClient(self.field0.wire2api())
@@ -86,8 +90,8 @@ impl Wire2Api<Vec<u8>> for *mut wire_uint_8_list {
         }
     }
 }
-// Section: wire structs
 
+// Section: wire structs
 #[repr(C)]
 #[derive(Clone)]
 pub struct wire_RwLockMioClientState {
@@ -108,7 +112,6 @@ pub struct wire_uint_8_list {
 }
 
 // Section: impl NewWithNullPtr
-
 pub trait NewWithNullPtr {
     fn new_with_null_ptr() -> Self;
 }
@@ -121,17 +124,13 @@ impl<T> NewWithNullPtr for *mut T {
 
 impl NewWithNullPtr for wire_RwLockMioClientState {
     fn new_with_null_ptr() -> Self {
-        Self {
-            ptr: core::ptr::null(),
-        }
+        Self { ptr: core::ptr::null() }
     }
 }
 
 impl NewWithNullPtr for wire_MioClient {
     fn new_with_null_ptr() -> Self {
-        Self {
-            field0: wire_RwLockMioClientState::new_with_null_ptr(),
-        }
+        Self { field0: wire_RwLockMioClientState::new_with_null_ptr() }
     }
 }
 
@@ -142,7 +141,6 @@ impl Default for wire_MioClient {
 }
 
 // Section: sync execution mode utility
-
 #[no_mangle]
 pub extern "C" fn free_WireSyncReturn(ptr: support::WireSyncReturn) {
     unsafe {

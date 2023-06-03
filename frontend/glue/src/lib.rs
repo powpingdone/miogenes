@@ -26,25 +26,17 @@ impl MioClientState {
     }
 
     pub async fn test_set_url(&mut self, url: String) -> anyhow::Result<()> {
-        let ret = CLIENT
-            .get(format!("{url}/ver"))
-            .send()
-            .await?
-            .json::<mio_common::Vers>()
-            .await?;
-        if ret
-            == (mio_common::Vers::new(
+        let ret = CLIENT.get(format!("{url}/ver")).send().await?.json::<mio_common::Vers>().await?;
+        if ret ==
+            (mio_common::Vers::new(
                 konst::unwrap_ctx!(konst::primitive::parse_u16(env!("CARGO_PKG_VERSION_MAJOR"))),
                 konst::unwrap_ctx!(konst::primitive::parse_u16(env!("CARGO_PKG_VERSION_MINOR"))),
                 konst::unwrap_ctx!(konst::primitive::parse_u16(env!("CARGO_PKG_VERSION_PATCH"))),
-            ))
-        {
+            )) {
             self.url = url;
             Ok(())
         } else {
-            Err(anyhow::anyhow!(
-                "either the version is outdated or this is not a miogenes server"
-            ))
+            Err(anyhow::anyhow!("either the version is outdated or this is not a miogenes server"))
         }
     }
 }

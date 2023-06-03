@@ -426,7 +426,7 @@ async fn insert_into_db(
                 None => {
                     let id = Uuid::new_v4();
                     let ahold = metadata.audiohash.unwrap();
-                    let audiohash = ahold.as_slice(); 
+                    let audiohash = ahold.as_slice();
                     sqlx::query!(
                         "INSERT INTO track 
                             (id, 
@@ -451,7 +451,7 @@ async fn insert_into_db(
                         album_id,
                         artist_id,
                         cover_art_id,
-                        userid,
+                        userid
                     );
                     trace!("{orig_filename}: new track created: {id}")
                 },
