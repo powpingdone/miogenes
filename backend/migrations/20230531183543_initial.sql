@@ -32,17 +32,18 @@ CREATE TABLE IF NOT EXISTS playlist (
 CREATE TABLE IF NOT EXISTS track (
     id BLOB PRIMARY KEY NOT NULL CHECK (length(id) == 16),
     title TEXT NOT NULL,
+    path TEXT NOT NULL,
+    owner BLOB NOT NULL,
+    orig_fname TEXT NOT NULL,
+    audio_hash BLOB UNIQUE NOT NULL CHECK (length(audio_hash) == 32),
     disk INTEGER NULL,
     track INTEGER NULL,
     -- extra tags, as json
     tags TEXT NOT NULL,
     -- sha256 hash of the wavelength
-    audio_hash BLOB UNIQUE NOT NULL CHECK (length(audio_hash) == 32),
-    orig_fname TEXT NOT NULL,
     album BLOB NULL,
     artist BLOB NULL,
     cover_art BLOB NULL,
-    owner BLOB NOT NULL,
     FOREIGN KEY(album) REFERENCES album(id),
     FOREIGN KEY(artist) REFERENCES artist(id),
     FOREIGN KEY(cover_art) REFERENCES cover_art(id),

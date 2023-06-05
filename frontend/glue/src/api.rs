@@ -10,7 +10,9 @@ pub use std::sync::RwLock;
 pub struct MioClient(pub RustOpaque<RwLock<MioClientState>>);
 
 pub fn new_mio_client() -> SyncReturn<MioClient> {
-    SyncReturn(MioClient(RustOpaque::new(RwLock::new(MioClientState::new()))))
+    SyncReturn(MioClient(RustOpaque::new(RwLock::new(
+        MioClientState::new(),
+    ))))
 }
 
 impl MioClient {

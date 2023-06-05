@@ -1,15 +1,5 @@
-use jsonwebtoken::{
-    Algorithm,
-    DecodingKey,
-    EncodingKey,
-    Header,
-    TokenData,
-    Validation,
-};
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -26,10 +16,14 @@ const ALG: Algorithm = Algorithm::HS512;
 
 impl JWT {
     pub fn new(inner: JWTInner, secret: &[u8]) -> jsonwebtoken::errors::Result<Self> {
-        Ok(JWT(jsonwebtoken::encode(&Header {
-            alg: ALG,
-            ..Default::default()
-        }, &inner, &EncodingKey::from_secret(secret))?))
+        Ok(JWT(jsonwebtoken::encode(
+            &Header {
+                alg: ALG,
+                ..Default::default()
+            },
+            &inner,
+            &EncodingKey::from_secret(secret),
+        )?))
     }
 
     pub fn from_raw(x: String) -> Self {
@@ -38,7 +32,11 @@ impl JWT {
 
     pub fn decode(self, secret: &[u8]) -> jsonwebtoken::errors::Result<TokenData<JWTInner>> {
         // decode
-        jsonwebtoken::decode(&self.0, &DecodingKey::from_secret(secret), &Validation::new(ALG))
+        jsonwebtoken::decode(
+            &self.0,
+            &DecodingKey::from_secret(secret),
+            &Validation::new(ALG),
+        )
     }
 }
 

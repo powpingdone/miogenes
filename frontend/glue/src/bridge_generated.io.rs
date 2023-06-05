@@ -54,9 +54,7 @@ pub extern "C" fn share_opaque_RwLockMioClientState(ptr: *const c_void) -> *cons
 // Section: impl Wire2Api
 impl Wire2Api<RustOpaque<RwLock<MioClientState>>> for wire_RwLockMioClientState {
     fn wire2api(self) -> RustOpaque<RwLock<MioClientState>> {
-        unsafe {
-            support::opaque_from_dart(self.ptr as _)
-        }
+        unsafe { support::opaque_from_dart(self.ptr as _) }
     }
 }
 
@@ -69,9 +67,7 @@ impl Wire2Api<String> for *mut wire_uint_8_list {
 
 impl Wire2Api<MioClient> for *mut wire_MioClient {
     fn wire2api(self) -> MioClient {
-        let wrap = unsafe {
-            support::box_from_leak_ptr(self)
-        };
+        let wrap = unsafe { support::box_from_leak_ptr(self) };
         Wire2Api::<MioClient>::wire2api(*wrap).into()
     }
 }
@@ -124,13 +120,17 @@ impl<T> NewWithNullPtr for *mut T {
 
 impl NewWithNullPtr for wire_RwLockMioClientState {
     fn new_with_null_ptr() -> Self {
-        Self { ptr: core::ptr::null() }
+        Self {
+            ptr: core::ptr::null(),
+        }
     }
 }
 
 impl NewWithNullPtr for wire_MioClient {
     fn new_with_null_ptr() -> Self {
-        Self { field0: wire_RwLockMioClientState::new_with_null_ptr() }
+        Self {
+            field0: wire_RwLockMioClientState::new_with_null_ptr(),
+        }
     }
 }
 

@@ -1,25 +1,26 @@
 use crate::db::uuid_serialize;
 use crate::*;
+use anyhow::anyhow;
 use axum::http::StatusCode;
 use glib::SendValue;
 use gstreamer::glib;
-use gstreamer::glib::user_config_dir;
 use gstreamer_app::AppSink;
 use gstreamer_pbutils::prelude::*;
 use gstreamer_pbutils::DiscovererResult;
+#[allow(unused)]
 use log::*;
 use path_absolutize::Absolutize;
-use sha2::{
-    Digest,
-    Sha256,
-};
+use sha2::{Digest, Sha256};
 use sqlx::Connection;
-use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::io::Cursor;
 use std::path::Path;
+use std::path::PathBuf;
 use uuid::*;
 
+// TODO: DO NOT SPAM Option<> ON THIS
+//
 // metadata parsed from the individual file
 #[derive(Default)]
 struct Metadata {
@@ -41,24 +42,30 @@ struct Metadata {
 pub async fn track_upload_process(
     state: MioState,
     id: Uuid,
+    path: PathBuf,
+    dir: String,
     userid: Uuid,
     orig_filename: String,
 ) -> Result<(), MioInnerError> {
     // process metadata
-    let permit = state.lim.acquire().await.unwrap();
     let mdata = tokio::task::spawn_blocking({
         let orig_filename = orig_filename.clone();
-        move || get_metadata(format!("{}{}", DATA_DIR.get().unwrap(), id), orig_filename)
-    }).await.expect("join failure").map_err(|err| {
-        MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST)
-    })?;
-    drop(permit);
+        move || get_metadata(path, orig_filename)
+    })
+    .await
+    .map_err(|err| {
+        MioInnerError::TrackProcessingError(
+            anyhow!("failed to run task: {err}"),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })?
+    .map_err(|err| MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))?;
 
     // insert into the database
-    insert_into_db(state.db, id, userid, mdata, orig_filename).await
+    insert_into_db(state.db, id, userid, dir, mdata, orig_filename).await
 }
 
-fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Error> {
+fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::Error> {
     // TODO: make this timeout configurable
     let discover = gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(10))?;
     trace!("{orig_path}: creating discoverer");
@@ -73,10 +80,10 @@ fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Er
         DiscovererResult::Ok => (),
         DiscovererResult::MissingPlugins => {
             anyhow::bail!("Missing plugin needed for file {orig_path}");
-        },
+        }
         DiscovererResult::Timeout => {
             anyhow::bail!("Timeout reached for processing tags")
-        },
+        }
         // these branches _shouldn't_ fail.
         //
         // Busy -> each discoverer is in it's own thread, where it only reads one file
@@ -117,7 +124,10 @@ fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Er
                         let mut imgbuf: Vec<u8> = vec![];
                         for buf in bufs {
                             // TODO: make this error better
-                            buf.map_readable().expect("memory should be readable: {}").iter().for_each(|x| imgbuf.push(*x));
+                            buf.map_readable()
+                                .expect("memory should be readable: {}")
+                                .iter()
+                                .for_each(|x| imgbuf.push(*x));
                         }
                         imgbuf
                     };
@@ -133,19 +143,19 @@ fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Er
                 } else {
                     anyhow::bail!("no buffer found for image");
                 }
-            },
+            }
             "title" => {
                 mdata.title = proc_tag(data);
                 trace!("{orig_path}: title is {:?}", mdata.title)
-            },
+            }
             "artist" => {
                 mdata.artist = proc_tag(data);
                 trace!("{orig_path}: artist is {:?}", mdata.artist)
-            },
+            }
             "album" => {
                 mdata.album = proc_tag(data);
                 trace!("{orig_path}: album is {:?}", mdata.album)
-            },
+            }
             "album-disc-number" | "track-number" => {
                 let mut_info = if tag.as_str() == "album-disc-number" {
                     &mut mdata.disk_track.0
@@ -157,10 +167,10 @@ fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Er
                     Err(err) => {
                         debug!("{orig_path}: error parsing int out {err}");
                         None
-                    },
+                    }
                 });
                 trace!("{orig_path}: disk_track is {:?}", mdata.disk_track)
-            },
+            }
             _ => {
                 // generic handler
                 let data = proc_tag(data);
@@ -178,77 +188,81 @@ fn get_metadata(fname: String, orig_path: String) -> Result<Metadata, anyhow::Er
                         }
                     }
 
-                    let (data, ret) = ({
-                        truncate(format!("{data:?}"))
-                    }, {
+                    let (data, ret) = ({ truncate(format!("{data:?}")) }, {
                         truncate(format!("{ret:?}"))
                     });
                     trace!("{orig_path}: KV inserted ({tag}, {data}), replaced ({tag}, {ret})");
                 }
-            },
+            }
         }
     }
     if !set.is_empty() {
-        mdata.other_tags =
-            Some(
-                serde_json::to_string(
-                    &set.into_iter().map(|(a, b)| (a.to_string(), b)).collect::<HashMap<_, _>>(),
-                )?,
-            );
+        mdata.other_tags = Some(serde_json::to_string(
+            &set.into_iter()
+                .map(|(a, b)| (a.to_string(), b))
+                .collect::<HashMap<_, _>>(),
+        )?);
     }
     if mdata.title.is_none() {
         warn!("{orig_path}: this song has no \"title\" tag, using filename");
-        mdata.title = Some(orig_path.to_owned())
+        mdata.title = Some(orig_path.to_string())
     }
     drop(discover);
 
     // audiohash
     trace!("{orig_path}: beginning audiohash");
-    let pipeline =
-        gstreamer::parse_launch(&format!("uridecodebin3 uri={fname} ! audioconvert ! appsink name=sink"))?
-            .downcast::<gstreamer::Pipeline>()
-            .expect("Expected a gst::Pipeline");
+    let pipeline = gstreamer::parse_launch(&format!(
+        "uridecodebin3 uri={fname} ! audioconvert ! appsink name=sink"
+    ))?
+    .downcast::<gstreamer::Pipeline>()
+    .expect("Expected a gst::Pipeline");
 
     // sink extractor
     //
     // TODO: either do a shared memory thing or Oneshot it
     let (tx, rx) = std::sync::mpsc::channel();
-    let sink =
-        pipeline
-            .by_name("sink")
-            .expect("sink element not found")
-            .dynamic_cast::<AppSink>()
-            .expect("failed dynamic cast to AppSink");
+    let sink = pipeline
+        .by_name("sink")
+        .expect("sink element not found")
+        .dynamic_cast::<AppSink>()
+        .expect("failed dynamic cast to AppSink");
     sink.set_property("sync", false);
     sink.set_callbacks({
         let orig_path = orig_path.to_owned();
-        gstreamer_app::AppSinkCallbacks::builder().new_sample(move |sink| {
-            trace!("{orig_path}: sink match from main loop entered");
-            match sink.pull_sample() {
-                Ok(sample) => match sample.buffer() {
-                    Some(buflist) => {
-                        trace!("{orig_path}: found some buffers, sending over");
-                        tx.send(buflist.iter_memories().flat_map(|buf| {
-                            buf
-                                .map_readable()
-                                .expect("memory should be readable")
-                                .iter()
-                                .copied()
-                                .collect::<Vec<_>>()
-                        }).collect::<Vec<_>>()).unwrap();
-                        Err(gstreamer::FlowError::Eos)
+        gstreamer_app::AppSinkCallbacks::builder()
+            .new_sample(move |sink| {
+                trace!("{orig_path}: sink match from main loop entered");
+                match sink.pull_sample() {
+                    Ok(sample) => match sample.buffer() {
+                        Some(buflist) => {
+                            trace!("{orig_path}: found some buffers, sending over");
+                            tx.send(
+                                buflist
+                                    .iter_memories()
+                                    .flat_map(|buf| {
+                                        buf.map_readable()
+                                            .expect("memory should be readable")
+                                            .iter()
+                                            .copied()
+                                            .collect::<Vec<_>>()
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                            .unwrap();
+                            Err(gstreamer::FlowError::Eos)
+                        }
+                        None => {
+                            debug!("{orig_path}: failed to get buffer list as none was produced");
+                            Err(gstreamer::FlowError::Error)
+                        }
                     },
-                    None => {
-                        debug!("{orig_path}: failed to get buffer list as none was produced");
+                    Err(err) => {
+                        debug!("{orig_path}: failed to grab sample: {err}");
                         Err(gstreamer::FlowError::Error)
-                    },
-                },
-                Err(err) => {
-                    debug!("{orig_path}: failed to grab sample: {err}");
-                    Err(gstreamer::FlowError::Error)
-                },
-            }
-        }).build()
+                    }
+                }
+            })
+            .build()
     });
 
     // begin the actual fetching
@@ -285,7 +299,6 @@ fn hash(data: &[u8]) -> [u8; 32] {
     actual_hash
 }
 
-// TODO: log failures
 fn proc_tag(data: SendValue) -> Option<String> {
     if let Ok(x) = data.get::<String>() {
         trace!("got string directly: {x}");
@@ -303,133 +316,148 @@ async fn insert_into_db(
     db: SqlitePool,
     id: Uuid,
     userid: Uuid,
+    dir: String,
     metadata: Metadata,
     orig_filename: String,
 ) -> Result<(), MioInnerError> {
-    db.acquire().await?.transaction(|txn| {
-        Box::pin(async move {
-            // insert cover art, check against img_hash
-            let cover_art_id = {
-                if let Some(cover_hash) = metadata.imghash.as_ref() {
-                    let q = cover_hash.as_slice();
-                    match sqlx::query!("SELECT id FROM cover_art
-                            WHERE img_hash = ?;", q)
+    db.acquire()
+        .await?
+        .transaction(|txn| {
+            Box::pin(async move {
+                // insert cover art, check against img_hash
+                let cover_art_id = {
+                    if let Some(cover_hash) = metadata.imghash.as_ref() {
+                        let q = cover_hash.as_slice();
+                        match sqlx::query!(
+                            "SELECT id FROM cover_art
+                            WHERE img_hash = ?;",
+                            q
+                        )
                         .fetch_optional(&mut *txn)
-                        .await? {
-                        Some(x) => Some(uuid_serialize(&x.id)?),
-                        None => {
-                            let id = Uuid::new_v4();
-                            let webm_blob = metadata.img.unwrap();
-                            let img_hash_hold = metadata.imghash.unwrap();
-                            let img_hash = img_hash_hold.as_slice();
-                            sqlx::query!(
-                                "INSERT INTO cover_art
+                        .await?
+                        {
+                            Some(x) => Some(uuid_serialize(&x.id)?),
+                            None => {
+                                let id = Uuid::new_v4();
+                                let webm_blob = metadata.img.unwrap();
+                                let img_hash_hold = metadata.imghash.unwrap();
+                                let img_hash = img_hash_hold.as_slice();
+                                sqlx::query!(
+                                    "INSERT INTO cover_art
                                     (id, webm_blob, img_hash)
                                     VALUES (?, ?, ?);",
-                                id,
-                                webm_blob,
-                                img_hash
-                            )
+                                    id,
+                                    webm_blob,
+                                    img_hash
+                                )
                                 .execute(&mut *txn)
                                 .await?;
-                            trace!("{orig_filename}: new artist generated: {id}");
-                            Some(id)
-                        },
+                                trace!("{orig_filename}: new artist generated: {id}");
+                                Some(id)
+                            }
+                        }
+                    } else {
+                        None
                     }
-                } else {
-                    None
-                }
-            };
+                };
 
-            // insert artist, check on artist name
-            let artist_id = {
-                if let Some(q) = metadata.artist.as_ref() {
-                    match sqlx::query!("SELECT id FROM artist
-                            WHERE artist_name = ?;", q)
+                // insert artist, check on artist name
+                let artist_id = {
+                    if let Some(q) = metadata.artist.as_ref() {
+                        match sqlx::query!(
+                            "SELECT id FROM artist
+                            WHERE artist_name = ?;",
+                            q
+                        )
                         .fetch_optional(&mut *txn)
-                        .await? {
-                        Some(x) => Some(uuid_serialize(&x.id)?),
-                        None => {
-                            let id = Uuid::new_v4();
-                            let artist_name = metadata.artist.unwrap();
-                            sqlx::query!(
-                                "INSERT INTO artist
+                        .await?
+                        {
+                            Some(x) => Some(uuid_serialize(&x.id)?),
+                            None => {
+                                let id = Uuid::new_v4();
+                                let artist_name = metadata.artist.unwrap();
+                                sqlx::query!(
+                                    "INSERT INTO artist
                                     (id, artist_name, sort_name)
                                     VALUES (?, ?, ?);",
-                                id,
-                                artist_name,
-                                metadata.artist_sort
-                            )
+                                    id,
+                                    artist_name,
+                                    metadata.artist_sort
+                                )
                                 .execute(&mut *txn)
                                 .await?;
-                            trace!("{orig_filename}: new artist generated: {id}");
-                            Some(id)
-                        },
+                                trace!("{orig_filename}: new artist generated: {id}");
+                                Some(id)
+                            }
+                        }
+                    } else {
+                        None
                     }
-                } else {
-                    None
-                }
-            };
+                };
 
-            // insert album, check on album title
-            let album_id = {
-                if let Some(q) = metadata.album.as_ref() {
-                    match sqlx::query!("SELECT id FROM album
-                            WHERE title = ?;", q)
+                // insert album, check on album title
+                let album_id = {
+                    if let Some(q) = metadata.album.as_ref() {
+                        match sqlx::query!(
+                            "SELECT id FROM album
+                            WHERE title = ?;",
+                            q
+                        )
                         .fetch_optional(&mut *txn)
-                        .await? {
-                        Some(x) => Some(uuid_serialize(&x.id)?),
-                        None => {
-                            let id = Uuid::new_v4();
-                            let title = metadata.album.unwrap();
-                            sqlx::query!(
-                                "INSERT INTO album
+                        .await?
+                        {
+                            Some(x) => Some(uuid_serialize(&x.id)?),
+                            None => {
+                                let id = Uuid::new_v4();
+                                let title = metadata.album.unwrap();
+                                sqlx::query!(
+                                    "INSERT INTO album
                                     (id, title, sort_title)
                                     VALUES (?, ?, ?);",
-                                id,
-                                title,
-                                metadata.album_sort
-                            )
+                                    id,
+                                    title,
+                                    metadata.album_sort
+                                )
                                 .execute(&mut *txn)
                                 .await?;
-                            trace!("{orig_filename}: new album generated: {id}");
-                            Some(id)
-                        },
+                                trace!("{orig_filename}: new album generated: {id}");
+                                Some(id)
+                            }
+                        }
+                    } else {
+                        None
                     }
-                } else {
-                    None
-                }
-            };
+                };
 
-            // insert track, check on audiohash
-            let hold = metadata.audiohash.unwrap();
-            let audiohash = hold.as_slice();
-            match sqlx::query!(
-                "SELECT id FROM track
-                WHERE owner = ? AND audio_hash = ?;",
-                userid,
-                audiohash
-            )
-                .fetch_optional(&mut *txn)
-                .await? {
-                Some(x) => {
-                    return Err(
-                        MioInnerError::TrackProcessingError(
+                // insert track, check on audiohash
+                let hold = metadata.audiohash.unwrap();
+                let audiohash = hold.as_slice();
+                match {
+                    sqlx::query!(
+                        "SELECT id FROM track
+                        WHERE owner = ? AND audio_hash = ?;",
+                        userid,
+                        audiohash
+                    )
+                    .fetch_optional(&mut *txn)
+                    .await?
+                } {
+                    Some(x) => {
+                        return Err(MioInnerError::TrackProcessingError(
                             anyhow::anyhow!(
                                 "this track already seems to be in conflict with {}, not uploading",
                                 uuid_serialize(&x.id)?
                             ),
                             StatusCode::CONFLICT,
-                        ),
-                    )
-                },
-                None => {
-                    let id = Uuid::new_v4();
-                    let ahold = metadata.audiohash.unwrap();
-                    let audiohash = ahold.as_slice();
-                    sqlx::query!(
-                        "INSERT INTO track 
-                            (id, 
+                        ))
+                    }
+                    None => {
+                        let ahold = metadata.audiohash.unwrap();
+                        let audiohash = ahold.as_slice();
+                        let other_tags = metadata.other_tags.unwrap();
+                        sqlx::query!(
+                            "INSERT INTO track 
+                            (id,
                             title, 
                             disk, 
                             track, 
@@ -439,24 +467,29 @@ async fn insert_into_db(
                             album, 
                             artist, 
                             cover_art, 
-                            owner) 
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?);",
-                        id,
-                        metadata.title,
-                        metadata.disk_track.0,
-                        metadata.disk_track.1,
-                        metadata.other_tags.unwrap(),
-                        audiohash,
-                        orig_filename,
-                        album_id,
-                        artist_id,
-                        cover_art_id,
-                        userid
-                    );
-                    trace!("{orig_filename}: new track created: {id}")
-                },
-            }
-            Ok(())
+                            owner,
+                            path) 
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?);",
+                            id,
+                            metadata.title,
+                            metadata.disk_track.0,
+                            metadata.disk_track.1,
+                            other_tags,
+                            audiohash,
+                            orig_filename,
+                            album_id,
+                            artist_id,
+                            cover_art_id,
+                            userid,
+                            dir
+                        )
+                        .execute(&mut *txn)
+                        .await?;
+                        trace!("{orig_filename}: new track created: {id}")
+                    }
+                }
+                Ok(())
+            })
         })
-    }).await
+        .await
 }

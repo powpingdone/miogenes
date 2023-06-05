@@ -1,20 +1,11 @@
+#[allow(unused)]
+use log::*;
 use once_cell::sync::OnceCell;
 use rand::RngCore;
-use std::{
-    io::Cursor,
-    sync::Arc,
-    time::SystemTime,
-};
+use std::{io::Cursor, sync::Arc, time::SystemTime};
 use tokio::{
-    fs::{
-        File,
-        OpenOptions,
-    },
-    io::{
-        AsyncReadExt,
-        AsyncSeekExt,
-        AsyncWriteExt,
-    },
+    fs::{File, OpenOptions},
+    io::{AsyncReadExt, AsyncWriteExt},
     sync::RwLock,
 };
 
@@ -34,19 +25,21 @@ static REFRESH_TASK: OnceCell<tokio::task::JoinHandle<()>> = OnceCell::new();
 
 impl SecretHolder {
     pub async fn new() -> Self {
-        let mut read =
-            OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .open(format!("{}/secret", crate::DATA_DIR.get().unwrap()))
-                .await
-                .expect("Failed to open secret file: {}");
+        let mut read = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(format!("{}/secret", crate::DATA_DIR.get().unwrap()))
+            .await
+            .expect("Failed to open secret file: {}");
         let mut secret: [u8; SECRET_SIZE] = [0; SECRET_SIZE];
         let tryread = read.read_exact(secret.as_mut()).await;
         let secret = {
-            if tryread.as_ref().is_err_and(|err| err.kind() == std::io::ErrorKind::UnexpectedEof) ||
-                tryread.as_ref().is_ok_and(|len| *len != SECRET_SIZE) {
+            if tryread
+                .as_ref()
+                .is_err_and(|err| err.kind() == std::io::ErrorKind::UnexpectedEof)
+                || tryread.as_ref().is_ok_and(|len| *len != SECRET_SIZE)
+            {
                 new_secret(read).await
             } else if tryread.is_ok() {
                 secret
@@ -55,24 +48,28 @@ impl SecretHolder {
             }
         };
         let secret = Arc::new(RwLock::const_new(secret));
-        REFRESH_TASK.set(tokio::spawn({
-            let secret = secret.clone();
-            async move {
-                loop {
-                    tokio::time::sleep(stat_secret().await).await;
-                    let mut write = secret.write().await;
-                    *write =
-                        new_secret(
+        REFRESH_TASK
+            .set(tokio::spawn({
+                let secret = secret.clone();
+                async move {
+                    loop {
+                        tokio::time::sleep(stat_secret().await).await;
+                        let mut write = secret.write().await;
+                        *write = new_secret(
                             OpenOptions::new()
                                 .write(true)
                                 .open(format!("{}/secret", crate::DATA_DIR.get().unwrap()))
                                 .await
-                                .unwrap(),
-                        ).await;
+                                .expect("failed to open secret for writing: {}"),
+                        )
+                        .await;
+                    }
                 }
-            }
-        })).expect("only one SecretHolder may exist at the time of the Miogenes server: {}");
-        Self { curr_secret: secret }
+            }))
+            .expect("only one SecretHolder may exist at the time of the Miogenes server: {}");
+        Self {
+            curr_secret: secret,
+        }
     }
 
     pub async fn get_secret(&self) -> [u8; SECRET_SIZE] {
@@ -81,16 +78,20 @@ impl SecretHolder {
 }
 
 pub async fn stat_secret() -> std::time::Duration {
-    let file =
-        OpenOptions::new().read(true).open(format!("{}/secret", crate::DATA_DIR.get().unwrap())).await.unwrap();
-    let dur =
-        SystemTime::now()
-            .duration_since(file.metadata().await.unwrap().modified().unwrap())
-            .unwrap_or(std::time::Duration::ZERO);
-    if dur > std::time::Duration::from_secs(
-        // seconds in a week
-        604800,
-    ) {
+    let file = OpenOptions::new()
+        .read(true)
+        .open(format!("{}/secret", crate::DATA_DIR.get().unwrap()))
+        .await
+        .expect("failed to open file for metadata statting: {}");
+    let dur = SystemTime::now()
+        .duration_since(file.metadata().await.unwrap().modified().unwrap())
+        .unwrap_or(std::time::Duration::ZERO);
+    if dur
+        > std::time::Duration::from_secs(
+            // seconds in a week
+            604800,
+        )
+    {
         std::time::Duration::ZERO
     } else {
         dur

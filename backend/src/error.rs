@@ -1,16 +1,6 @@
-use axum::{
-    http::{
-        Response,
-        StatusCode,
-    },
-    response::IntoResponse,
-    Json,
-};
+use axum::{http::StatusCode, response::IntoResponse, Json};
 use log::*;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::Serialize;
 use thiserror::Error;
 
 // Internal server errors, depending on the issue
@@ -57,28 +47,45 @@ impl IntoResponse for MioInnerError {
             error: String,
         }
 
-        log::log!(match self {
-            NotFound(_) | Conflict(_) | ExtIoError(_, _) => Level::Debug,
-            UserChallengedFail(_, _) => Level::Info,
-            TrackProcessingError(_, _) => Level::Warn,
-            DbError(_) | UserCreationFail(_, _) | IntIoError(_) => Level::Error,
-        }, "{}", self);
+        log::log!(
+            match self {
+                NotFound(_) | Conflict(_) | ExtIoError(_, _) => Level::Debug,
+                UserChallengedFail(_, _) => Level::Info,
+                TrackProcessingError(_, _) => Level::Warn,
+                DbError(_) | UserCreationFail(_, _) | IntIoError(_) => Level::Error,
+            },
+            "{}",
+            self
+        );
 
         // return
-        (match self {
-            NotFound(_) => StatusCode::NOT_FOUND,
-            Conflict(_) => StatusCode::CONFLICT,
-            IntIoError(_) | DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            UserChallengedFail(_, c) | UserCreationFail(_, c) | TrackProcessingError(_, c) | ExtIoError(_, c) => c,
-        }, Json(Error { error: format!("{}", match self {
-            NotFound(e) |
-            Conflict(e) |
-            UserChallengedFail(e, _) |
-            UserCreationFail(e, _) |
-            TrackProcessingError(e, _) |
-            IntIoError(e) |
-            ExtIoError(e, _) => e,
-            DbError(_) => anyhow::anyhow!("Internal database error. Please check server log."),
-        }) })).into_response()
+        (
+            match self {
+                NotFound(_) => StatusCode::NOT_FOUND,
+                Conflict(_) => StatusCode::CONFLICT,
+                IntIoError(_) | DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                UserChallengedFail(_, c)
+                | UserCreationFail(_, c)
+                | TrackProcessingError(_, c)
+                | ExtIoError(_, c) => c,
+            },
+            Json(Error {
+                error: format!(
+                    "{}",
+                    match self {
+                        NotFound(e)
+                        | Conflict(e)
+                        | UserChallengedFail(e, _)
+                        | UserCreationFail(e, _)
+                        | TrackProcessingError(e, _)
+                        | IntIoError(e)
+                        | ExtIoError(e, _) => e,
+                        DbError(_) =>
+                            anyhow::anyhow!("Internal database error. Please check server log."),
+                    }
+                ),
+            }),
+        )
+            .into_response()
     }
 }

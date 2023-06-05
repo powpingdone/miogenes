@@ -1,7 +1,4 @@
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -51,7 +48,7 @@ pub struct Playlists {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct UploadReturn {
-    pub uuid: Vec<Uuid>,
+    pub uuid: Uuid,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]

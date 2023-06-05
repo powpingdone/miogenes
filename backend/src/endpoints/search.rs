@@ -1,15 +1,10 @@
 use crate::*;
 use axum::extract::ws::WebSocket;
-use axum::extract::{
-    State,
-    WebSocketUpgrade,
-};
+use axum::extract::{State, WebSocketUpgrade};
 use axum::http::StatusCode;
 use axum::response::Response;
-use axum::{
-    response::IntoResponse,
-    *,
-};
+use axum::{response::IntoResponse, *};
+#[allow(unused)]
 use log::*;
 use uuid::Uuid;
 
@@ -18,6 +13,7 @@ pub async fn search(
     ws: WebSocketUpgrade,
     Extension(userid): Extension<Uuid>,
 ) -> Result<Response, impl IntoResponse> {
+    todo!();
     Ok::<_, StatusCode>(ws.on_upgrade(move |x| search_inner(x, state, userid)))
 }
 
