@@ -10,8 +10,9 @@ use futures::StreamExt;
 #[allow(unused)]
 use log::*;
 use mio_common::*;
+use sqlx::Connection;
 use std::path::PathBuf;
-use tokio::fs::{remove_file, File, OpenOptions};
+use tokio::fs::{remove_file, File, OpenOptions, rename};
 use tokio::io::{AsyncWriteExt, ErrorKind};
 use uuid::Uuid;
 
@@ -185,7 +186,7 @@ async fn track_stream(
     match file {
         Err(err) => {
             if err.kind() == ErrorKind::NotFound {
-                debug!("GET /track/stream track {id} under user {userid} doesn't exist");
+                warn!("GET /track/stream track {id} under user {userid} doesn't exist, despite the db saying it does.");
 
                 // TODO: maybe delete the id from the table
                 Err(MioInnerError::NotFound(anyhow!(
@@ -210,7 +211,45 @@ async fn track_move(
     Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
     Query(msgstructs::TrackMove { id, new_path }): Query<msgstructs::TrackMove>,
 ) -> impl IntoResponse {
-    todo!()
+    state
+        .db
+        .acquire()
+        .await?
+        .transaction(|txn| {
+            Box::pin(async move {
+                // preliminary checks
+                let dir = sqlx::query!("SELECT path FROM track WHERE id = ?;", id)
+                    .fetch_optional(&mut *txn)
+                    .await?
+                    .map(|x| x.path)
+                    .ok_or_else(|| {
+                        MioInnerError::NotFound(anyhow!("could not find id {id} for user {userid}"))
+                    })?;
+                let curr_fname = [
+                    *crate::DATA_DIR.get().unwrap(),
+                    &format!("{userid}"),
+                    dir.as_ref(),
+                    &format!("{id}"),
+                ]
+                .into_iter()
+                .collect::<PathBuf>();
+                let next_fname = [
+                    *crate::DATA_DIR.get().unwrap(),
+                    &format!("{userid}"),
+                    new_path.as_ref(),
+                    &format!("{id}"),
+                ]
+                .into_iter()
+                .collect::<PathBuf>();
+                tokio::task::block_in_place(|| check_dir_in_data_dir(next_fname.clone(), userid))?;
+
+                // begin the actual meat of the transaction
+                rename(curr_fname, next_fname).await?;
+                sqlx::query!("UPDATE track SET path = ? WHERE id = ?;", new_path, id).execute(&mut *txn).await?;
+                Ok::<_, MioInnerError>(StatusCode::OK)
+            })
+        })
+        .await
 }
 
 async fn track_delete(

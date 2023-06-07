@@ -98,10 +98,9 @@ async fn folder_rename(
         .await
         .is_ok_and(|x| x)
     {
-        return Err(MioInnerError::ExtIoError(
-            anyhow!("the new directory specified already exists"),
-            StatusCode::CONFLICT,
-        ));
+        return Err(MioInnerError::Conflict(anyhow!(
+            "the new directory specified already exists"
+        )));
     }
 
     // finally, rename

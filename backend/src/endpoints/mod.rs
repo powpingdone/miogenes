@@ -10,6 +10,7 @@ pub mod query;
 pub mod search;
 pub mod track_manage;
 
+// util function to check if path is in user path
 pub(self) fn check_dir_in_data_dir(
     path: impl AsRef<Path>,
     userid: Uuid,
