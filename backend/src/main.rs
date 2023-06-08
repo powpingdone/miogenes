@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
         .nest(
             "/api",
             Router::new()
-                .route("/search", get(search::search))
+                //. route("/search", get(search::search))
                 .nest("/track", track_manage::routes())
                 .nest("/query", query::routes())
                 .nest("/load", idquery::routes())

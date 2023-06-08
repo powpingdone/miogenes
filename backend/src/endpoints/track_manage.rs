@@ -12,16 +12,18 @@ use log::*;
 use mio_common::*;
 use sqlx::Connection;
 use std::path::PathBuf;
-use tokio::fs::{remove_file, File, OpenOptions, rename};
+use tokio::fs::{remove_file, rename, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
 use uuid::Uuid;
 
 pub fn routes() -> Router<MioState> {
-    Router::new()
-        .route("/upload", put(track_upload))
-        .route("/move", patch(track_move))
-        .route("/delete", delete(track_delete))
-        .route("/stream", get(track_stream))
+    Router::new().route(
+        "/",
+        post(track_upload)
+            .get(track_stream)
+            .patch(track_move)
+            .delete(track_delete),
+    )
 }
 
 async fn track_upload(
@@ -30,14 +32,14 @@ async fn track_upload(
     Query(msgstructs::TrackUploadQuery { fname, dir }): Query<msgstructs::TrackUploadQuery>,
     mut payload: BodyStream,
 ) -> impl IntoResponse {
-    trace!("PUT /track/upload acquiring directory lock");
+    trace!("track_upload acquiring directory lock");
     let _lock_hold = state.lock_files.clone();
     let _hold = _lock_hold.write().await;
 
     // TODO: store the filename for dumping purposes
     //
     // find a unique id for the track
-    debug!("PUT /track/upload generating UUID");
+    debug!("track_upload generating UUID");
     let mut track_id;
     let mut file: File;
     let mut real_fname;
@@ -65,7 +67,7 @@ async fn track_upload(
         match check {
             Ok(opened_file) => {
                 trace!(
-                    "PUT /track/upload opened file {}",
+                    "track_upload opened file {}",
                     real_fname.as_os_str().to_string_lossy()
                 );
                 file = opened_file;
@@ -73,10 +75,10 @@ async fn track_upload(
             }
             Err(err) => {
                 if err.kind() == ErrorKind::AlreadyExists {
-                    trace!("PUT /track/upload file already exists");
+                    trace!("track_upload file already exists");
                     continue;
                 }
-                error!("PUT /track/upload failed to open file: {err}");
+                error!("track_upload failed to open file: {err}");
                 return Err(MioInnerError::from(err));
             }
         }
@@ -85,7 +87,7 @@ async fn track_upload(
     // get original filename
     let orig_filename = sanitize_filename::sanitize_with_options(
         fname.unwrap_or_else(|| {
-            trace!("PUT /track/upload generated fname with uuid");
+            trace!("PUT track_upload generated fname with uuid");
             track_id.to_string()
         }),
         sanitize_filename::Options {
@@ -94,7 +96,7 @@ async fn track_upload(
         },
     );
     debug!(
-        "PUT /track/upload filename and uuid used: \"{orig_filename}\" -> \"{}\": {track_id}",
+        "track_upload filename and uuid used: \"{orig_filename}\" -> \"{}\": {track_id}",
         real_fname.as_os_str().to_string_lossy()
     );
 
@@ -107,7 +109,7 @@ async fn track_upload(
         match chunk {
             Ok(chunk) => {
                 if let Err(err) = file.write_all(&chunk).await {
-                    error!("PUT /track/upload failed to write to file: {err}");
+                    error!("PUT track_upload failed to write to file: {err}");
                     file.flush().await?;
                     drop(file);
                     remove_file(real_fname).await?;
@@ -117,7 +119,7 @@ async fn track_upload(
             // on err just delete the file
             Err(err) => {
                 // delete failed upload, as well as all other uploads per this req
-                error!("PUT /track/upload failure during streaming chunk: {err}");
+                error!("track_upload failure during streaming chunk: {err}");
                 file.flush().await?;
                 drop(file);
                 remove_file(real_fname).await?;
@@ -128,7 +130,7 @@ async fn track_upload(
             }
         }
     }
-    trace!("PUT /track/upload, out of chunks, final flushing {track_id}");
+    trace!("track_upload, out of chunks, final flushing {track_id}");
     file.shutdown()
         .await
         .expect("Failed to shutdown uploaded file: {}");
@@ -154,24 +156,26 @@ async fn track_stream(
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
     Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
 ) -> impl IntoResponse {
-    trace!("GET /track/stream locking read dir");
+    trace!("/track/stream locking read dir");
     let _hold = state.lock_files.read().await;
 
     // get dir
-    trace!("GET /track/stream grabbing dir");
+    trace!("/track/stream grabbing dir");
     let mut conn = state.db.acquire().await?;
     let Some(
         dir
-    ) = sqlx::query!("SELECT path FROM track WHERE id = ?;", id).fetch_optional(&mut *conn).await?.map(|x| x.path)
-    else {
+    ) = sqlx:: query !(
+        "SELECT path FROM track WHERE id = ? AND owner = ?;",
+        id,
+        userid
+    ).fetch_optional(&mut *conn).await ?.map(|x| x.path) else {
         return Err(MioInnerError::NotFound(anyhow!("{id} under {userid} does not exist")));
     };
     drop(conn);
 
     // TODO: transcode into something browser friendly, as the file on disk may not
-    // actually be consumable by the browser
-    // read in file
-    trace!("GET /track/stream requesting track {id} under user {userid} via dir {dir}");
+    // actually be consumable by the browser read in file
+    trace!("/track/stream requesting track {id} under user {userid} via dir {dir}");
     let file = tokio::fs::read(
         [
             *crate::DATA_DIR.get().unwrap(),
@@ -186,7 +190,7 @@ async fn track_stream(
     match file {
         Err(err) => {
             if err.kind() == ErrorKind::NotFound {
-                warn!("GET /track/stream track {id} under user {userid} doesn't exist, despite the db saying it does.");
+                warn!("/track/stream track {id} under user {userid} doesn't exist, despite the db saying it does.");
 
                 // TODO: maybe delete the id from the table
                 Err(MioInnerError::NotFound(anyhow!(
@@ -198,7 +202,7 @@ async fn track_stream(
         }
         Ok(bytes) => {
             trace!(
-                "GET /track/stream sending back {:?} bytes from {id}",
+                "/track/stream sending back {:?} bytes from {id}",
                 bytes.len()
             );
             Ok((StatusCode::OK, bytes))
@@ -211,6 +215,8 @@ async fn track_move(
     Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
     Query(msgstructs::TrackMove { id, new_path }): Query<msgstructs::TrackMove>,
 ) -> impl IntoResponse {
+    trace!("/track/move locking read dir");
+    let _hold = state.lock_files.write().await;
     state
         .db
         .acquire()
@@ -218,13 +224,17 @@ async fn track_move(
         .transaction(|txn| {
             Box::pin(async move {
                 // preliminary checks
-                let dir = sqlx::query!("SELECT path FROM track WHERE id = ?;", id)
-                    .fetch_optional(&mut *txn)
-                    .await?
-                    .map(|x| x.path)
-                    .ok_or_else(|| {
-                        MioInnerError::NotFound(anyhow!("could not find id {id} for user {userid}"))
-                    })?;
+                let dir = sqlx::query!(
+                    "SELECT path FROM track WHERE id = ? AND owner = ?;",
+                    id,
+                    userid
+                )
+                .fetch_optional(&mut *txn)
+                .await?
+                .map(|x| x.path)
+                .ok_or_else(|| {
+                    MioInnerError::NotFound(anyhow!("could not find id {id} for user {userid}"))
+                })?;
                 let curr_fname = [
                     *crate::DATA_DIR.get().unwrap(),
                     &format!("{userid}"),
@@ -243,9 +253,17 @@ async fn track_move(
                 .collect::<PathBuf>();
                 tokio::task::block_in_place(|| check_dir_in_data_dir(next_fname.clone(), userid))?;
 
+                // note: no collision check is needed because every id is guaranteed to be unique
                 // begin the actual meat of the transaction
                 rename(curr_fname, next_fname).await?;
-                sqlx::query!("UPDATE track SET path = ? WHERE id = ?;", new_path, id).execute(&mut *txn).await?;
+                sqlx::query!(
+                    "UPDATE track SET path = ? WHERE id = ? AND owner = ?;",
+                    new_path,
+                    id,
+                    userid
+                )
+                .execute(&mut *txn)
+                .await?;
                 Ok::<_, MioInnerError>(StatusCode::OK)
             })
         })
@@ -257,5 +275,24 @@ async fn track_delete(
     Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
     Query(msgstructs::DeleteQuery { id }): Query<msgstructs::DeleteQuery>,
 ) -> impl IntoResponse {
-    todo!()
+    trace!("/track/delete locking write dir");
+    let _hold = state.lock_files.write().await;
+    state.db.acquire().await?.transaction(|txn| Box::pin(async move {
+        let Some(
+            path
+        ) = sqlx:: query !(
+            "SELECT path FROM track WHERE id = ? AND owner = ?;",
+            id,
+            userid
+        ).fetch_optional(&mut *txn).await ?.map(|x| x.path) else {
+            return Err(MioInnerError::NotFound(anyhow!("track {id} for owner {userid} does not exist")));
+        };
+        let path =
+            [*crate::DATA_DIR.get().unwrap(), &format!("{userid}"), &path, &format!("{id}")]
+                .into_iter()
+                .collect::<PathBuf>();
+        sqlx::query!("DELETE FROM track WHERE id = ? AND owner = ?;", id, userid).execute(&mut *txn).await?;
+        remove_file(path).await?;
+        Ok::<_, MioInnerError>(StatusCode::OK)
+    })).await
 }

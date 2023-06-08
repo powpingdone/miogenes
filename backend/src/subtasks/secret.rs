@@ -102,7 +102,7 @@ async fn new_secret(mut file: File) -> [u8; SECRET_SIZE] {
     let mut new = [0; SECRET_SIZE];
     rand::thread_rng().fill_bytes(new.as_mut());
     file.set_len(0).await.unwrap();
-    let mut copy_cursor = Cursor::new(new.clone());
+    let mut copy_cursor = Cursor::new(new);
     file.write_buf(&mut copy_cursor).await.unwrap();
     file.sync_all().await.unwrap();
     new

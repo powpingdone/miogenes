@@ -8,22 +8,30 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::Router;
+use futures::Future;
 #[allow(unused)]
 use log::*;
 use mio_common::*;
 use std::path::PathBuf;
+use std::path::MAIN_SEPARATOR_STR;
+use std::pin::Pin;
 use tokio::fs::create_dir;
 use tokio::fs::metadata;
+use tokio::fs::read_dir;
 use tokio::fs::rename;
 use tokio::fs::try_exists;
+use tokio::fs::ReadDir;
+use uuid::Uuid;
 
 // TODO: pepper with log
 pub fn routes() -> Router<MioState> {
-    Router::new()
-        .route("/new", put(folder_create))
-        .route("/rename", patch(folder_rename))
-        .route("/tree", get(folder_tree))
-        .route("/delete", delete(folder_delete))
+    Router::new().route(
+        "/",
+        put(folder_create)
+            .get(folder_query)
+            .patch(folder_rename)
+            .delete(folder_delete),
+    )
 }
 
 async fn folder_create(
@@ -73,8 +81,8 @@ async fn folder_rename(
         let real = pbuf.components().collect::<Vec<_>>();
         let oldn = old.components().collect::<Vec<_>>();
         let newn = new.components().collect::<Vec<_>>();
-        if &real[..real.len() - 1] != &oldn[..oldn.len() - 1]
-            || &real[..real.len() - 1] != &newn[..newn.len() - 1]
+        if real[..real.len() - 1] != oldn[..oldn.len() - 1]
+            || real[..real.len() - 1] != newn[..newn.len() - 1]
         {
             return Err(MioInnerError::ExtIoError(
                 anyhow!("the movement will not result in the same directory"),
@@ -107,11 +115,108 @@ async fn folder_rename(
     rename(old, new).await.map_err(MioInnerError::from)
 }
 
-async fn folder_tree(
+async fn folder_query(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    path_query: Option<Query<msgstructs::FolderQuery>>,
 ) -> Result<impl IntoResponse, MioInnerError> {
-    Ok(todo!())
+    let _hold = state.lock_files.read().await;
+    let top_level = [*crate::DATA_DIR.get().unwrap(), &format!("{userid}")]
+        .into_iter()
+        .collect::<PathBuf>();
+    if let Some(Query(msgstructs::FolderQuery { path })) = path_query {
+        // query individual folder
+        let mut check = top_level.clone();
+        check.push(path);
+        tokio::task::block_in_place(|| check_dir_in_data_dir(check.clone(), userid))?;
+        let mut ret = vec![];
+        let mut read_dir = read_dir(check).await?;
+        while let Some(x) = read_dir.next_entry().await? {
+            if x.file_type().await?.is_file() {
+                ret.push(
+                    Uuid::parse_str(
+                        x.file_name().into_string().map_err(|err| {
+                            MioInnerError::IntIoError(
+                                anyhow!(
+                                    "could not convert internal file name into string to become uuid: name is {err:?}"
+                                ),
+                            )
+                        })?.as_str(),
+                    ).map_err(|err| MioInnerError::IntIoError(anyhow!("internal file name is not a uuid: {err}")))?,
+                );
+            }
+        }
+        Ok(Json(retstructs::FolderQuery {
+            ret: retstructs::FolderQueryRet::Track(ret),
+        }))
+    } else {
+        // query folder tree
+        Ok(Json(retstructs::FolderQuery {
+            ret: retstructs::FolderQueryRet::Tree(
+                folder_tree_inner(
+                    top_level.clone(),
+                    read_dir(top_level).await?,
+                    MAIN_SEPARATOR_STR.try_into().unwrap(),
+                )
+                .await?,
+            ),
+        }))
+    }
+}
+
+// TODO: TEST THIS FOR THE LOVE OF HOLY MOTHER MARY JOESPH
+fn folder_tree_inner(
+    base_dir: PathBuf,
+    mut dir: ReadDir,
+    curr_path: PathBuf,
+) -> Pin<Box<dyn Future<Output = Result<Vec<PathBuf>, MioInnerError>> + Send>> {
+    // The strange return type is due to recursion. I don't think that this could have
+    // been impl'd reasonably any other way. Thanks rust async!
+    Box::pin(async move {
+        // 1: collect all the dirs
+        let mut dirs = vec![];
+        while let Some(file) = dir.next_entry().await? {
+            if file.file_type().await?.is_dir() {
+                dirs.push(file.file_name());
+            }
+        }
+
+        // 2: for each dir, recurse into each and see if they have any dirs
+        let dir_futs = dirs
+            .into_iter()
+            .map(|next_dir| {
+                let next_display_path = [curr_path.clone(), next_dir.into()]
+                    .into_iter()
+                    .collect::<PathBuf>();
+                let reading_dir = [base_dir.clone(), next_display_path.clone()]
+                    .into_iter()
+                    .collect::<PathBuf>();
+                tokio::spawn({
+                    let base_dir = base_dir.clone();
+                    async move {
+                        folder_tree_inner(base_dir, read_dir(reading_dir).await?, next_display_path)
+                            .await
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut dirs_finished = vec![];
+        for fut in dir_futs {
+            dirs_finished.push(fut.await.map_err(|err| {
+                MioInnerError::IntIoError(anyhow!("failed to join task: {err}"))
+            })??);
+        }
+
+        // 3: flatten, and concatenate with the curr path. the current path is appended too
+        let mut ret = vec![curr_path.clone()];
+        ret.extend(
+            dirs_finished
+                .into_iter()
+                .flatten()
+                .map(|x| [curr_path.clone(), x].into_iter().collect()),
+        );
+        Ok(ret)
+    })
 }
 
 async fn folder_delete(
@@ -119,5 +224,6 @@ async fn folder_delete(
     Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> Result<impl IntoResponse, MioInnerError> {
+    let _hold = state.lock_files.write().await;
     Ok(todo!())
 }

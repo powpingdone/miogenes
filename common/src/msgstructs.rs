@@ -29,6 +29,11 @@ pub struct FolderCreateDelete {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct FolderQuery {
+    pub path: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct FolderRename {
     pub path: String,
     pub old_name: String,
