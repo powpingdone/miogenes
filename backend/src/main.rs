@@ -20,7 +20,7 @@ mod user;
 pub(crate) use crate::error::*;
 use endpoints::*;
 
-// use endpoints::*; TODO: use the user supplied dir
+// TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value("./files/");
 
 #[derive(Clone)]
@@ -83,7 +83,6 @@ async fn main() -> anyhow::Result<()> {
         .nest(
             "/api",
             Router::new()
-                //. route("/search", get(search::search))
                 .nest("/track", track_manage::routes())
                 .nest("/query", query::routes())
                 .nest("/load", idquery::routes())
@@ -97,6 +96,20 @@ async fn main() -> anyhow::Result<()> {
                 .route("/signup", post(user::signup)),
         )
         .route("/ver", get(version))
+        .layer(tower_http::catch_panic::CatchPanicLayer::custom(
+            |x: Box<dyn std::any::Any + Send>| {
+                MioInnerError::Panicked({
+                    if let Some(ret) = x.downcast_ref::<&str>() {
+                        anyhow::anyhow!("{ret}")
+                    } else if let Ok(ret) = x.downcast::<String>() {
+                        anyhow::anyhow!("{ret}")
+                    } else {
+                        anyhow::anyhow!("panic could not be serialized")
+                    }
+                })
+                .into_response()
+            },
+        ))
         .layer(axum::middleware::from_fn(log_req))
         .with_state(state.clone());
 

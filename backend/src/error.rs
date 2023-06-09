@@ -1,7 +1,9 @@
+use anyhow::anyhow;
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use log::*;
 use serde::Serialize;
 use thiserror::Error;
+use MioInnerError::*;
 
 // Internal server errors, depending on the issue
 #[derive(Debug, Error)]
@@ -10,6 +12,8 @@ pub enum MioInnerError {
     NotFound(anyhow::Error),
     #[error("DATABASE ERROR: `{0}`. \nTRACE:\n{}", .0.backtrace())]
     DbError(anyhow::Error),
+    #[error("internal thread issue: `{0}`. \nTRACE:\n{}", .0.backtrace())]
+    Panicked(anyhow::Error),
     #[error("user challenge failure: `{0}`. \nTRACE:\n{}", .0.backtrace())]
     UserChallengedFail(anyhow::Error, StatusCode),
     #[error("user creation failure: `{0}`. \nTRACE:\n{}", .0.backtrace())]
@@ -24,24 +28,27 @@ pub enum MioInnerError {
     Conflict(anyhow::Error),
 }
 
-// helper function for translating DbErrs to logged statuscodes
-impl From<sqlx::Error> for MioInnerError {
-    fn from(value: sqlx::Error) -> Self {
-        MioInnerError::DbError(anyhow::Error::from(value))
+// various helper functions for translating common errors
+impl From<tokio::task::JoinError> for MioInnerError {
+    fn from(value: tokio::task::JoinError) -> Self {
+        Panicked(anyhow::Error::from(value))
     }
 }
 
-// internal std::io::error translator
+impl From<sqlx::Error> for MioInnerError {
+    fn from(value: sqlx::Error) -> Self {
+        DbError(anyhow::Error::from(value))
+    }
+}
+
 impl From<std::io::Error> for MioInnerError {
     fn from(value: std::io::Error) -> Self {
-        MioInnerError::IntIoError(anyhow::Error::from(value))
+        IntIoError(anyhow::Error::from(value))
     }
 }
 
 impl IntoResponse for MioInnerError {
     fn into_response(self) -> axum::response::Response {
-        use MioInnerError::*;
-
         #[derive(Serialize)]
         struct Error {
             error: String,
@@ -52,40 +59,35 @@ impl IntoResponse for MioInnerError {
                 NotFound(_) | Conflict(_) | ExtIoError(_, _) => Level::Debug,
                 UserChallengedFail(_, _) => Level::Info,
                 TrackProcessingError(_, _) => Level::Warn,
-                DbError(_) | UserCreationFail(_, _) | IntIoError(_) => Level::Error,
+                DbError(_) | UserCreationFail(_, _) | IntIoError(_) | Panicked(_) => Level::Error,
             },
             "{}",
             self
         );
 
         // return
-        (
-            match self {
-                NotFound(_) => StatusCode::NOT_FOUND,
-                Conflict(_) => StatusCode::CONFLICT,
-                IntIoError(_) | DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-                UserChallengedFail(_, c)
-                | UserCreationFail(_, c)
-                | TrackProcessingError(_, c)
-                | ExtIoError(_, c) => c,
+        (match self {
+            NotFound(_) => StatusCode::NOT_FOUND,
+            Conflict(_) => StatusCode::CONFLICT,
+            IntIoError(_) | DbError(_) | Panicked(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            UserChallengedFail(_, c) | UserCreationFail(_, c) | TrackProcessingError(_, c) | ExtIoError(_, c) => c,
+        }, Json(Error { error: format!("{}", match self {
+            NotFound(e) |
+            Conflict(e) |
+            UserChallengedFail(e, _) |
+            UserCreationFail(e, _) |
+            TrackProcessingError(e, _) |
+            ExtIoError(e, _) => e,
+            // these errors are not put into the error field as they could leak information
+            IntIoError(_) => {
+                anyhow!("The server encountered an filesystem io error. Please check the server log.")
             },
-            Json(Error {
-                error: format!(
-                    "{}",
-                    match self {
-                        NotFound(e)
-                        | Conflict(e)
-                        | UserChallengedFail(e, _)
-                        | UserCreationFail(e, _)
-                        | TrackProcessingError(e, _)
-                        | IntIoError(e)
-                        | ExtIoError(e, _) => e,
-                        DbError(_) =>
-                            anyhow::anyhow!("Internal database error. Please check server log."),
-                    }
-                ),
-            }),
-        )
-            .into_response()
+            Panicked(_) => {
+                anyhow!("The server encountered an error it could not handle. Please check the server log.")
+            },
+            DbError(_) => {
+                anyhow!("The server encountered an internal database error. Please check server log.")
+            },
+        }) })).into_response()
     }
 }

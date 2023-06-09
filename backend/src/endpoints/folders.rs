@@ -18,6 +18,7 @@ use std::pin::Pin;
 use tokio::fs::create_dir;
 use tokio::fs::metadata;
 use tokio::fs::read_dir;
+use tokio::fs::remove_dir;
 use tokio::fs::rename;
 use tokio::fs::try_exists;
 use tokio::fs::ReadDir;
@@ -39,7 +40,7 @@ async fn folder_create(
     Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> impl IntoResponse {
-    tokio::task::block_in_place(|| check_dir_in_data_dir(format!("{path}/{name}"), userid))?;
+    check_dir_in_data_dir(format!("{path}/{name}"), userid)?;
     let _hold = state.lock_files.write().await;
     let pbuf: PathBuf = [*DATA_DIR.get().unwrap(), &format!("{userid}"), &path, &name]
         .iter()
@@ -73,24 +74,32 @@ async fn folder_rename(
     let new = new.canonicalize()?;
 
     // majority of blocking code here
-    tokio::task::block_in_place(|| {
-        check_dir_in_data_dir(format!("{path}/{old_name}"), userid)?;
-        check_dir_in_data_dir(format!("{path}/{new_name}"), userid)?;
+    tokio::task::spawn_blocking({
+        let path = path.clone();
+        let old_name = old_name.clone();
+        let new_name = new_name.clone();
+        let old = old.clone();
+        let new = new.clone();
+        move || {
+            check_dir_in_data_dir(format!("{path}/{old_name}"), userid)?;
+            check_dir_in_data_dir(format!("{path}/{new_name}"), userid)?;
 
-        // make sure it's in the same parent directory
-        let real = pbuf.components().collect::<Vec<_>>();
-        let oldn = old.components().collect::<Vec<_>>();
-        let newn = new.components().collect::<Vec<_>>();
-        if real[..real.len() - 1] != oldn[..oldn.len() - 1]
-            || real[..real.len() - 1] != newn[..newn.len() - 1]
-        {
-            return Err(MioInnerError::ExtIoError(
-                anyhow!("the movement will not result in the same directory"),
-                StatusCode::BAD_REQUEST,
-            ));
+            // make sure it's in the same parent directory
+            let real = pbuf.components().collect::<Vec<_>>();
+            let oldn = old.components().collect::<Vec<_>>();
+            let newn = new.components().collect::<Vec<_>>();
+            if real[..real.len() - 1] != oldn[..oldn.len() - 1]
+                || real[..real.len() - 1] != newn[..newn.len() - 1]
+            {
+                return Err(MioInnerError::ExtIoError(
+                    anyhow!("the movement will not result in the same directory"),
+                    StatusCode::BAD_REQUEST,
+                ));
+            }
+            Ok(())
         }
-        Ok(())
-    })?;
+    })
+    .await??;
 
     // and make sure it's also a directory
     let _hold = state.lock_files.write().await;
@@ -128,7 +137,7 @@ async fn folder_query(
         // query individual folder
         let mut check = top_level.clone();
         check.push(path);
-        tokio::task::block_in_place(|| check_dir_in_data_dir(check.clone(), userid))?;
+        check_dir_in_data_dir(check.clone(), userid)?;
         let mut ret = vec![];
         let mut read_dir = read_dir(check).await?;
         while let Some(x) = read_dir.next_entry().await? {
@@ -202,9 +211,7 @@ fn folder_tree_inner(
             .collect::<Vec<_>>();
         let mut dirs_finished = vec![];
         for fut in dir_futs {
-            dirs_finished.push(fut.await.map_err(|err| {
-                MioInnerError::IntIoError(anyhow!("failed to join task: {err}"))
-            })??);
+            dirs_finished.push(fut.await??);
         }
 
         // 3: flatten, and concatenate with the curr path. the current path is appended too
@@ -225,5 +232,26 @@ async fn folder_delete(
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> Result<impl IntoResponse, MioInnerError> {
     let _hold = state.lock_files.write().await;
-    Ok(todo!())
+    let real_path = [
+        *crate::DATA_DIR.get().unwrap(),
+        &format!("{userid}"),
+        &path,
+        &name,
+    ]
+    .into_iter()
+    .collect::<PathBuf>();
+    check_dir_in_data_dir(&real_path, userid)?;
+
+    // check if dir has contents https://github.com/rust-lang/rust/issues/86442
+    if read_dir(&real_path).await?.next_entry().await?.is_none() {
+        return Err(MioInnerError::ExtIoError(
+            anyhow!(
+                "Directory {:?} has items, please remove them.",
+                [name, path].into_iter().collect::<PathBuf>()
+            ),
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    remove_dir(real_path).await?;
+    Ok(())
 }

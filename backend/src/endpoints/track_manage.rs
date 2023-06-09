@@ -55,7 +55,7 @@ async fn track_upload(
         ]
         .into_iter()
         .collect::<PathBuf>();
-        tokio::task::block_in_place(|| check_dir_in_data_dir(real_fname.clone(), userid))?;
+        check_dir_in_data_dir(real_fname.clone(), userid)?;
 
         // check if file is already taken
         let check = OpenOptions::new()
@@ -251,9 +251,9 @@ async fn track_move(
                 ]
                 .into_iter()
                 .collect::<PathBuf>();
-                tokio::task::block_in_place(|| check_dir_in_data_dir(next_fname.clone(), userid))?;
+                check_dir_in_data_dir(next_fname.clone(), userid)?;
 
-                // note: no collision check is needed because every id is guaranteed to be unique
+                // note: no collision check is needed because every id is guaranteed to be unique.
                 // begin the actual meat of the transaction
                 rename(curr_fname, next_fname).await?;
                 sqlx::query!(
