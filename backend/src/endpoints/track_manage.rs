@@ -28,7 +28,7 @@ pub fn routes() -> Router<MioState> {
 
 async fn track_upload(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid , .. }): Extension<auth::JWTInner>,
     Query(msgstructs::TrackUploadQuery { fname, dir }): Query<msgstructs::TrackUploadQuery>,
     mut payload: BodyStream,
 ) -> impl IntoResponse {
@@ -154,7 +154,7 @@ async fn track_upload(
 async fn track_stream(
     State(state): State<MioState>,
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
 ) -> impl IntoResponse {
     trace!("/track/stream locking read dir");
     let _hold = state.lock_files.read().await;
@@ -212,7 +212,7 @@ async fn track_stream(
 
 async fn track_move(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::TrackMove { id, new_path }): Query<msgstructs::TrackMove>,
 ) -> impl IntoResponse {
     trace!("/track/move locking read dir");
@@ -272,7 +272,7 @@ async fn track_move(
 
 async fn track_delete(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::DeleteQuery { id }): Query<msgstructs::DeleteQuery>,
 ) -> impl IntoResponse {
     trace!("/track/delete locking write dir");

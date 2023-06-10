@@ -2,7 +2,7 @@
 use log::*;
 use once_cell::sync::OnceCell;
 use rand::RngCore;
-use std::{io::Cursor, sync::Arc, time::SystemTime};
+use std::{io::Cursor, path::PathBuf, sync::Arc, time::SystemTime};
 use tokio::{
     fs::{File, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
@@ -29,9 +29,13 @@ impl SecretHolder {
             .read(true)
             .write(true)
             .create(true)
-            .open(format!("{}/secret", crate::DATA_DIR.get().unwrap()))
+            .open(
+                [crate::DATA_DIR.get().unwrap(), "secret"]
+                    .into_iter()
+                    .collect::<PathBuf>(),
+            )
             .await
-            .expect("Failed to open secret file: {}");
+            .expect("Failed to open secret file");
         let mut secret: [u8; SECRET_SIZE] = [0; SECRET_SIZE];
         let tryread = read.read_exact(secret.as_mut()).await;
         let secret = {
@@ -60,13 +64,13 @@ impl SecretHolder {
                                 .write(true)
                                 .open(format!("{}/secret", crate::DATA_DIR.get().unwrap()))
                                 .await
-                                .expect("failed to open secret for writing: {}"),
+                                .expect("failed to open secret for writing"),
                         )
                         .await;
                     }
                 }
             }))
-            .expect("only one SecretHolder may exist at the time of the Miogenes server: {}");
+            .expect("only one SecretHolder may exist at the time of the Miogenes server");
         Self {
             curr_secret: secret,
         }

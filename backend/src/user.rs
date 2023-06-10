@@ -1,14 +1,16 @@
 use crate::db::uuid_serialize;
+use crate::subtasks::secret::stat_secret;
 use crate::{MioInnerError, MioState, MioStateRegen};
 use anyhow::anyhow;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::extract::{FromRequestParts, State};
 use axum::headers::authorization::{Basic, Bearer};
-use axum::headers::{Authorization, Cookie};
+use axum::headers::Authorization;
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{async_trait, Json, RequestPartsExt, TypedHeader};
+use chrono::Utc;
 use log::*;
 use mio_common::*;
 use sqlx::Connection;
@@ -30,27 +32,16 @@ where
         let auth = {
             // auth header
             let authheader: Result<TypedHeader<Authorization<Bearer>>, _> = req.extract().await;
-            let cookies: Result<TypedHeader<Cookie>, _> = req.extract().await;
             let raw_token = if let Ok(auth_bearer) = authheader.as_ref() {
                 auth_bearer.token()
-            } else if let Ok(cookies) = cookies.as_ref() {
-                cookies.get("Token").ok_or_else(|| {
-                    MioInnerError::UserChallengedFail(
-                        anyhow!("'Token' does not exist in cookies"),
-                        StatusCode::BAD_REQUEST,
-                    )
-                })?
             } else {
-                return Err(
-                    MioInnerError::UserChallengedFail(
-                        anyhow!(
-                            "failed to get token as both auth and cookie were in err: (auth: {}, cookie: {})",
-                            authheader.unwrap_err(),
-                            cookies.unwrap_err()
-                        ),
-                        StatusCode::BAD_REQUEST,
+                return Err(MioInnerError::UserChallengedFail(
+                    anyhow!(
+                        "failed to get token as auth was in err: {}",
+                        authheader.unwrap_err(),
                     ),
-                );
+                    StatusCode::BAD_REQUEST,
+                ));
             };
             auth::JWT::from_raw(raw_token.to_string())
                 .decode(&state.secret.get_secret().await)
@@ -115,6 +106,14 @@ pub async fn login(
     let token = auth::JWT::new(
         auth::JWTInner {
             userid: uuid_serialize(&user.id)?,
+            exp: (Utc::now()
+                + chrono::Duration::from_std(stat_secret().await).map_err(|err| {
+                    MioInnerError::UserChallengedFail(
+                        anyhow!("Failed to generate exp: {err}"),
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    )
+                })?)
+            .timestamp(),
         },
         &state.secret.get_secret().await,
     )
@@ -215,4 +214,20 @@ pub async fn signup(
             })
         })
         .await
+}
+
+#[cfg(test)]
+mod test {
+    use axum::http::{Method, StatusCode};
+
+    use crate::test::*;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn user_auth_good() {
+        let jwt = gen_user("user_auth_good").await;
+        let resp = jwt_header(Method::GET, "/api/auth_test", &jwt).send().await;
+        let status = resp.status();
+        dbg!(resp.text().await);
+        assert_eq!(status, StatusCode::OK)
+    }
 }

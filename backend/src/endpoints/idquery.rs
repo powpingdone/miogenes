@@ -10,7 +10,7 @@ pub fn routes() -> Router<MioState> {
 
 async fn get_albums(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, ..  }): Extension<auth::JWTInner>,
 ) -> impl IntoResponse {
     Ok::<_, MioInnerError>((
         StatusCode::OK,
@@ -35,7 +35,7 @@ async fn get_albums(
 
 async fn get_playlists(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, ..  }): Extension<auth::JWTInner>,
 ) -> impl IntoResponse {
     Ok::<_, MioInnerError>((
         StatusCode::OK,

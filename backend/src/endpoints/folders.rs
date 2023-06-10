@@ -37,7 +37,7 @@ pub fn routes() -> Router<MioState> {
 
 async fn folder_create(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, ..  }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> impl IntoResponse {
     check_dir_in_data_dir(format!("{path}/{name}"), userid)?;
@@ -55,7 +55,7 @@ async fn folder_create(
 
 async fn folder_rename(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, ..  }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderRename {
         path,
         old_name,
@@ -126,7 +126,7 @@ async fn folder_rename(
 
 async fn folder_query(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, ..  }): Extension<auth::JWTInner>,
     path_query: Option<Query<msgstructs::FolderQuery>>,
 ) -> Result<impl IntoResponse, MioInnerError> {
     let _hold = state.lock_files.read().await;
@@ -228,7 +228,7 @@ fn folder_tree_inner(
 
 async fn folder_delete(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> Result<impl IntoResponse, MioInnerError> {
     let _hold = state.lock_files.write().await;

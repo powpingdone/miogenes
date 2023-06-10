@@ -12,10 +12,16 @@ impl std::fmt::Debug for JWT {
     }
 }
 
+impl ToString for JWT {
+    fn to_string(&self) -> String {
+        self.0.clone()
+    }
+}
+
 const ALG: Algorithm = Algorithm::HS512;
 
 impl JWT {
-    pub fn new(inner: JWTInner, secret: &[u8]) -> jsonwebtoken::errors::Result<Self> {
+    pub fn new(inner: JWTInner, secret: &[u8],) -> jsonwebtoken::errors::Result<Self> {
         Ok(JWT(jsonwebtoken::encode(
             &Header {
                 alg: ALG,
@@ -43,4 +49,5 @@ impl JWT {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct JWTInner {
     pub userid: Uuid,
+    pub exp: i64,
 }

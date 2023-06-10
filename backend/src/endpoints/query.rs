@@ -28,7 +28,7 @@ fn uuid_map_back(x: Option<Vec<u8>>) -> Result<Option<Uuid>, MioInnerError> {
 
 async fn track_info(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
     Ok::<_, MioInnerError>((
@@ -61,7 +61,7 @@ async fn track_info(
 
 async fn album_info(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
     Ok::<_, MioInnerError>((
@@ -110,7 +110,7 @@ async fn album_info(
 
 async fn playlist_info(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
     Ok::<_, MioInnerError>((
@@ -157,7 +157,7 @@ async fn playlist_info(
 
 async fn cover_art(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
     Ok::<_, MioInnerError>((
@@ -184,7 +184,7 @@ async fn cover_art(
 
 async fn artist(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
 ) -> impl IntoResponse {
     Ok::<_, MioInnerError>((
