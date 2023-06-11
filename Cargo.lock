@@ -159,6 +159,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79d6dc922a2792b006573f60b2648076355daeae5ce9cb59507e5908c9625d31"
 
 [[package]]
+name = "auto-future"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c1e7e457ea78e524f48639f551fd79703ac3f2237f5ecccdf4708f8a75ad373"
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -228,6 +234,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.18",
+]
+
+[[package]]
+name = "axum-test"
+version = "9.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "550dda6ebd9ac39e980faf1d62ff844d38de854c1ccf2256e5ed823a378496dc"
+dependencies = [
+ "anyhow",
+ "auto-future",
+ "axum",
+ "cookie",
+ "hyper",
+ "portpicker",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -412,6 +435,16 @@ name = "const_panic"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6051f239ecec86fde3410901ab7860d458d160371533842974fc61f96d15879b"
+
+[[package]]
+name = "cookie"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7efb37c3e1ccb1ff97164ad95ac1606e8ccd35b3fa0a7d99a304c7f4a428cc24"
+dependencies = [
+ "time 0.3.22",
+ "version_check",
+]
 
 [[package]]
 name = "core-foundation"
@@ -1665,7 +1698,9 @@ dependencies = [
  "argon2",
  "async-trait",
  "axum",
+ "axum-test",
  "base64 0.21.2",
+ "cfg-if",
  "chrono",
  "env_logger",
  "futures",
@@ -2030,6 +2065,15 @@ dependencies = [
  "fdeflate",
  "flate2",
  "miniz_oxide 0.7.1",
+]
+
+[[package]]
+name = "portpicker"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
+dependencies = [
+ "rand",
 ]
 
 [[package]]

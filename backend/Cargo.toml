@@ -50,4 +50,5 @@ sqlx = { version = "0.6", features = [
 cfg-if = "1.0.0"
 
 [dev-dependencies]
-axum-test-helper = "0.3"
+axum-test = "9.1"
+jsonwebtoken = "8.3"

@@ -21,7 +21,7 @@ impl ToString for JWT {
 const ALG: Algorithm = Algorithm::HS512;
 
 impl JWT {
-    pub fn new(inner: JWTInner, secret: &[u8],) -> jsonwebtoken::errors::Result<Self> {
+    pub fn new(inner: JWTInner, secret: &[u8]) -> jsonwebtoken::errors::Result<Self> {
         Ok(JWT(jsonwebtoken::encode(
             &Header {
                 alg: ALG,

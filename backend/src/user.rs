@@ -1,4 +1,4 @@
-use crate::db::uuid_serialize;
+use crate::db::{uuid_serialize, write_transaction};
 use crate::subtasks::secret::stat_secret;
 use crate::{MioInnerError, MioState, MioStateRegen};
 use anyhow::anyhow;
@@ -13,7 +13,6 @@ use axum::{async_trait, Json, RequestPartsExt, TypedHeader};
 use chrono::Utc;
 use log::*;
 use mio_common::*;
-use sqlx::Connection;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -27,7 +26,7 @@ where
     type Rejection = MioInnerError;
 
     async fn from_request_parts(req: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        // get user token from either a Authorization Bearer header or from cookies
+        // get user token from a Authorization Bearer header
         let state = state.get_self();
         let auth = {
             // auth header
@@ -38,12 +37,12 @@ where
                 return Err(MioInnerError::UserChallengedFail(
                     anyhow!(
                         "failed to get token as auth was in err: {}",
-                        authheader.unwrap_err(),
+                        authheader.unwrap_err()
                     ),
                     StatusCode::BAD_REQUEST,
                 ));
             };
-            auth::JWT::from_raw(raw_token.to_string())
+            auth::JWT::from_raw(raw_token.to_owned())
                 .decode(&state.secret.get_secret().await)
                 .map_err(|err| {
                     MioInnerError::UserChallengedFail(
@@ -81,7 +80,7 @@ pub async fn login(
 
     // check hash
     let passwd = user.password.to_owned();
-    tokio::task::block_in_place({
+    tokio::task::spawn_blocking({
         move || {
             let parsed = PasswordHash::new(&passwd).map_err(|err| {
                 MioInnerError::UserChallengedFail(
@@ -98,7 +97,8 @@ pub async fn login(
                     )
                 })
         }
-    })?;
+    })
+    .await??;
 
     // TODO: let server host specify when the logout tokens expire
     //
@@ -124,7 +124,7 @@ pub async fn login(
         )
     })?;
     debug!(
-        "GET /l/login new token generated for {:?}: {token:?}",
+        "GET /user/login new token generated for {:?}: {token:?}",
         uuid_serialize(&user.id)
     );
     Ok((StatusCode::OK, Json(token)))
@@ -140,8 +140,8 @@ pub async fn signup(
     let passwd = auth.password().to_owned();
 
     // argon2 the password
-    let phc_string = tokio::task::block_in_place(move || {
-        debug!("POST /l/signup generating phc string");
+    let phc_string = tokio::task::spawn_blocking(move || {
+        debug!("POST /user/signup generating phc string");
         let salt = argon2::password_hash::SaltString::generate(&mut rand::rngs::OsRng);
         let ret = Argon2::default()
             .hash_password(passwd.as_bytes(), &salt)
@@ -152,82 +152,153 @@ pub async fn signup(
                 )
             })?;
         Ok::<_, MioInnerError>(ret.to_string())
-    })?;
+    });
 
     // then put into db and create dir
-    state
-        .db
-        .acquire()
-        .await?
-        .transaction(|txn| {
-            Box::pin(async move {
-                // setup user
-                debug!("POST /l/signup transaction begin");
-                if sqlx::query!("SELECT * FROM user WHERE username = ?;", uname)
+    let mut conn = state.db.acquire().await?;
+    write_transaction(&mut conn, |txn| {
+        Box::pin(async move {
+            // setup user
+            debug!("POST /user/signup transaction begin");
+            if sqlx::query!("SELECT * FROM user WHERE username = ?;", uname)
+                .fetch_optional(&mut *txn)
+                .await?
+                .is_some()
+            {
+                return Err(MioInnerError::UserCreationFail(
+                    anyhow!("username already taken"),
+                    StatusCode::CONFLICT,
+                ));
+            }
+
+            // generate uuid
+            let uid = loop {
+                let uid = Uuid::new_v4();
+                if sqlx::query!("SELECT * FROM user WHERE id = ?;", uid)
                     .fetch_optional(&mut *txn)
                     .await?
-                    .is_some()
+                    .is_none()
                 {
-                    return Err(MioInnerError::UserCreationFail(
-                        anyhow!("username already taken"),
-                        StatusCode::CONFLICT,
-                    ));
+                    break uid;
                 }
+            };
+            let phc_string = phc_string.await??;
+            sqlx::query!(
+                "INSERT INTO user (id, username, password) VALUES (?,?,?);",
+                uid,
+                uname,
+                phc_string
+            )
+            .execute(&mut *txn)
+            .await?;
 
-                // generate uuid
-                let uid = loop {
-                    let uid = Uuid::new_v4();
-                    if sqlx::query!("SELECT * FROM user WHERE id = ?;", uid)
-                        .fetch_optional(&mut *txn)
-                        .await?
-                        .is_none()
-                    {
-                        break uid;
-                    }
-                };
-                sqlx::query!(
-                    "INSERT INTO user (id, username, password) VALUES (?,?,?);",
-                    uid,
-                    uname,
-                    phc_string
+            // create the user dir if not exists
+            if let Err(err) = {
+                tokio::fs::create_dir(
+                    [*crate::DATA_DIR.get().unwrap(), &format!("{uid}")]
+                        .into_iter()
+                        .collect::<PathBuf>(),
                 )
-                .execute(&mut *txn)
-                .await?;
-
-                // create the user dir if not exists
-                if let Err(err) = {
-                    tokio::fs::create_dir(
-                        [*crate::DATA_DIR.get().unwrap(), &format!("{uid}")]
-                            .into_iter()
-                            .collect::<PathBuf>(),
-                    )
-                    .await
-                } {
-                    if err.kind() != std::io::ErrorKind::AlreadyExists {
-                        error!("PUT /track/upload failed to create user directory: {err}");
-                        return Err(MioInnerError::IntIoError(anyhow!(
-                            "failed to create user dir: {err}"
-                        )));
-                    }
+                .await
+            } {
+                if err.kind() != std::io::ErrorKind::AlreadyExists {
+                    error!("POST /user/signup failed to create user directory: {err}");
+                    return Err(MioInnerError::IntIoError(anyhow!(
+                        "failed to create user dir: {err}"
+                    )));
                 }
-                Ok(StatusCode::OK)
-            })
+            }
+            Ok(StatusCode::OK)
         })
-        .await
+    })
+    .await
 }
 
 #[cfg(test)]
 mod test {
-    use axum::http::{Method, StatusCode};
-
     use crate::test::*;
+    use axum::{
+        headers::{authorization::Credentials, Authorization},
+        http::{HeaderName, Method},
+    };
+    use mio_common::*;
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     async fn user_auth_good() {
-        let jwt = gen_user("user_auth_good").await;
-        let resp = jwt_header(Method::GET, "/api/auth_test", &jwt).send().await;
-        let status = resp.status();
-        dbg!(resp.text().await);
-        assert_eq!(status, StatusCode::OK)
+        let cli = client().await;
+        let jwt = gen_user(&cli, "user_auth_good").await;
+        jwt_header(&cli, Method::GET, "/api/auth_test", &jwt).await;
     }
+
+    #[tokio::test]
+    async fn user_auth_bad_token_bad() {
+        let cli = client().await;
+        let fake_jwt = auth::JWT::from_raw("a.aaaaa.aaaaaaaaaaaaaaa".to_owned());
+        jwt_header(&cli, Method::GET, "/api/auth_test", &fake_jwt)
+            .expect_failure()
+            .await;
+    }
+
+    #[tokio::test]
+    async fn user_auth_bad_basic_not_bearer() {
+        let cli = client().await;
+        let _ = gen_user(&cli, "basic_not_bearer").await;
+        cli.get("/api/auth_get")
+            .add_header(
+                HeaderName::from_static("authorization"),
+                Authorization::basic("basic_not_bearer", "password")
+                    .0
+                    .encode(),
+            )
+            .expect_failure()
+            .await;
+    }
+
+    // user_login_good is already proven by `gen_user`
+    #[tokio::test]
+    async fn user_login_bad_user_bad() {
+        let cli = client().await;
+        cli.get("/user/login")
+            .add_header(
+                HeaderName::from_static("authorization"),
+                Authorization::basic("NOT A USERNAME", "password")
+                    .0
+                    .encode(),
+            )
+            .expect_failure()
+            .await;
+    }
+
+    #[tokio::test]
+    async fn user_login_bad_password_bad() {
+        let cli = client().await;
+        let _ = gen_user(&cli, "password_bad").await;
+        cli.get("/user/login")
+            .add_header(
+                HeaderName::from_static("authorization"),
+                Authorization::basic("password_bad", "notpassword")
+                    .0
+                    .encode(),
+            )
+            .expect_failure()
+            .await;
+    }
+
+    // user_signup_good is already proven by `gen_user`
+    #[tokio::test]
+    async fn user_signup_bad_username_conflict() {
+        let cli = client().await;
+        let _ = gen_user(&cli, "username_conflict").await;
+        cli.post("/usr/signup")
+            .add_header(
+                HeaderName::from_static("authorization"),
+                Authorization::basic("username_conflict", "password")
+                    .0
+                    .encode(),
+            )
+            .expect_failure()
+            .await;
+    }
+
+    
 }

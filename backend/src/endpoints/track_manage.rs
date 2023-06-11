@@ -1,3 +1,4 @@
+use crate::db::write_transaction;
 use crate::endpoints::check_dir_in_data_dir;
 use crate::error::MioInnerError;
 use crate::MioState;
@@ -10,7 +11,6 @@ use futures::StreamExt;
 #[allow(unused)]
 use log::*;
 use mio_common::*;
-use sqlx::Connection;
 use std::path::PathBuf;
 use tokio::fs::{remove_file, rename, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
@@ -28,7 +28,7 @@ pub fn routes() -> Router<MioState> {
 
 async fn track_upload(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid , .. }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::TrackUploadQuery { fname, dir }): Query<msgstructs::TrackUploadQuery>,
     mut payload: BodyStream,
 ) -> impl IntoResponse {
@@ -217,57 +217,54 @@ async fn track_move(
 ) -> impl IntoResponse {
     trace!("/track/move locking read dir");
     let _hold = state.lock_files.write().await;
-    state
-        .db
-        .acquire()
-        .await?
-        .transaction(|txn| {
-            Box::pin(async move {
-                // preliminary checks
-                let dir = sqlx::query!(
-                    "SELECT path FROM track WHERE id = ? AND owner = ?;",
-                    id,
-                    userid
-                )
-                .fetch_optional(&mut *txn)
-                .await?
-                .map(|x| x.path)
-                .ok_or_else(|| {
-                    MioInnerError::NotFound(anyhow!("could not find id {id} for user {userid}"))
-                })?;
-                let curr_fname = [
-                    *crate::DATA_DIR.get().unwrap(),
-                    &format!("{userid}"),
-                    dir.as_ref(),
-                    &format!("{id}"),
-                ]
-                .into_iter()
-                .collect::<PathBuf>();
-                let next_fname = [
-                    *crate::DATA_DIR.get().unwrap(),
-                    &format!("{userid}"),
-                    new_path.as_ref(),
-                    &format!("{id}"),
-                ]
-                .into_iter()
-                .collect::<PathBuf>();
-                check_dir_in_data_dir(next_fname.clone(), userid)?;
+    let mut conn = state.db.acquire().await?;
+    write_transaction(&mut conn, |txn| {
+        Box::pin(async move {
+            // preliminary checks
+            let dir = sqlx::query!(
+                "SELECT path FROM track WHERE id = ? AND owner = ?;",
+                id,
+                userid
+            )
+            .fetch_optional(&mut *txn)
+            .await?
+            .map(|x| x.path)
+            .ok_or_else(|| {
+                MioInnerError::NotFound(anyhow!("could not find id {id} for user {userid}"))
+            })?;
+            let curr_fname = [
+                *crate::DATA_DIR.get().unwrap(),
+                &format!("{userid}"),
+                dir.as_ref(),
+                &format!("{id}"),
+            ]
+            .into_iter()
+            .collect::<PathBuf>();
+            let next_fname = [
+                *crate::DATA_DIR.get().unwrap(),
+                &format!("{userid}"),
+                new_path.as_ref(),
+                &format!("{id}"),
+            ]
+            .into_iter()
+            .collect::<PathBuf>();
+            check_dir_in_data_dir(next_fname.clone(), userid)?;
 
-                // note: no collision check is needed because every id is guaranteed to be unique.
-                // begin the actual meat of the transaction
-                rename(curr_fname, next_fname).await?;
-                sqlx::query!(
-                    "UPDATE track SET path = ? WHERE id = ? AND owner = ?;",
-                    new_path,
-                    id,
-                    userid
-                )
-                .execute(&mut *txn)
-                .await?;
-                Ok::<_, MioInnerError>(StatusCode::OK)
-            })
+            // note: no collision check is needed because every id is almost certainly
+            // guaranteed to be unique. begin the actual meat of the transaction
+            rename(curr_fname, next_fname).await?;
+            sqlx::query!(
+                "UPDATE track SET path = ? WHERE id = ? AND owner = ?;",
+                new_path,
+                id,
+                userid
+            )
+            .execute(&mut *txn)
+            .await?;
+            Ok::<_, MioInnerError>(StatusCode::OK)
         })
-        .await
+    })
+    .await
 }
 
 async fn track_delete(
@@ -277,7 +274,8 @@ async fn track_delete(
 ) -> impl IntoResponse {
     trace!("/track/delete locking write dir");
     let _hold = state.lock_files.write().await;
-    state.db.acquire().await?.transaction(|txn| Box::pin(async move {
+    let mut conn = state.db.acquire().await?;
+    write_transaction(&mut conn, |txn| Box::pin(async move {
         let Some(
             path
         ) = sqlx:: query !(

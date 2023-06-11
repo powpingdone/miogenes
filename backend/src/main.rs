@@ -25,7 +25,8 @@ static DATA_DIR: OnceCell<&str> = OnceCell::with_value({
     cfg_if::cfg_if! {
         if #[cfg(test)] {
             "test_files"
-        } else {
+        }
+        else {
             "files"
         }
     }
@@ -97,9 +98,7 @@ async fn gen_state() -> MioState {
                 SqliteConnectOptions::from_str(":memory:").unwrap()
             }
             else {
-                SqliteConnectOptions::from_str("sqlite://files/music.db")
-                    .unwrap()
-                    .create_if_missing(true)
+                SqliteConnectOptions::from_str("sqlite://files/music.db").unwrap().create_if_missing(true)
             }
         }
     };
@@ -118,6 +117,7 @@ async fn gen_state() -> MioState {
 fn gen_router(state: MioState) -> Router<()> {
     #[allow(unused)]
     use axum::extract::State;
+
     #[cfg(test)]
     async fn ok(State(_): State<MioState>) {}
 
@@ -130,11 +130,13 @@ fn gen_router(state: MioState) -> Router<()> {
                 .nest("/query", query::routes())
                 .nest("/load", idquery::routes())
                 .nest("/folder", folders::routes());
+
             // this is used during testing as a quick method to test for if the auth works
             cfg_if::cfg_if! {
                 if #[cfg(test)] {
                     api.route("/auth_test", get(ok))
-                } else {
+                }
+                else {
                     api
                 }
             }
@@ -183,59 +185,71 @@ pub mod test {
         headers::authorization::{Authorization, Credentials},
         http::{HeaderName, Method},
     };
-    use axum_test_helper::{RequestBuilder, TestClient};
+    use axum_test::{TestRequest, TestServer, TestServerConfig};
     use mio_common::auth;
     use once_cell::sync::Lazy;
 
-    pub static STATE: Lazy<MioState> = Lazy::new(|| {
-        env_logger::builder()
-            .is_test(true)
-            .target(env_logger::Target::Stdout)
-            .init();
-        futures::executor::block_on(gen_state())
-    });
+    pub static STATE: Lazy<MioState> = Lazy::new(|| futures::executor::block_on(gen_state()));
 
-    pub static CLIENT: Lazy<TestClient> = Lazy::new(|| TestClient::new(gen_router(STATE.clone())));
-
-    pub async fn gen_user(username: &str) -> auth::JWT {
-        let x = CLIENT
-            .post("/user/signup")
-            .header(
-                HeaderName::from_static("authorization"),
-                Authorization::basic(username, "password").0.encode(),
-            )
-            .send()
-            .await;
-        if x.status() != StatusCode::OK {
-            panic!(
-                "failed to create user for testing: ({}, {})",
-                x.status(),
-                x.text().await
-            )
-        }
-        CLIENT
-            .get("/user/login")
-            .header(
-                HeaderName::from_static("authorization"),
-                Authorization::basic(username, "password").0.encode(),
-            )
-            .send()
-            .await
-            .json::<auth::JWT>()
-            .await
+    // create client
+    pub async fn client() -> TestServer {
+        // Try to init the logger each time just to make sure stuff is working
+        drop(
+            env_logger::builder()
+                .is_test(true)
+                .target(env_logger::Target::Stderr)
+                .filter_level(LevelFilter::Debug)
+                .try_init(),
+        );
+        TestServer::new_with_config(
+            gen_router(STATE.clone()).into_make_service(),
+            TestServerConfig {
+                ..Default::default()
+            },
+        )
+        .unwrap()
     }
 
-    pub fn jwt_header(method: Method, url: &str, jwt: &auth::JWT) -> RequestBuilder {
+    pub async fn gen_user(client: &TestServer, username: &str) -> auth::JWT {
+        let x = client
+            .post("/user/signup")
+            .add_header(
+                HeaderName::from_static("authorization"),
+                Authorization::basic(username, "password").0.encode(),
+            )
+            .await;
+        if x.status_code() != StatusCode::OK {
+            panic!(
+                "failed to create user for testing: ({}, {})",
+                x.status_code(),
+                x.text()
+            )
+        }
+        client
+            .get("/user/login")
+            .add_header(
+                HeaderName::from_static("authorization"),
+                Authorization::basic(username, "password").0.encode(),
+            )
+            .await
+            .json::<auth::JWT>()
+    }
+
+    pub fn jwt_header(
+        client: &TestServer,
+        method: Method,
+        url: &str,
+        jwt: &auth::JWT,
+    ) -> TestRequest {
         match method {
-            Method::GET => CLIENT.get(url),
-            Method::POST => CLIENT.post(url),
-            Method::PUT => CLIENT.put(url),
-            Method::DELETE => CLIENT.delete(url),
-            Method::PATCH => CLIENT.patch(url),
-            Method::HEAD => CLIENT.head(url),
+            Method::GET => client.get(url),
+            Method::POST => client.post(url),
+            Method::PUT => client.put(url),
+            Method::DELETE => client.delete(url),
+            Method::PATCH => client.patch(url),
             _ => panic!("method {method:?} is not defined for client creation, plz fix?"),
         }
-        .header(
+        .add_header(
             HeaderName::from_static("authorization"),
             Authorization::bearer(&jwt.to_string()).unwrap().0.encode(),
         )

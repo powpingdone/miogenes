@@ -1,4 +1,5 @@
 use crate::db::uuid_serialize;
+use crate::db::write_transaction;
 use crate::*;
 use anyhow::anyhow;
 use axum::http::StatusCode;
@@ -11,7 +12,6 @@ use gstreamer_pbutils::DiscovererResult;
 use log::*;
 use path_absolutize::Absolutize;
 use sha2::{Digest, Sha256};
-use sqlx::Connection;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::Cursor;
@@ -320,143 +320,142 @@ async fn insert_into_db(
     metadata: Metadata,
     orig_filename: String,
 ) -> Result<(), MioInnerError> {
-    db.acquire()
-        .await?
-        .transaction(|txn| {
-            Box::pin(async move {
-                // insert cover art, check against img_hash
-                let cover_art_id = {
-                    if let Some(cover_hash) = metadata.imghash.as_ref() {
-                        let q = cover_hash.as_slice();
-                        match sqlx::query!(
-                            "SELECT id FROM cover_art
+    let mut conn = db.acquire().await?;
+    write_transaction(&mut conn, |txn| {
+        Box::pin(async move {
+            // insert cover art, check against img_hash
+            let cover_art_id = {
+                if let Some(cover_hash) = metadata.imghash.as_ref() {
+                    let q = cover_hash.as_slice();
+                    match sqlx::query!(
+                        "SELECT id FROM cover_art
                             WHERE img_hash = ?;",
-                            q
-                        )
-                        .fetch_optional(&mut *txn)
-                        .await?
-                        {
-                            Some(x) => Some(uuid_serialize(&x.id)?),
-                            None => {
-                                let id = Uuid::new_v4();
-                                let webm_blob = metadata.img.unwrap();
-                                let img_hash_hold = metadata.imghash.unwrap();
-                                let img_hash = img_hash_hold.as_slice();
-                                sqlx::query!(
-                                    "INSERT INTO cover_art
-                                    (id, webm_blob, img_hash)
-                                    VALUES (?, ?, ?);",
-                                    id,
-                                    webm_blob,
-                                    img_hash
-                                )
-                                .execute(&mut *txn)
-                                .await?;
-                                trace!("{orig_filename}: new artist generated: {id}");
-                                Some(id)
-                            }
-                        }
-                    } else {
-                        None
-                    }
-                };
-
-                // insert artist, check on artist name
-                let artist_id = {
-                    if let Some(q) = metadata.artist.as_ref() {
-                        match sqlx::query!(
-                            "SELECT id FROM artist
-                            WHERE artist_name = ?;",
-                            q
-                        )
-                        .fetch_optional(&mut *txn)
-                        .await?
-                        {
-                            Some(x) => Some(uuid_serialize(&x.id)?),
-                            None => {
-                                let id = Uuid::new_v4();
-                                let artist_name = metadata.artist.unwrap();
-                                sqlx::query!(
-                                    "INSERT INTO artist
-                                    (id, artist_name, sort_name)
-                                    VALUES (?, ?, ?);",
-                                    id,
-                                    artist_name,
-                                    metadata.artist_sort
-                                )
-                                .execute(&mut *txn)
-                                .await?;
-                                trace!("{orig_filename}: new artist generated: {id}");
-                                Some(id)
-                            }
-                        }
-                    } else {
-                        None
-                    }
-                };
-
-                // insert album, check on album title
-                let album_id = {
-                    if let Some(q) = metadata.album.as_ref() {
-                        match sqlx::query!(
-                            "SELECT id FROM album
-                            WHERE title = ?;",
-                            q
-                        )
-                        .fetch_optional(&mut *txn)
-                        .await?
-                        {
-                            Some(x) => Some(uuid_serialize(&x.id)?),
-                            None => {
-                                let id = Uuid::new_v4();
-                                let title = metadata.album.unwrap();
-                                sqlx::query!(
-                                    "INSERT INTO album
-                                    (id, title, sort_title)
-                                    VALUES (?, ?, ?);",
-                                    id,
-                                    title,
-                                    metadata.album_sort
-                                )
-                                .execute(&mut *txn)
-                                .await?;
-                                trace!("{orig_filename}: new album generated: {id}");
-                                Some(id)
-                            }
-                        }
-                    } else {
-                        None
-                    }
-                };
-
-                // insert track, check on audiohash
-                let hold = metadata.audiohash.unwrap();
-                let audiohash = hold.as_slice();
-                match {
-                    sqlx::query!(
-                        "SELECT id FROM track
-                        WHERE owner = ? AND audio_hash = ?;",
-                        userid,
-                        audiohash
+                        q
                     )
                     .fetch_optional(&mut *txn)
                     .await?
-                } {
-                    Some(x) => {
-                        return Err(MioInnerError::TrackProcessingError(
-                            anyhow::anyhow!(
-                                "this track already seems to be in conflict with {}, not uploading",
-                                uuid_serialize(&x.id)?
-                            ),
-                            StatusCode::CONFLICT,
-                        ))
+                    {
+                        Some(x) => Some(uuid_serialize(&x.id)?),
+                        None => {
+                            let id = Uuid::new_v4();
+                            let webm_blob = metadata.img.unwrap();
+                            let img_hash_hold = metadata.imghash.unwrap();
+                            let img_hash = img_hash_hold.as_slice();
+                            sqlx::query!(
+                                "INSERT INTO cover_art
+                                    (id, webm_blob, img_hash)
+                                    VALUES (?, ?, ?);",
+                                id,
+                                webm_blob,
+                                img_hash
+                            )
+                            .execute(&mut *txn)
+                            .await?;
+                            trace!("{orig_filename}: new artist generated: {id}");
+                            Some(id)
+                        }
                     }
-                    None => {
-                        let ahold = metadata.audiohash.unwrap();
-                        let audiohash = ahold.as_slice();
-                        let other_tags = metadata.other_tags.unwrap();
-                        sqlx::query!(
-                            "INSERT INTO track 
+                } else {
+                    None
+                }
+            };
+
+            // insert artist, check on artist name
+            let artist_id = {
+                if let Some(q) = metadata.artist.as_ref() {
+                    match sqlx::query!(
+                        "SELECT id FROM artist
+                            WHERE artist_name = ?;",
+                        q
+                    )
+                    .fetch_optional(&mut *txn)
+                    .await?
+                    {
+                        Some(x) => Some(uuid_serialize(&x.id)?),
+                        None => {
+                            let id = Uuid::new_v4();
+                            let artist_name = metadata.artist.unwrap();
+                            sqlx::query!(
+                                "INSERT INTO artist
+                                    (id, artist_name, sort_name)
+                                    VALUES (?, ?, ?);",
+                                id,
+                                artist_name,
+                                metadata.artist_sort
+                            )
+                            .execute(&mut *txn)
+                            .await?;
+                            trace!("{orig_filename}: new artist generated: {id}");
+                            Some(id)
+                        }
+                    }
+                } else {
+                    None
+                }
+            };
+
+            // insert album, check on album title
+            let album_id = {
+                if let Some(q) = metadata.album.as_ref() {
+                    match sqlx::query!(
+                        "SELECT id FROM album
+                            WHERE title = ?;",
+                        q
+                    )
+                    .fetch_optional(&mut *txn)
+                    .await?
+                    {
+                        Some(x) => Some(uuid_serialize(&x.id)?),
+                        None => {
+                            let id = Uuid::new_v4();
+                            let title = metadata.album.unwrap();
+                            sqlx::query!(
+                                "INSERT INTO album
+                                    (id, title, sort_title)
+                                    VALUES (?, ?, ?);",
+                                id,
+                                title,
+                                metadata.album_sort
+                            )
+                            .execute(&mut *txn)
+                            .await?;
+                            trace!("{orig_filename}: new album generated: {id}");
+                            Some(id)
+                        }
+                    }
+                } else {
+                    None
+                }
+            };
+
+            // insert track, check on audiohash
+            let hold = metadata.audiohash.unwrap();
+            let audiohash = hold.as_slice();
+            match {
+                sqlx::query!(
+                    "SELECT id FROM track
+                        WHERE owner = ? AND audio_hash = ?;",
+                    userid,
+                    audiohash
+                )
+                .fetch_optional(&mut *txn)
+                .await?
+            } {
+                Some(x) => {
+                    return Err(MioInnerError::TrackProcessingError(
+                        anyhow::anyhow!(
+                            "this track already seems to be in conflict with {}, not uploading",
+                            uuid_serialize(&x.id)?
+                        ),
+                        StatusCode::CONFLICT,
+                    ))
+                }
+                None => {
+                    let ahold = metadata.audiohash.unwrap();
+                    let audiohash = ahold.as_slice();
+                    let other_tags = metadata.other_tags.unwrap();
+                    sqlx::query!(
+                        "INSERT INTO track 
                             (id,
                             title, 
                             disk, 
@@ -470,26 +469,26 @@ async fn insert_into_db(
                             owner,
                             path) 
                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?);",
-                            id,
-                            metadata.title,
-                            metadata.disk_track.0,
-                            metadata.disk_track.1,
-                            other_tags,
-                            audiohash,
-                            orig_filename,
-                            album_id,
-                            artist_id,
-                            cover_art_id,
-                            userid,
-                            dir
-                        )
-                        .execute(&mut *txn)
-                        .await?;
-                        trace!("{orig_filename}: new track created: {id}")
-                    }
+                        id,
+                        metadata.title,
+                        metadata.disk_track.0,
+                        metadata.disk_track.1,
+                        other_tags,
+                        audiohash,
+                        orig_filename,
+                        album_id,
+                        artist_id,
+                        cover_art_id,
+                        userid,
+                        dir
+                    )
+                    .execute(&mut *txn)
+                    .await?;
+                    trace!("{orig_filename}: new track created: {id}")
                 }
-                Ok(())
-            })
+            }
+            Ok(())
         })
-        .await
+    })
+    .await
 }

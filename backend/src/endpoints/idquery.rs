@@ -10,7 +10,7 @@ pub fn routes() -> Router<MioState> {
 
 async fn get_albums(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid, ..  }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
 ) -> impl IntoResponse {
     Ok::<_, MioInnerError>((
         StatusCode::OK,
@@ -19,8 +19,8 @@ async fn get_albums(
             retstructs::Albums {
                 albums: sqlx::query!(
                     "SELECT DISTINCT album.id FROM album 
-            JOIN track ON track.album = album.id 
-            WHERE track.owner = ?;",
+                    JOIN track ON track.album = album.id 
+                    WHERE track.owner = ?;",
                     userid
                 )
                 .fetch_all(&mut *conn)
@@ -35,7 +35,7 @@ async fn get_albums(
 
 async fn get_playlists(
     State(state): State<MioState>,
-    Extension(auth::JWTInner { userid, ..  }): Extension<auth::JWTInner>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
 ) -> impl IntoResponse {
     Ok::<_, MioInnerError>((
         StatusCode::OK,
