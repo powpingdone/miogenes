@@ -12,6 +12,7 @@ use futures::Future;
 #[allow(unused)]
 use log::*;
 use mio_common::*;
+use path_absolutize::Absolutize;
 use std::path::PathBuf;
 use std::path::MAIN_SEPARATOR_STR;
 use std::pin::Pin;
@@ -35,13 +36,15 @@ pub fn routes() -> Router<MioState> {
     )
 }
 
+// TODO: join! dir locking and check_dir_in..
+
 async fn folder_create(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> impl IntoResponse {
-    let _hold = state.lock_files.write().await;
     let name = sanitize_filename::sanitize(name);
+    let _hold = state.lock_files.write().await;
     tokio::task::spawn_blocking({
         let pbuf = [&path].iter().collect::<PathBuf>();
         move || check_dir_in_data_dir(&pbuf, userid)
@@ -61,55 +64,43 @@ async fn folder_create(
 async fn folder_rename(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
-    Query(msgstructs::FolderRename {
-        path,
-        old_name,
-        new_name,
-    }): Query<msgstructs::FolderRename>,
+    Query(msgstructs::FolderRename { old_path, new_path }): Query<msgstructs::FolderRename>,
 ) -> impl IntoResponse {
     // setup vars
-    // TODO: dont use canon with names
-    let pbuf: PathBuf = [*DATA_DIR.get().unwrap(), &format!("{userid}"), &path]
+    let pbuf: PathBuf = [*DATA_DIR.get().unwrap(), &format!("{userid}")]
         .iter()
         .collect();
     let mut old = pbuf.clone();
-    old.push(&old_name);
-    let old = old.canonicalize()?;
+    old.push(&old_path);
+    let old = old.absolutize()?;
     let mut new = pbuf.clone();
-    new.push(&new_name);
-    let new = new.canonicalize()?;
+    new.push(&new_path);
+    let new = new.absolutize()?;
+    debug!(
+        "PATCH /api/folder trying to move \"{}\" -> \"{}\"",
+        old.display(),
+        new.display()
+    );
 
     // majority of blocking code here
     tokio::task::spawn_blocking({
-        let path = path.clone();
-        let old_name = old_name.clone();
-        let new_name = new_name.clone();
-        let old = old.clone();
-        let new = new.clone();
+        let old_path = old_path.clone();
+        let new_path = new_path.clone();
         move || {
-            check_dir_in_data_dir(format!("{path}/{old_name}"), userid)?;
-            check_dir_in_data_dir(format!("{path}/{new_name}"), userid)?;
-
-            // make sure it's in the same parent directory
-            let real = pbuf.components().collect::<Vec<_>>();
-            let oldn = old.components().collect::<Vec<_>>();
-            let newn = new.components().collect::<Vec<_>>();
-            if real[..real.len() - 1] != oldn[..oldn.len() - 1]
-                || real[..real.len() - 1] != newn[..newn.len() - 1]
-            {
-                return Err(MioInnerError::ExtIoError(
-                    anyhow!("the movement will not result in the same directory"),
-                    StatusCode::BAD_REQUEST,
-                ));
-            }
-            Ok(())
+            check_dir_in_data_dir(&old_path, userid)?;
+            check_dir_in_data_dir(&new_path, userid)
         }
     })
     .await??;
 
-    // and make sure it's also a directory
+    // make sure it exists
     let _hold = state.lock_files.write().await;
-    if !metadata(format!("{path}/{old_name}")).await?.is_dir() {
+    if !try_exists(&old).await? {
+        return Err(MioInnerError::NotFound(anyhow!("{old_path}")));
+    }
+
+    // and make sure it's also a directory
+    if !metadata(&old).await?.is_dir() {
         return Err(MioInnerError::ExtIoError(
             anyhow!("the directory specified is not a directory"),
             StatusCode::BAD_REQUEST,
@@ -117,13 +108,8 @@ async fn folder_rename(
     }
 
     // and that we're not in conflict
-    if !try_exists(format!("{path}/{new_name}"))
-        .await
-        .is_ok_and(|exists| exists)
-    {
-        return Err(MioInnerError::Conflict(anyhow!(
-            "the new directory specified already exists"
-        )));
+    if try_exists(&new).await? {
+        return Err(MioInnerError::Conflict(anyhow!("{new_path}")));
     }
 
     // finally, rename
@@ -327,7 +313,40 @@ mod test {
         } else {
             panic!("did not return tree when supposted to");
         }
-        // rename and delete
+        // rename
+        jwt_header(
+            &cli,
+            Method::PATCH,
+            &format!(
+                "/api/folder?{}",
+                serde_urlencoded::to_string(&msgstructs::FolderRename {
+                    old_path: "a horse".to_string(),
+                    new_path: "merasmus".to_string()
+                })
+                .unwrap()
+            ),
+            &jwt,
+        )
+        .await;
+        // check tree again
+        let ret = jwt_header(&cli, Method::GET, "/api/folder", &jwt)
+            .await
+            .json::<retstructs::FolderQuery>()
+            .ret;
+        if let retstructs::FolderQueryRet::Tree(ret) = ret {
+            let ret = ret.into_iter().collect::<HashSet<_>>();
+            assert_eq!(
+                ret,
+                HashSet::from_iter(
+                    ["", "merasmus", "merasmus/neigh", "merasmus/neigh/bleh"]
+                        .into_iter()
+                        .map(PathBuf::from)
+                )
+            );
+        } else {
+            panic!("did not return tree when supposted to");
+        }
+        // delete
         todo!()
     }
 

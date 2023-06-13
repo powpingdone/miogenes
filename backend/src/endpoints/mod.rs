@@ -3,6 +3,7 @@ use anyhow::anyhow;
 use axum::http::StatusCode;
 #[allow(unused)]
 use log::*;
+use path_absolutize::*;
 use std::path::Path;
 use uuid::Uuid;
 
@@ -22,9 +23,9 @@ pub(self) fn check_dir_in_data_dir(
     let mut ask_path = real_path.clone();
     ask_path.push(&path);
     debug!("CD_IN_DD ask path is {ask_path:?}");
-    let real_path = real_path.canonicalize()?;
+    let real_path = real_path.absolutize()?;
     debug!("CD_IN_DD real canon {real_path:?}");
-    let ask_path = match ask_path.canonicalize() {
+    let ask_path = match ask_path.absolutize() {
         Ok(ok) => ok,
         Err(err) => {
             return Err(MioInnerError::ExtIoError(

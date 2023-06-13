@@ -35,9 +35,8 @@ pub struct FolderQuery {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct FolderRename {
-    pub path: String,
-    pub old_name: String,
-    pub new_name: String,
+    pub old_path: String,
+    pub new_path: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
