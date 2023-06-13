@@ -40,8 +40,13 @@ async fn folder_create(
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> impl IntoResponse {
-    check_dir_in_data_dir(format!("{path}/{name}"), userid)?;
     let _hold = state.lock_files.write().await;
+    let name = sanitize_filename::sanitize(name);
+    tokio::task::spawn_blocking({
+        let pbuf = [&path].iter().collect::<PathBuf>();
+        move || check_dir_in_data_dir(&pbuf, userid)
+    })
+    .await??;
     let pbuf: PathBuf = [*DATA_DIR.get().unwrap(), &format!("{userid}"), &path, &name]
         .iter()
         .collect();
@@ -63,6 +68,7 @@ async fn folder_rename(
     }): Query<msgstructs::FolderRename>,
 ) -> impl IntoResponse {
     // setup vars
+    // TODO: dont use canon with names
     let pbuf: PathBuf = [*DATA_DIR.get().unwrap(), &format!("{userid}"), &path]
         .iter()
         .collect();
@@ -113,7 +119,7 @@ async fn folder_rename(
     // and that we're not in conflict
     if !try_exists(format!("{path}/{new_name}"))
         .await
-        .is_ok_and(|x| x)
+        .is_ok_and(|exists| exists)
     {
         return Err(MioInnerError::Conflict(anyhow!(
             "the new directory specified already exists"
@@ -162,12 +168,7 @@ async fn folder_query(
         // query folder tree
         Ok(Json(retstructs::FolderQuery {
             ret: retstructs::FolderQueryRet::Tree(
-                folder_tree_inner(
-                    top_level.clone(),
-                    read_dir(top_level).await?,
-                    MAIN_SEPARATOR_STR.try_into().unwrap(),
-                )
-                .await?,
+                folder_tree_inner(top_level.clone(), read_dir(top_level).await?, "".into()).await?,
             ),
         }))
     }
@@ -182,6 +183,7 @@ fn folder_tree_inner(
     // The strange return type is due to recursion. I don't think that this could have
     // been impl'd reasonably any other way. Thanks rust async!
     Box::pin(async move {
+        debug!("FTI call to ({base_dir:?}, {curr_path:?})");
         // 1: collect all the dirs
         let mut dirs = vec![];
         while let Some(file) = dir.next_entry().await? {
@@ -214,14 +216,9 @@ fn folder_tree_inner(
             dirs_finished.push(fut.await??);
         }
 
-        // 3: flatten, and concatenate with the curr path. the current path is appended too
+        // 3: flatten. the current path is appended too
         let mut ret = vec![curr_path.clone()];
-        ret.extend(
-            dirs_finished
-                .into_iter()
-                .flatten()
-                .map(|x| [curr_path.clone(), x].into_iter().collect()),
-        );
+        ret.extend(dirs_finished.into_iter().flatten());
         Ok(ret)
     })
 }
@@ -254,4 +251,86 @@ async fn folder_delete(
     }
     remove_dir(real_path).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use std::{collections::HashSet, path::PathBuf};
+
+    use crate::test::*;
+    use axum::http::Method;
+    use mio_common::{msgstructs, retstructs};
+
+    #[tokio::test]
+    async fn folder_good() {
+        let cli = client().await;
+        let jwt = gen_user(&cli, "folder_good").await;
+        // create folders
+        jwt_header(
+            &cli,
+            Method::PUT,
+            &format!(
+                "/api/folder?{}",
+                serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
+                    name: "a horse".to_string(),
+                    path: "".to_string()
+                })
+                .unwrap()
+            ),
+            &jwt,
+        )
+        .await;
+        jwt_header(
+            &cli,
+            Method::PUT,
+            &format!(
+                "/api/folder?{}",
+                serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
+                    name: "neigh".to_string(),
+                    path: "a horse/".to_string()
+                })
+                .unwrap()
+            ),
+            &jwt,
+        )
+        .await;
+        jwt_header(
+            &cli,
+            Method::PUT,
+            &format!(
+                "/api/folder?{}",
+                serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
+                    name: "bleh".to_string(),
+                    path: "a horse/neigh".to_string()
+                })
+                .unwrap()
+            ),
+            &jwt,
+        )
+        .await;
+
+        // get tree
+        let ret = jwt_header(&cli, Method::GET, "/api/folder", &jwt)
+            .await
+            .json::<retstructs::FolderQuery>()
+            .ret;
+        if let retstructs::FolderQueryRet::Tree(ret) = ret {
+            let ret = ret.into_iter().collect::<HashSet<_>>();
+            assert_eq!(
+                ret,
+                HashSet::from_iter(
+                    ["", "a horse", "a horse/neigh", "a horse/neigh/bleh"]
+                        .into_iter()
+                        .map(PathBuf::from)
+                )
+            );
+        } else {
+            panic!("did not return tree when supposted to");
+        }
+        // rename and delete
+        todo!()
+    }
+
+    #[tokio::test]
+    async fn folder_bad_path_checks() {}
 }

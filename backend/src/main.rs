@@ -225,14 +225,16 @@ pub mod test {
                 x.text()
             )
         }
-        client
+        let jwt = client
             .get("/user/login")
             .add_header(
                 HeaderName::from_static("authorization"),
                 Authorization::basic(username, "password").0.encode(),
             )
             .await
-            .json::<auth::JWT>()
+            .json::<auth::JWT>();
+        debug!("token is {jwt:?}");
+        jwt
     }
 
     pub fn jwt_header(

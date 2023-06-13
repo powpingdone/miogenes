@@ -299,6 +299,4 @@ mod test {
             .expect_failure()
             .await;
     }
-
-    
 }

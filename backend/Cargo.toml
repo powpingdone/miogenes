@@ -52,3 +52,4 @@ cfg-if = "1.0.0"
 [dev-dependencies]
 axum-test = "9.1"
 jsonwebtoken = "8.3"
+serde_urlencoded = "0.7"
