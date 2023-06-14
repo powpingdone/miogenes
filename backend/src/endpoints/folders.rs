@@ -14,7 +14,6 @@ use log::*;
 use mio_common::*;
 use path_absolutize::Absolutize;
 use std::path::PathBuf;
-use std::path::MAIN_SEPARATOR_STR;
 use std::pin::Pin;
 use tokio::fs::create_dir;
 use tokio::fs::metadata;
@@ -25,6 +24,8 @@ use tokio::fs::try_exists;
 use tokio::fs::ReadDir;
 use uuid::Uuid;
 
+// TODO: join! dir locking and check_dir_in..
+//
 // TODO: pepper with log
 pub fn routes() -> Router<MioState> {
     Router::new().route(
@@ -36,7 +37,6 @@ pub fn routes() -> Router<MioState> {
     )
 }
 
-// TODO: join! dir locking and check_dir_in..
 async fn folder_create(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -53,9 +53,7 @@ async fn folder_create(
         .iter()
         .collect();
     create_dir(pbuf).await.map_err(|err| match err.kind() {
-        std::io::ErrorKind::AlreadyExists => {
-            MioInnerError::Conflict(anyhow!("folder {name} already exists"))
-        }
+        std::io::ErrorKind::AlreadyExists => MioInnerError::Conflict(anyhow!("{name}")),
         _ => MioInnerError::from(err),
     })
 }
@@ -244,6 +242,7 @@ mod test {
     use crate::test::*;
     use axum::http::Method;
     use mio_common::*;
+    use serde_urlencoded::to_string as url_enc;
     use std::{collections::HashSet, path::PathBuf};
 
     // util function to check if dirs are the same
@@ -272,7 +271,7 @@ mod test {
             Method::PUT,
             &format!(
                 "/api/folder?{}",
-                serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
+                url_enc(&msgstructs::FolderCreateDelete {
                     name: "a horse".to_string(),
                     path: "".to_string(),
                 })
@@ -286,7 +285,7 @@ mod test {
             Method::PUT,
             &format!(
                 "/api/folder?{}",
-                serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
+                url_enc(&msgstructs::FolderCreateDelete {
                     name: "neigh".to_string(),
                     path: "a horse/".to_string(),
                 })
@@ -300,7 +299,7 @@ mod test {
             Method::PUT,
             &format!(
                 "/api/folder?{}",
-                serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
+                url_enc(&msgstructs::FolderCreateDelete {
                     name: "bleh".to_string(),
                     path: "a horse/neigh".to_string(),
                 })
@@ -326,7 +325,7 @@ mod test {
             Method::PATCH,
             &format!(
                 "/api/folder?{}",
-                serde_urlencoded::to_string(&msgstructs::FolderRename {
+                url_enc(&msgstructs::FolderRename {
                     old_path: "a horse".to_string(),
                     new_path: "merasmus".to_string(),
                 })
@@ -344,18 +343,35 @@ mod test {
             .await
         );
 
+        // move
+        jwt_header(
+            &cli,
+            Method::PATCH,
+            &format!(
+                "/api/folder?{}",
+                url_enc(&msgstructs::FolderRename {
+                    old_path: "merasmus/neigh/bleh".to_string(),
+                    new_path: "merasmus/bleh".to_string()
+                })
+                .unwrap()
+            ),
+            &jwt,
+        )
+        .await;
+        assert!(
+            tree_check(
+                &cli,
+                &jwt,
+                &["", "merasmus", "merasmus/neigh", "merasmus/bleh"]
+            )
+            .await
+        );
+
         // delete
         jwt_header(
             &cli,
             Method::DELETE,
-            &format!(
-                "/api/folder?{}",
-                serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
-                    name: "bleh".to_string(),
-                    path: "merasmus/neigh".to_string(),
-                })
-                .unwrap()
-            ),
+            "/api/folder?name=bleh&path=merasmus",
             &jwt,
         )
         .await;
@@ -375,14 +391,7 @@ mod test {
                 jwt_header(
                     &cli,
                     Method::PUT,
-                    &format!(
-                        "/api/folder?{}",
-                        serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
-                            name: name.to_string(),
-                            path: path.to_string(),
-                        })
-                        .unwrap()
-                    ),
+                    &format!("/api/folder?name={name}&path={path}",),
                     &jwt,
                 )
                 .expect_failure()
@@ -390,13 +399,7 @@ mod test {
                 jwt_header(
                     &cli,
                     Method::GET,
-                    &format!(
-                        "/api/folder?{}",
-                        serde_urlencoded::to_string(&msgstructs::FolderQuery {
-                            path: path.to_string(),
-                        })
-                        .unwrap()
-                    ),
+                    &format!("/api/folder?path={path}",),
                     &jwt,
                 )
                 .expect_failure()
@@ -404,14 +407,7 @@ mod test {
                 jwt_header(
                     &cli,
                     Method::PATCH,
-                    &format!(
-                        "/api/folder/?{}",
-                        serde_urlencoded::to_string(&msgstructs::FolderRename {
-                            old_path: path.to_string(),
-                            new_path: name.to_string()
-                        })
-                        .unwrap()
-                    ),
+                    &format!("/api/folder/?old_path={path}&new_path={name}",),
                     &jwt,
                 )
                 .expect_failure()
@@ -419,19 +415,35 @@ mod test {
                 jwt_header(
                     &cli,
                     Method::DELETE,
-                    &format!(
-                        "/api/folder?{}",
-                        serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
-                            name: name.to_string(),
-                            path: path.to_string(),
-                        })
-                        .unwrap()
-                    ),
+                    &format!("/api/folder?name={name}&path={path}",),
                     &jwt,
                 )
                 .expect_failure()
                 .await;
             }
         }
+    }
+
+    #[tokio::test]
+    async fn folder_bad_collison_checks() {
+        let cli = client().await;
+        let jwt = gen_user(&cli, "folder_bad_collison_checks").await;
+        {
+            jwt_header(&cli, Method::PUT, "/api/folder?name=a&path=", &jwt).await;
+            jwt_header(&cli, Method::PUT, "/api/folder?name=b&path=a", &jwt).await;
+            jwt_header(&cli, Method::PUT, "/api/folder?name=1&path=", &jwt).await;
+            assert!(tree_check(&cli, &jwt, &["", "a", "a/b", "1"]).await)
+        }
+        jwt_header(&cli, Method::PUT, "/api/folder?name=b&path=a", &jwt)
+            .expect_failure()
+            .await;
+        jwt_header(
+            &cli,
+            Method::PATCH,
+            "/api/folder?old_path=a&new_path=1",
+            &jwt,
+        )
+        .expect_failure()
+        .await;
     }
 }
