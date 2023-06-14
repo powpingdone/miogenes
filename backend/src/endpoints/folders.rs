@@ -37,7 +37,6 @@ pub fn routes() -> Router<MioState> {
 }
 
 // TODO: join! dir locking and check_dir_in..
-
 async fn folder_create(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -170,6 +169,7 @@ fn folder_tree_inner(
     // been impl'd reasonably any other way. Thanks rust async!
     Box::pin(async move {
         debug!("FTI call to ({base_dir:?}, {curr_path:?})");
+
         // 1: collect all the dirs
         let mut dirs = vec![];
         while let Some(file) = dir.next_entry().await? {
@@ -223,14 +223,14 @@ async fn folder_delete(
     ]
     .into_iter()
     .collect::<PathBuf>();
-    check_dir_in_data_dir(&real_path, userid)?;
+    check_dir_in_data_dir(&format!("{path}/{name}"), userid)?;
 
     // check if dir has contents https://github.com/rust-lang/rust/issues/86442
-    if read_dir(&real_path).await?.next_entry().await?.is_none() {
+    if read_dir(&real_path).await?.next_entry().await?.is_some() {
         return Err(MioInnerError::ExtIoError(
             anyhow!(
                 "Directory {:?} has items, please remove them.",
-                [name, path].into_iter().collect::<PathBuf>()
+                [path, name].into_iter().collect::<PathBuf>()
             ),
             StatusCode::BAD_REQUEST,
         ));
@@ -241,16 +241,31 @@ async fn folder_delete(
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, path::PathBuf};
-
     use crate::test::*;
     use axum::http::Method;
-    use mio_common::{msgstructs, retstructs};
+    use mio_common::*;
+    use std::{collections::HashSet, path::PathBuf};
+
+    // util function to check if dirs are the same
+    #[must_use]
+    async fn tree_check(cli: &axum_test::TestServer, jwt: &auth::JWT, dirs: &[&str]) -> bool {
+        let ret = jwt_header(&cli, Method::GET, "/api/folder", &jwt)
+            .await
+            .json::<retstructs::FolderQuery>()
+            .ret;
+        if let retstructs::FolderQueryRet::Tree(ret) = ret {
+            let ret = ret.into_iter().collect::<HashSet<_>>();
+            return ret == HashSet::from_iter(dirs.into_iter().map(PathBuf::from));
+        } else {
+            panic!("did not return tree when supposted to");
+        }
+    }
 
     #[tokio::test]
     async fn folder_good() {
         let cli = client().await;
         let jwt = gen_user(&cli, "folder_good").await;
+
         // create folders
         jwt_header(
             &cli,
@@ -259,7 +274,7 @@ mod test {
                 "/api/folder?{}",
                 serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
                     name: "a horse".to_string(),
-                    path: "".to_string()
+                    path: "".to_string(),
                 })
                 .unwrap()
             ),
@@ -273,7 +288,7 @@ mod test {
                 "/api/folder?{}",
                 serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
                     name: "neigh".to_string(),
-                    path: "a horse/".to_string()
+                    path: "a horse/".to_string(),
                 })
                 .unwrap()
             ),
@@ -287,7 +302,7 @@ mod test {
                 "/api/folder?{}",
                 serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
                     name: "bleh".to_string(),
-                    path: "a horse/neigh".to_string()
+                    path: "a horse/neigh".to_string(),
                 })
                 .unwrap()
             ),
@@ -296,23 +311,15 @@ mod test {
         .await;
 
         // get tree
-        let ret = jwt_header(&cli, Method::GET, "/api/folder", &jwt)
+        assert!(
+            tree_check(
+                &cli,
+                &jwt,
+                &["", "a horse", "a horse/neigh", "a horse/neigh/bleh"]
+            )
             .await
-            .json::<retstructs::FolderQuery>()
-            .ret;
-        if let retstructs::FolderQueryRet::Tree(ret) = ret {
-            let ret = ret.into_iter().collect::<HashSet<_>>();
-            assert_eq!(
-                ret,
-                HashSet::from_iter(
-                    ["", "a horse", "a horse/neigh", "a horse/neigh/bleh"]
-                        .into_iter()
-                        .map(PathBuf::from)
-                )
-            );
-        } else {
-            panic!("did not return tree when supposted to");
-        }
+        );
+
         // rename
         jwt_header(
             &cli,
@@ -321,35 +328,110 @@ mod test {
                 "/api/folder?{}",
                 serde_urlencoded::to_string(&msgstructs::FolderRename {
                     old_path: "a horse".to_string(),
-                    new_path: "merasmus".to_string()
+                    new_path: "merasmus".to_string(),
                 })
                 .unwrap()
             ),
             &jwt,
         )
         .await;
-        // check tree again
-        let ret = jwt_header(&cli, Method::GET, "/api/folder", &jwt)
+        assert!(
+            tree_check(
+                &cli,
+                &jwt,
+                &["", "merasmus", "merasmus/neigh", "merasmus/neigh/bleh"]
+            )
             .await
-            .json::<retstructs::FolderQuery>()
-            .ret;
-        if let retstructs::FolderQueryRet::Tree(ret) = ret {
-            let ret = ret.into_iter().collect::<HashSet<_>>();
-            assert_eq!(
-                ret,
-                HashSet::from_iter(
-                    ["", "merasmus", "merasmus/neigh", "merasmus/neigh/bleh"]
-                        .into_iter()
-                        .map(PathBuf::from)
-                )
-            );
-        } else {
-            panic!("did not return tree when supposted to");
-        }
+        );
+
         // delete
-        todo!()
+        jwt_header(
+            &cli,
+            Method::DELETE,
+            &format!(
+                "/api/folder?{}",
+                serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
+                    name: "bleh".to_string(),
+                    path: "merasmus/neigh".to_string(),
+                })
+                .unwrap()
+            ),
+            &jwt,
+        )
+        .await;
+        assert!(tree_check(&cli, &jwt, &["", "merasmus", "merasmus/neigh"]).await);
     }
 
     #[tokio::test]
-    async fn folder_bad_path_checks() {}
+    #[ignore]
+    // this test _MAY MODIFY FILES ON YOUR HARD DRIVE NOT IN THE TEST DIR_, please
+    // only run as a verification of your changes
+    async fn folder_bad_path_checks() {
+        let cli = client().await;
+        let jwt = gen_user(&cli, "folder_bad_path_checks").await;
+        const TEST_PATHS: &[&str] = &["../", "..", "a/../..", "../../test_files"];
+        for path in TEST_PATHS {
+            for name in TEST_PATHS {
+                jwt_header(
+                    &cli,
+                    Method::PUT,
+                    &format!(
+                        "/api/folder?{}",
+                        serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
+                            name: name.to_string(),
+                            path: path.to_string(),
+                        })
+                        .unwrap()
+                    ),
+                    &jwt,
+                )
+                .expect_failure()
+                .await;
+                jwt_header(
+                    &cli,
+                    Method::GET,
+                    &format!(
+                        "/api/folder?{}",
+                        serde_urlencoded::to_string(&msgstructs::FolderQuery {
+                            path: path.to_string(),
+                        })
+                        .unwrap()
+                    ),
+                    &jwt,
+                )
+                .expect_failure()
+                .await;
+                jwt_header(
+                    &cli,
+                    Method::PATCH,
+                    &format!(
+                        "/api/folder/?{}",
+                        serde_urlencoded::to_string(&msgstructs::FolderRename {
+                            old_path: path.to_string(),
+                            new_path: name.to_string()
+                        })
+                        .unwrap()
+                    ),
+                    &jwt,
+                )
+                .expect_failure()
+                .await;
+                jwt_header(
+                    &cli,
+                    Method::DELETE,
+                    &format!(
+                        "/api/folder?{}",
+                        serde_urlencoded::to_string(&msgstructs::FolderCreateDelete {
+                            name: name.to_string(),
+                            path: path.to_string(),
+                        })
+                        .unwrap()
+                    ),
+                    &jwt,
+                )
+                .expect_failure()
+                .await;
+            }
+        }
+    }
 }
