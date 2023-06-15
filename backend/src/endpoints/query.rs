@@ -77,8 +77,8 @@ async fn album_info(
                             id,
                             title: sqlx::query!(
                                 "SELECT album.title FROM album 
-                        JOIN track ON track.album = album.id 
-                        WHERE album.id = ? AND track.owner = ?;",
+                                JOIN track ON track.album = album.id 
+                                WHERE album.id = ? AND track.owner = ?;",
                                 id,
                                 userid
                             )
@@ -90,8 +90,8 @@ async fn album_info(
                             })?,
                             tracks: sqlx::query!(
                                 "SELECT track.id FROM track
-                        JOIN album ON track.album = album.id
-                        WHERE album.id = ? AND track.owner=?;",
+                                JOIN album ON track.album = album.id
+                                WHERE album.id = ? AND track.owner=?;",
                                 id,
                                 userid
                             )
@@ -126,8 +126,8 @@ async fn playlist_info(
                             id,
                             tracks: sqlx::query!(
                                 "SELECT track FROM JOIN_playlist_track
-                        JOIN playlist ON playlist.id = JOIN_playlist_track.playlist 
-                        WHERE playlist = ? AND owner = ?;",
+                                JOIN playlist ON playlist.id = JOIN_playlist_track.playlist 
+                                WHERE playlist = ? AND owner = ?;",
                                 id,
                                 userid
                             )

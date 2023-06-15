@@ -19,20 +19,17 @@ use std::path::Path;
 use std::path::PathBuf;
 use uuid::*;
 
-// TODO: DO NOT SPAM Option<> ON THIS
-//
 // metadata parsed from the individual file
 #[derive(Default)]
 struct Metadata {
+    title: String,
+    audiohash: [u8; 32],
+    other_tags: String,
     artist: Option<String>,
     artist_sort: Option<String>,
-    title: Option<String>,
     album: Option<String>,
     album_sort: Option<String>,
-    other_tags: Option<String>,
-    img: Option<Vec<u8>>,
-    imghash: Option<[u8; 32]>,
-    audiohash: Option<[u8; 32]>,
+    img: Option<(Vec<u8>, [u8; 32])>,
     disk_track: (Option<i32>, Option<i32>),
 }
 
@@ -82,7 +79,7 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
             anyhow::bail!("Missing plugin needed for file {orig_path}");
         }
         DiscovererResult::Timeout => {
-            anyhow::bail!("Timeout reached for processing tags")
+            anyhow::bail!("Timeout reached for processing tags");
         }
         // these branches _shouldn't_ fail.
         //
@@ -95,72 +92,84 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
         _other => panic!("unhandled enum: {_other:?}"),
     }
 
-    // tag metadata
+    // tag metadata, iterate through all tags
     debug!("{orig_path}: collecting tags");
-    let mut mdata: Metadata = Default::default();
-
-    // iterate through all tags
+    let mut title = None;
+    let mut artist = None;
+    let mut artist_sort = None;
+    let mut album = None;
+    let mut album_sort = None;
+    let mut img = None;
+    let mut disk_track = (None, None);
     let mut set = HashMap::new();
     for (tag, data) in data.audio_streams().iter().flat_map(|streaminfo| {
         let tags = streaminfo.tags();
         let mut ret = vec![];
-        if let Some(tags) = tags {
-            for (tag, value) in tags.iter() {
-                trace!("{orig_path}: tag proc'd \"{tag}\"");
-                ret.push((tag.to_owned(), value));
+        match tags {
+            Some(tags) => {
+                for (tag, value) in tags.iter() {
+                    trace!("{orig_path}: tag proc'd \"{tag}\"");
+                    ret.push((tag.to_owned(), value));
+                }
             }
-        } else {
-            debug!("{orig_path}: streaminfo.tags() produced a none");
+            None => debug!("{orig_path}: streaminfo.tags() produced a none"),
         };
         ret
     }) {
         trace!("{orig_path}: tag \"{tag}\"");
         match tag.as_str() {
-            // TODO: verify this is the right thing
             "image" => {
                 let samp = data.get::<gstreamer::Sample>()?;
                 if let Some(bufs) = samp.buffer() {
-                    let img: Vec<u8> = {
-                        let mut imgbuf: Vec<u8> = vec![];
+                    let img_raw = {
+                        let mut imgbuf = vec![];
                         for buf in bufs {
-                            // TODO: make this error better
                             buf.map_readable()
-                                .expect("memory should be readable: {}")
+                                .expect("image memory should be readable: {}")
                                 .iter()
                                 .for_each(|x| imgbuf.push(*x));
                         }
                         imgbuf
                     };
-                    mdata.imghash = Some(hash(&img));
-                    trace!("{orig_path}: imghash: {:?}", mdata.imghash);
 
                     // convert to webp
-                    let dropped = image::load_from_memory(&img)?;
+                    let dropped = image::load_from_memory(&img_raw)?;
                     let conv = dropped.into_rgb8();
                     let mut hold = Cursor::new(vec![]);
                     conv.write_to(&mut hold, image::ImageFormat::WebP)?;
-                    mdata.img = Some(hold.into_inner());
+                    let img_buf = hold.into_inner();
+                    let imghash = hash(&img_buf);
+                    trace!("{orig_path}: imghash: {:?}", imghash);
+                    img = Some((img_buf, imghash));
                 } else {
                     anyhow::bail!("no buffer found for image");
                 }
             }
             "title" => {
-                mdata.title = proc_tag(data);
-                trace!("{orig_path}: title is {:?}", mdata.title)
+                title = proc_tag(data);
+                trace!("{orig_path}: title is {:?}", title)
             }
             "artist" => {
-                mdata.artist = proc_tag(data);
-                trace!("{orig_path}: artist is {:?}", mdata.artist)
+                artist = proc_tag(data);
+                trace!("{orig_path}: artist is {:?}", artist)
+            }
+            "artist-sortname" => {
+                artist_sort = proc_tag(data);
+                trace!("{orig_path}: artist sortname is {:?}", artist_sort);
             }
             "album" => {
-                mdata.album = proc_tag(data);
-                trace!("{orig_path}: album is {:?}", mdata.album)
+                album = proc_tag(data);
+                trace!("{orig_path}: album is {:?}", album)
+            }
+            "album-sortname" => {
+                album_sort = proc_tag(data);
+                trace!("{orig_path}: album sortname is {:?}", album_sort);
             }
             "album-disc-number" | "track-number" => {
                 let mut_info = if tag.as_str() == "album-disc-number" {
-                    &mut mdata.disk_track.0
+                    &mut disk_track.0
                 } else {
-                    &mut mdata.disk_track.1
+                    &mut disk_track.1
                 };
                 *mut_info = proc_tag(data).and_then(|inp| match inp.parse() {
                     Ok(ok) => Some(ok),
@@ -169,7 +178,7 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
                         None
                     }
                 });
-                trace!("{orig_path}: disk_track is {:?}", mdata.disk_track)
+                trace!("{orig_path}: disk_track is {:?}", disk_track)
             }
             _ => {
                 // generic handler
@@ -196,17 +205,19 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
             }
         }
     }
-    if !set.is_empty() {
-        mdata.other_tags = Some(serde_json::to_string(
+    let other_tags = if !set.is_empty() {
+        serde_json::to_string(
             &set.into_iter()
                 .map(|(a, b)| (a.to_string(), b))
                 .collect::<HashMap<_, _>>(),
-        )?);
-    }
-    if mdata.title.is_none() {
+        )?
+    } else {
+        "{}".to_string()
+    };
+    let title = title.unwrap_or_else(|| {
         warn!("{orig_path}: this song has no \"title\" tag, using filename");
-        mdata.title = Some(orig_path.to_string())
-    }
+        orig_path.to_string()
+    });
     drop(discover);
 
     // audiohash
@@ -218,9 +229,7 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
     .expect("Expected a gst::Pipeline");
 
     // sink extractor
-    //
-    // TODO: either do a shared memory thing or Oneshot it
-    let (tx, rx) = std::sync::mpsc::channel();
+    let audiohash = Arc::new(std::sync::Mutex::new(None));
     let sink = pipeline
         .by_name("sink")
         .expect("sink element not found")
@@ -229,6 +238,7 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
     sink.set_property("sync", false);
     sink.set_callbacks({
         let orig_path = orig_path.to_owned();
+        let audiohash = Arc::downgrade(&audiohash);
         gstreamer_app::AppSinkCallbacks::builder()
             .new_sample(move |sink| {
                 trace!("{orig_path}: sink match from main loop entered");
@@ -236,19 +246,22 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
                     Ok(sample) => match sample.buffer() {
                         Some(buflist) => {
                             trace!("{orig_path}: found some buffers, sending over");
-                            tx.send(
-                                buflist
-                                    .iter_memories()
-                                    .flat_map(|buf| {
-                                        buf.map_readable()
-                                            .expect("memory should be readable")
-                                            .iter()
-                                            .copied()
-                                            .collect::<Vec<_>>()
-                                    })
-                                    .collect::<Vec<_>>(),
-                            )
-                            .unwrap();
+                            let hold = audiohash.upgrade().unwrap();
+                            let mut lock = hold.lock().unwrap();
+                            if lock.is_none() {
+                                *lock = Some(
+                                    buflist
+                                        .iter_memories()
+                                        .flat_map(|buf| {
+                                            buf.map_readable()
+                                                .expect("memory should be readable")
+                                                .iter()
+                                                .copied()
+                                                .collect::<Vec<_>>()
+                                        })
+                                        .collect::<Vec<_>>(),
+                                );
+                            }
                             Err(gstreamer::FlowError::Eos)
                         }
                         None => {
@@ -281,11 +294,21 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
     debug!("{orig_path}: exiting waveform capture loop");
     pipeline.set_state(gstreamer::State::Null)?;
     trace!("{orig_path}: collecting iter");
-    let waveform = rx.recv().unwrap();
+    let waveform = audiohash.lock().unwrap().clone().unwrap();
     trace!("{orig_path}: hashing");
-    mdata.audiohash = Some(hash(&waveform));
-    trace!("{orig_path}: audiohash is {:?}", mdata.audiohash);
-    Ok(mdata)
+    let audiohash = hash(&waveform);
+    trace!("{orig_path}: audiohash is {:?}", audiohash);
+    Ok(Metadata {
+        title,
+        audiohash,
+        other_tags,
+        artist,
+        artist_sort,
+        album,
+        album_sort,
+        img,
+        disk_track,
+    })
 }
 
 // copy the hash of one value into a regular array since sha2 uses GenericArray's,
@@ -325,11 +348,11 @@ async fn insert_into_db(
         Box::pin(async move {
             // insert cover art, check against img_hash
             let cover_art_id = {
-                if let Some(cover_hash) = metadata.imghash.as_ref() {
+                if let Some(cover_hash) = metadata.img.as_ref().map(|x| x.1) {
                     let q = cover_hash.as_slice();
                     match sqlx::query!(
                         "SELECT id FROM cover_art
-                            WHERE img_hash = ?;",
+                        WHERE img_hash = ?;",
                         q
                     )
                     .fetch_optional(&mut *txn)
@@ -338,13 +361,12 @@ async fn insert_into_db(
                         Some(x) => Some(uuid_serialize(&x.id)?),
                         None => {
                             let id = Uuid::new_v4();
-                            let webm_blob = metadata.img.unwrap();
-                            let img_hash_hold = metadata.imghash.unwrap();
+                            let (webm_blob, img_hash_hold) = metadata.img.unwrap();
                             let img_hash = img_hash_hold.as_slice();
                             sqlx::query!(
                                 "INSERT INTO cover_art
-                                    (id, webm_blob, img_hash)
-                                    VALUES (?, ?, ?);",
+                                (id, webm_blob, img_hash)
+                                VALUES (?, ?, ?);",
                                 id,
                                 webm_blob,
                                 img_hash
@@ -365,7 +387,7 @@ async fn insert_into_db(
                 if let Some(q) = metadata.artist.as_ref() {
                     match sqlx::query!(
                         "SELECT id FROM artist
-                            WHERE artist_name = ?;",
+                        WHERE artist_name = ?;",
                         q
                     )
                     .fetch_optional(&mut *txn)
@@ -377,8 +399,8 @@ async fn insert_into_db(
                             let artist_name = metadata.artist.unwrap();
                             sqlx::query!(
                                 "INSERT INTO artist
-                                    (id, artist_name, sort_name)
-                                    VALUES (?, ?, ?);",
+                                (id, artist_name, sort_name)
+                                VALUES (?, ?, ?);",
                                 id,
                                 artist_name,
                                 metadata.artist_sort
@@ -399,7 +421,7 @@ async fn insert_into_db(
                 if let Some(q) = metadata.album.as_ref() {
                     match sqlx::query!(
                         "SELECT id FROM album
-                            WHERE title = ?;",
+                        WHERE title = ?;",
                         q
                     )
                     .fetch_optional(&mut *txn)
@@ -411,8 +433,8 @@ async fn insert_into_db(
                             let title = metadata.album.unwrap();
                             sqlx::query!(
                                 "INSERT INTO album
-                                    (id, title, sort_title)
-                                    VALUES (?, ?, ?);",
+                                (id, title, sort_title)
+                                VALUES (?, ?, ?);",
                                 id,
                                 title,
                                 metadata.album_sort
@@ -429,12 +451,11 @@ async fn insert_into_db(
             };
 
             // insert track, check on audiohash
-            let hold = metadata.audiohash.unwrap();
-            let audiohash = hold.as_slice();
+            let audiohash = metadata.audiohash.as_slice();
             match {
                 sqlx::query!(
                     "SELECT id FROM track
-                        WHERE owner = ? AND audio_hash = ?;",
+                    WHERE owner = ? AND audio_hash = ?;",
                     userid,
                     audiohash
                 )
@@ -451,9 +472,9 @@ async fn insert_into_db(
                     ))
                 }
                 None => {
-                    let ahold = metadata.audiohash.unwrap();
+                    let ahold = metadata.audiohash;
                     let audiohash = ahold.as_slice();
-                    let other_tags = metadata.other_tags.unwrap();
+                    let other_tags = metadata.other_tags;
                     sqlx::query!(
                         "INSERT INTO track 
                             (id,

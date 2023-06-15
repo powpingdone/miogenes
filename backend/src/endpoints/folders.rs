@@ -24,8 +24,6 @@ use tokio::fs::try_exists;
 use tokio::fs::ReadDir;
 use uuid::Uuid;
 
-// TODO: join! dir locking and check_dir_in..
-//
 // TODO: pepper with log
 pub fn routes() -> Router<MioState> {
     Router::new().route(
@@ -42,13 +40,16 @@ async fn folder_create(
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> impl IntoResponse {
+    debug!("PUT /api/folder creating folder {name} at {path}");
     let name = sanitize_filename::sanitize(name);
-    let _hold = state.lock_files.write().await;
-    tokio::task::spawn_blocking({
-        let pbuf = [&path].iter().collect::<PathBuf>();
-        move || check_dir_in_data_dir(&pbuf, userid)
-    })
-    .await??;
+    let (_hold, task) = tokio::join!(
+        state.lock_files.write(),
+        tokio::task::spawn_blocking({
+            let pbuf = [&path].iter().collect::<PathBuf>();
+            move || check_dir_in_data_dir(&pbuf, userid)
+        })
+    );
+    task??;
     let pbuf: PathBuf = [*DATA_DIR.get().unwrap(), &format!("{userid}"), &path, &name]
         .iter()
         .collect();
@@ -63,35 +64,38 @@ async fn folder_rename(
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderRename { old_path, new_path }): Query<msgstructs::FolderRename>,
 ) -> impl IntoResponse {
-    // setup vars
-    let pbuf: PathBuf = [*DATA_DIR.get().unwrap(), &format!("{userid}")]
-        .iter()
-        .collect();
-    let mut old = pbuf.clone();
-    old.push(&old_path);
-    let old = old.absolutize()?;
-    let mut new = pbuf.clone();
-    new.push(&new_path);
-    let new = new.absolutize()?;
-    debug!(
-        "PATCH /api/folder trying to move \"{}\" -> \"{}\"",
-        old.display(),
-        new.display()
-    );
+    let (_hold, check_dir) = tokio::join!(
+        state.lock_files.write(),
+        // setup vars, majority of blocking code here
+        tokio::task::spawn_blocking({
+            let old_path = old_path.clone();
+            let new_path = new_path.clone();
+            move || -> Result<_, MioInnerError> {
+                check_dir_in_data_dir(&old_path, userid)?;
+                check_dir_in_data_dir(&new_path, userid)?;
 
-    // majority of blocking code here
-    tokio::task::spawn_blocking({
-        let old_path = old_path.clone();
-        let new_path = new_path.clone();
-        move || {
-            check_dir_in_data_dir(&old_path, userid)?;
-            check_dir_in_data_dir(&new_path, userid)
-        }
-    })
-    .await??;
+                // generate paths
+                let pbuf: PathBuf = [*DATA_DIR.get().unwrap(), &format!("{userid}")]
+                    .iter()
+                    .collect();
+                let mut old = pbuf.clone();
+                old.push(&old_path);
+                let old = old.absolutize()?.into_owned();
+                let mut new = pbuf.clone();
+                new.push(&new_path);
+                let new = new.absolutize()?.into_owned();
+                debug!(
+                    "PATCH /api/folder trying to move \"{}\" -> \"{}\"",
+                    old.display(),
+                    new.display()
+                );
+                Ok((old, new))
+            }
+        })
+    );
+    let (old, new) = check_dir??;
 
     // make sure it exists
-    let _hold = state.lock_files.write().await;
     if !try_exists(&old).await? {
         return Err(MioInnerError::NotFound(anyhow!("{old_path}")));
     }
@@ -124,9 +128,10 @@ async fn folder_query(
         .collect::<PathBuf>();
     if let Some(Query(msgstructs::FolderQuery { path })) = path_query {
         // query individual folder
+        let path = AsRef::<std::path::Path>::as_ref(&path).absolutize()?;
+        check_dir_in_data_dir(&path, userid)?;
         let mut check = top_level.clone();
         check.push(path);
-        check_dir_in_data_dir(check.clone(), userid)?;
         let mut ret = vec![];
         let mut read_dir = read_dir(check).await?;
         while let Some(x) = read_dir.next_entry().await? {
@@ -212,7 +217,6 @@ async fn folder_delete(
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> Result<impl IntoResponse, MioInnerError> {
-    let _hold = state.lock_files.write().await;
     let real_path = [
         *crate::DATA_DIR.get().unwrap(),
         &format!("{userid}"),
@@ -221,7 +225,13 @@ async fn folder_delete(
     ]
     .into_iter()
     .collect::<PathBuf>();
-    check_dir_in_data_dir(&format!("{path}/{name}"), userid)?;
+    let (_hold, _) = tokio::join!(
+        state.lock_files.write(),
+        tokio::task::spawn_blocking({
+            let (path, name) = (path.clone(), name.clone());
+            move || check_dir_in_data_dir(&format!("{path}/{name}"), userid)
+        })
+    );
 
     // check if dir has contents https://github.com/rust-lang/rust/issues/86442
     if read_dir(&real_path).await?.next_entry().await?.is_some() {
@@ -351,7 +361,7 @@ mod test {
                 "/api/folder?{}",
                 url_enc(&msgstructs::FolderRename {
                     old_path: "merasmus/neigh/bleh".to_string(),
-                    new_path: "merasmus/bleh".to_string()
+                    new_path: "merasmus/bleh".to_string(),
                 })
                 .unwrap()
             ),
@@ -391,23 +401,18 @@ mod test {
                 jwt_header(
                     &cli,
                     Method::PUT,
-                    &format!("/api/folder?name={name}&path={path}",),
+                    &format!("/api/folder?name={name}&path={path}"),
                     &jwt,
                 )
                 .expect_failure()
                 .await;
-                jwt_header(
-                    &cli,
-                    Method::GET,
-                    &format!("/api/folder?path={path}",),
-                    &jwt,
-                )
-                .expect_failure()
-                .await;
+                jwt_header(&cli, Method::GET, &format!("/api/folder?path={path}"), &jwt)
+                    .expect_failure()
+                    .await;
                 jwt_header(
                     &cli,
                     Method::PATCH,
-                    &format!("/api/folder/?old_path={path}&new_path={name}",),
+                    &format!("/api/folder/?old_path={path}&new_path={name}"),
                     &jwt,
                 )
                 .expect_failure()
@@ -415,7 +420,7 @@ mod test {
                 jwt_header(
                     &cli,
                     Method::DELETE,
-                    &format!("/api/folder?name={name}&path={path}",),
+                    &format!("/api/folder?name={name}&path={path}"),
                     &jwt,
                 )
                 .expect_failure()
