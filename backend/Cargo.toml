@@ -3,10 +3,6 @@ edition = "2021"
 name = "mio-backend"
 version = "0.1.0"
 
-[[bin]]
-name = "gen-openapi"
-path = "./src/gen_openapi.rs"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }

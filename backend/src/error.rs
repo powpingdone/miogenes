@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use log::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use MioInnerError::*;
 
@@ -28,6 +28,33 @@ pub enum MioInnerError {
     Conflict(anyhow::Error),
 }
 
+impl MioInnerError {
+    // this is mainly outside and pub because of testing
+    pub fn msg(self) -> String {
+        format!(
+            "{}",
+            match self {
+                NotFound(e)
+                | Conflict(e)
+                | UserChallengedFail(e, _)
+                | UserCreationFail(e, _)
+                | TrackProcessingError(e, _)
+                | ExtIoError(e, _) => e,
+                // these errors are not put into the error field as they could leak information
+                IntIoError(_) => {
+                    anyhow!("The server encountered an filesystem io error. Please check the server log.")
+                }
+                Panicked(_) => {
+                    anyhow!("The server encountered an error it could not handle. Please check the server log.")
+                }
+                DbError(_) => {
+                    anyhow!("The server encountered an internal database error. Please check server log.")
+                }
+            }
+        )
+    }
+}
+
 // various helper functions for translating common errors
 impl From<tokio::task::JoinError> for MioInnerError {
     fn from(value: tokio::task::JoinError) -> Self {
@@ -47,13 +74,13 @@ impl From<std::io::Error> for MioInnerError {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub struct ErrorMsg {
+    pub error: String,
+}
+
 impl IntoResponse for MioInnerError {
     fn into_response(self) -> axum::response::Response {
-        #[derive(Serialize)]
-        struct Error {
-            error: String,
-        }
-
         log::log!(
             match self {
                 NotFound(_) | Conflict(_) | ExtIoError(_, _) => Level::Debug,
@@ -66,28 +93,18 @@ impl IntoResponse for MioInnerError {
         );
 
         // return
-        (match self {
-            NotFound(_) => StatusCode::NOT_FOUND,
-            Conflict(_) => StatusCode::CONFLICT,
-            IntIoError(_) | DbError(_) | Panicked(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            UserChallengedFail(_, c) | UserCreationFail(_, c) | TrackProcessingError(_, c) | ExtIoError(_, c) => c,
-        }, Json(Error { error: format!("{}", match self {
-            NotFound(e) |
-            Conflict(e) |
-            UserChallengedFail(e, _) |
-            UserCreationFail(e, _) |
-            TrackProcessingError(e, _) |
-            ExtIoError(e, _) => e,
-            // these errors are not put into the error field as they could leak information
-            IntIoError(_) => {
-                anyhow!("The server encountered an filesystem io error. Please check the server log.")
+        (
+            match self {
+                NotFound(_) => StatusCode::NOT_FOUND,
+                Conflict(_) => StatusCode::CONFLICT,
+                IntIoError(_) | DbError(_) | Panicked(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                UserChallengedFail(_, c)
+                | UserCreationFail(_, c)
+                | TrackProcessingError(_, c)
+                | ExtIoError(_, c) => c,
             },
-            Panicked(_) => {
-                anyhow!("The server encountered an error it could not handle. Please check the server log.")
-            },
-            DbError(_) => {
-                anyhow!("The server encountered an internal database error. Please check server log.")
-            },
-        }) })).into_response()
+            Json(ErrorMsg { error: self.msg() }),
+        )
+            .into_response()
     }
 }

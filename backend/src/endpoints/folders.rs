@@ -64,6 +64,7 @@ async fn folder_rename(
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderRename { old_path, new_path }): Query<msgstructs::FolderRename>,
 ) -> impl IntoResponse {
+    debug!("PATCH /api/folder move from '{old_path}' -> '{new_path}'");
     let (_hold, check_dir) = tokio::join!(
         state.lock_files.write(),
         // setup vars, majority of blocking code here
@@ -81,7 +82,7 @@ async fn folder_rename(
                 let mut old = pbuf.clone();
                 old.push(&old_path);
                 let old = old.absolutize()?.into_owned();
-                let mut new = pbuf.clone();
+                let mut new = pbuf;
                 new.push(&new_path);
                 let new = new.absolutize()?.into_owned();
                 debug!(
@@ -229,7 +230,7 @@ async fn folder_delete(
         state.lock_files.write(),
         tokio::task::spawn_blocking({
             let (path, name) = (path.clone(), name.clone());
-            move || check_dir_in_data_dir(&format!("{path}/{name}"), userid)
+            move || check_dir_in_data_dir(format!("{path}/{name}"), userid)
         })
     );
 
@@ -249,8 +250,8 @@ async fn folder_delete(
 
 #[cfg(test)]
 mod test {
-    use crate::test::*;
-    use axum::http::Method;
+    use crate::{error::ErrorMsg, test::*};
+    use axum::http::{Method, StatusCode};
     use mio_common::*;
     use serde_urlencoded::to_string as url_enc;
     use std::{collections::HashSet, path::PathBuf};
@@ -258,13 +259,13 @@ mod test {
     // util function to check if dirs are the same
     #[must_use]
     async fn tree_check(cli: &axum_test::TestServer, jwt: &auth::JWT, dirs: &[&str]) -> bool {
-        let ret = jwt_header(&cli, Method::GET, "/api/folder", &jwt)
+        let ret = jwt_header(cli, Method::GET, "/api/folder", jwt)
             .await
             .json::<retstructs::FolderQuery>()
             .ret;
         if let retstructs::FolderQueryRet::Tree(ret) = ret {
             let ret = ret.into_iter().collect::<HashSet<_>>();
-            return ret == HashSet::from_iter(dirs.into_iter().map(PathBuf::from));
+            ret == HashSet::from_iter(dirs.iter().map(PathBuf::from))
         } else {
             panic!("did not return tree when supposted to");
         }
@@ -281,7 +282,7 @@ mod test {
             Method::PUT,
             &format!(
                 "/api/folder?{}",
-                url_enc(&msgstructs::FolderCreateDelete {
+                url_enc(msgstructs::FolderCreateDelete {
                     name: "a horse".to_string(),
                     path: "".to_string(),
                 })
@@ -295,7 +296,7 @@ mod test {
             Method::PUT,
             &format!(
                 "/api/folder?{}",
-                url_enc(&msgstructs::FolderCreateDelete {
+                url_enc(msgstructs::FolderCreateDelete {
                     name: "neigh".to_string(),
                     path: "a horse/".to_string(),
                 })
@@ -309,7 +310,7 @@ mod test {
             Method::PUT,
             &format!(
                 "/api/folder?{}",
-                url_enc(&msgstructs::FolderCreateDelete {
+                url_enc(msgstructs::FolderCreateDelete {
                     name: "bleh".to_string(),
                     path: "a horse/neigh".to_string(),
                 })
@@ -335,7 +336,7 @@ mod test {
             Method::PATCH,
             &format!(
                 "/api/folder?{}",
-                url_enc(&msgstructs::FolderRename {
+                url_enc(msgstructs::FolderRename {
                     old_path: "a horse".to_string(),
                     new_path: "merasmus".to_string(),
                 })
@@ -359,7 +360,7 @@ mod test {
             Method::PATCH,
             &format!(
                 "/api/folder?{}",
-                url_enc(&msgstructs::FolderRename {
+                url_enc(msgstructs::FolderRename {
                     old_path: "merasmus/neigh/bleh".to_string(),
                     new_path: "merasmus/bleh".to_string(),
                 })
@@ -395,36 +396,91 @@ mod test {
     async fn folder_bad_path_checks() {
         let cli = client().await;
         let jwt = gen_user(&cli, "folder_bad_path_checks").await;
-        const TEST_PATHS: &[&str] = &["../", "..", "a/../..", "../../test_files"];
+        const TEST_PATHS: &[&str] = &["..", "../", "a/../..", "../../test_files"];
+        let err = crate::ErrorMsg {
+            error: crate::MioInnerError::ExtIoError(
+                anyhow::anyhow!("bad path"),
+                StatusCode::BAD_REQUEST,
+            )
+            .msg(),
+        };
         for path in TEST_PATHS {
             for name in TEST_PATHS {
-                jwt_header(
-                    &cli,
-                    Method::PUT,
-                    &format!("/api/folder?name={name}&path={path}"),
-                    &jwt,
-                )
-                .expect_failure()
-                .await;
-                jwt_header(&cli, Method::GET, &format!("/api/folder?path={path}"), &jwt)
+                assert_eq!(
+                    jwt_header(
+                        &cli,
+                        Method::PUT,
+                        &format!(
+                            "/api/folder?{}",
+                            url_enc(msgstructs::FolderCreateDelete {
+                                name: name.to_string(),
+                                path: path.to_string()
+                            })
+                            .unwrap()
+                        ),
+                        &jwt,
+                    )
                     .expect_failure()
-                    .await;
-                jwt_header(
-                    &cli,
-                    Method::PATCH,
-                    &format!("/api/folder/?old_path={path}&new_path={name}"),
-                    &jwt,
-                )
-                .expect_failure()
-                .await;
-                jwt_header(
-                    &cli,
-                    Method::DELETE,
-                    &format!("/api/folder?name={name}&path={path}"),
-                    &jwt,
-                )
-                .expect_failure()
-                .await;
+                    .await
+                    .json::<ErrorMsg>(),
+                    err
+                );
+                assert_eq!(
+                    jwt_header(
+                        &cli,
+                        Method::GET,
+                        &format!(
+                            "/api/folder?{}",
+                            url_enc(msgstructs::FolderQuery {
+                                path: path.to_string()
+                            })
+                            .unwrap()
+                        ),
+                        &jwt,
+                    )
+                    .expect_failure()
+                    .await
+                    .json::<ErrorMsg>(),
+                    err
+                );
+                assert_eq!(
+                    jwt_header(
+                        &cli,
+                        Method::PATCH,
+                        &format!(
+                            "/api/folder?{}",
+                            url_enc(msgstructs::FolderRename {
+                                old_path: path.to_string(),
+                                new_path: name.to_string(),
+                            })
+                            .unwrap()
+                        ),
+                        &jwt,
+                    )
+                    .expect_failure()
+                    .await
+                    .json::<ErrorMsg>(),
+                    err
+                );
+                assert_eq!(
+                    jwt_header(
+                        &cli,
+                        Method::DELETE,
+                        &format!(
+                            "/api/folder?{}",
+                            url_enc(msgstructs::FolderCreateDelete {
+                                name: name.to_string(),
+                                path: path.to_string()
+                            })
+                            .unwrap()
+                        ),
+                        &jwt,
+                    )
+                    .expect_failure()
+                    .await
+                    .json::<ErrorMsg>(),
+                    err
+                );
             }
         }
     }

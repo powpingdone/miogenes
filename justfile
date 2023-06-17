@@ -1,6 +1,7 @@
 default: build
 
 gen:
+    RUSTFLAGS="--cfg generate_api_dot_json" cargo run --bin mio-backend
     flutter_rust_bridge_codegen --rust-input frontend/glue/src/api.rs --dart-output frontend/lib/bridge_generated.dart
 
 build: gen

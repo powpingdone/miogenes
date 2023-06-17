@@ -10,6 +10,7 @@ use sqlx::SqlitePool;
 use std::str::FromStr;
 use std::sync::Arc;
 use subtasks::secret::SecretHolder;
+use utoipa::OpenApi;
 
 mod db;
 mod endpoints;
@@ -50,7 +51,14 @@ impl MioStateRegen for MioState {
     }
 }
 
-async fn version() -> impl IntoResponse {
+#[utoipa::path(
+    get,
+    path = "/ver",
+    responses(
+        (status = 200, response = mio_common::Vers)
+    ),
+)]
+pub async fn get_version() -> impl IntoResponse {
     use konst::primitive::parse_u16;
     use konst::result::unwrap_ctx;
 
@@ -62,32 +70,47 @@ async fn version() -> impl IntoResponse {
     (StatusCode::OK, Json(VSTR))
 }
 
+pub fn gen_openapi() -> String {
+    #[derive(OpenApi)]
+    #[openapi(paths(get_version), components(responses(mio_common::Vers)))]
+    struct Api;
+    Api::openapi().to_pretty_json().unwrap()
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // TODO: tracing
     env_logger::builder()
-        .is_test(true)
-        .target(env_logger::Target::Stdout)
+        .filter_level(LevelFilter::Trace)
         .try_init()?;
     gstreamer::init()?;
 
-    // create the main passing state
-    let state = gen_state().await;
+    // generate openapi stuff for autogen of libraries
+    #[cfg(generate_api_dot_json)]
+    {
+        return std::fs::write("./api.json", gen_openapi()).map_err(anyhow::Error::new);
+    }
 
-    // setup the router
-    trace!("main: building router");
-    let router = gen_router(state.clone());
+    #[cfg(not(generate_api_dot_json))]
+    {
+        // create the main passing state
+        let state = gen_state().await;
 
-    // TODO: bind to user settings
-    static BINDING: &str = "127.0.0.1:8081";
-    info!("main: starting server on {BINDING}");
-    Server::bind(&BINDING.parse().unwrap())
-        .serve(router.into_make_service())
-        .await
-        .expect("server exited improperly: {}");
-    trace!("main: cleaning up nicely");
-    state.db.close().await;
-    Ok(())
+        // setup the router
+        trace!("main: building router");
+        let router = gen_router(state.clone());
+
+        // TODO: bind to user settings
+        static BINDING: &str = "127.0.0.1:8081";
+        info!("main: starting server on {BINDING}");
+        Server::bind(&BINDING.parse().unwrap())
+            .serve(router.into_make_service())
+            .await
+            .expect("server exited improperly: {}");
+        trace!("main: cleaning up nicely");
+        state.db.close().await;
+        Ok(())
+    }
 }
 
 async fn gen_state() -> MioState {
@@ -151,7 +174,7 @@ fn gen_router(state: MioState) -> Router<()> {
                 .route("/signup", post(user::signup)),
         )
         // get ver
-        .route("/ver", get(version))
+        .route("/ver", get(get_version))
         // on any panic, dont just leave the client hanging
         .layer(tower_http::catch_panic::CatchPanicLayer::custom(
             |x: Box<dyn std::any::Any + Send>| {
@@ -249,7 +272,7 @@ pub mod test {
             Method::PUT => client.put(url),
             Method::DELETE => client.delete(url),
             Method::PATCH => client.patch(url),
-            _ => panic!("method {method:?} is not defined for client creation, plz fix?"),
+            _ => panic!("method {method:?} is not defined for client creation, plz fix"),
         }
         .add_header(
             HeaderName::from_static("authorization"),
@@ -257,3 +280,4 @@ pub mod test {
         )
     }
 }
+

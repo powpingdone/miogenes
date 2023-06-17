@@ -41,16 +41,26 @@ pub(self) fn check_dir_in_data_dir(
     // NOTE: this length check is used to make sure that `zip` in the following for
     // loop does not run out and produce an Ok when the ask path is shorter than the
     // real path.
+    let ret_err = {
+        cfg_if::cfg_if! {
+            if #[cfg(test)] {
+                anyhow!("bad path")
+            } else {
+                anyhow!("invalid path: {:?}", path.as_ref().as_os_str())
+            }
+        }
+    };
+
     if ask_path.len() < real_path.len() {
         return Err(MioInnerError::ExtIoError(
-            anyhow!("invalid path: {:?}", path.as_ref().as_os_str()),
+            ret_err,
             StatusCode::BAD_REQUEST,
         ));
     }
     for (real, ask) in real_path.iter().zip(ask_path.iter()) {
         if real != ask {
             return Err(MioInnerError::ExtIoError(
-                anyhow!("invalid path: {:?}", path.as_ref().as_os_str()),
+                ret_err,
                 StatusCode::BAD_REQUEST,
             ));
         }
