@@ -20,3 +20,6 @@ files/
 
 # vscode
 .vscode/
+
+# openapi json export
+api.json

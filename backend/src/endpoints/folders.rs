@@ -86,7 +86,7 @@ async fn folder_rename(
                 new.push(&new_path);
                 let new = new.absolutize()?.into_owned();
                 debug!(
-                    "PATCH /api/folder trying to move \"{}\" -> \"{}\"",
+                    "PATCH /api/folder confirmed trying to move \"{}\" -> \"{}\"",
                     old.display(),
                     new.display()
                 );
@@ -115,6 +115,11 @@ async fn folder_rename(
     }
 
     // finally, rename
+    debug!(
+        "PATCH /api/folder finally attempting to move \"{}\" -> \"{}\"",
+        old.display(),
+        new.display()
+    );
     rename(old, new).await.map_err(MioInnerError::from)
 }
 
@@ -128,7 +133,7 @@ async fn folder_query(
         .into_iter()
         .collect::<PathBuf>();
     if let Some(Query(msgstructs::FolderQuery { path })) = path_query {
-        // query individual folder
+        debug!("GET /api/folder querying folder {}, {path}", top_level.display());
         let path = AsRef::<std::path::Path>::as_ref(&path).absolutize()?;
         check_dir_in_data_dir(&path, userid)?;
         let mut check = top_level.clone();
@@ -136,9 +141,13 @@ async fn folder_query(
         let mut ret = vec![];
         let mut read_dir = read_dir(check).await?;
         while let Some(x) = read_dir.next_entry().await? {
+            let loghold = x.file_name();
+            let logfile = AsRef::<std::path::Path>::as_ref(&loghold).display();
+            trace!("GET /api/folder checking branch {logfile}");
             if x.file_type().await?.is_file() {
+                trace!("GET /api/folder branch is file {logfile}");
                 ret.push(
-                    Uuid::parse_str(
+                    Uuid::try_parse(
                         x.file_name().into_string().map_err(|err| {
                             MioInnerError::IntIoError(
                                 anyhow!(
@@ -146,39 +155,49 @@ async fn folder_query(
                                 ),
                             )
                         })?.as_str(),
-                    ).map_err(|err| MioInnerError::IntIoError(anyhow!("internal file name is not a uuid: {err}")))?,
+                    ).map(|x| x.to_string()).map_err(|err| MioInnerError::IntIoError(anyhow!("internal file name is not a uuid: {err}")))?,
                 );
             }
         }
-        Ok(Json(retstructs::FolderQuery {
-            ret: retstructs::FolderQueryRet::Track(ret),
-        }))
+        Ok(Json(retstructs::FolderQuery { ret }))
     } else {
         // query folder tree
+        debug!("GET /api/folder querying folder tree");
         Ok(Json(retstructs::FolderQuery {
-            ret: retstructs::FolderQueryRet::Tree(
-                folder_tree_inner(top_level.clone(), read_dir(top_level).await?, "".into()).await?,
-            ),
+            ret: folder_tree_inner(top_level.clone(), read_dir(top_level).await?, "".into())
+                .await?,
         }))
     }
 }
 
-// TODO: TEST THIS FOR THE LOVE OF HOLY MOTHER MARY JOESPH
 fn folder_tree_inner(
     base_dir: PathBuf,
     mut dir: ReadDir,
     curr_path: PathBuf,
-) -> Pin<Box<dyn Future<Output = Result<Vec<PathBuf>, MioInnerError>> + Send>> {
+) -> Pin<Box<dyn Future<Output = Result<Vec<String>, MioInnerError>> + Send>> {
     // The strange return type is due to recursion. I don't think that this could have
     // been impl'd reasonably any other way. Thanks rust async!
     Box::pin(async move {
         debug!("FTI call to ({base_dir:?}, {curr_path:?})");
 
+        fn fail_to_utf8(file: impl AsRef<std::path::Path>) -> MioInnerError {
+            MioInnerError::IntIoError(anyhow!(
+                "the file \"{}\" could not be converted to a string",
+                file.as_ref().display()
+            ))
+        }
+
         // 1: collect all the dirs
         let mut dirs = vec![];
         while let Some(file) = dir.next_entry().await? {
             if file.file_type().await?.is_dir() {
-                dirs.push(file.file_name());
+                dirs.push({
+                    let fname = file.file_name();
+                    fname
+                        .to_str()
+                        .map(|x| x.to_owned())
+                        .ok_or_else(|| fail_to_utf8(file.file_name()))?
+                });
             }
         }
 
@@ -207,7 +226,11 @@ fn folder_tree_inner(
         }
 
         // 3: flatten. the current path is appended too
-        let mut ret = vec![curr_path.clone()];
+        let mut ret: Vec<String> = vec![curr_path
+            .clone()
+            .to_str()
+            .map(|x| x.to_owned())
+            .ok_or_else(|| fail_to_utf8(curr_path))?];
         ret.extend(dirs_finished.into_iter().flatten());
         Ok(ret)
     })
@@ -226,13 +249,18 @@ async fn folder_delete(
     ]
     .into_iter()
     .collect::<PathBuf>();
-    let (_hold, _) = tokio::join!(
+    debug!(
+        "DELETE /api/folder attemping to delete folder {}",
+        real_path.display()
+    );
+    let (_hold, ret) = tokio::join!(
         state.lock_files.write(),
         tokio::task::spawn_blocking({
-            let (path, name) = (path.clone(), name.clone());
-            move || check_dir_in_data_dir(format!("{path}/{name}"), userid)
+            let path = path.clone();
+            move || check_dir_in_data_dir(&path, userid)
         })
     );
+    ret??;
 
     // check if dir has contents https://github.com/rust-lang/rust/issues/86442
     if read_dir(&real_path).await?.next_entry().await?.is_some() {
@@ -244,6 +272,7 @@ async fn folder_delete(
             StatusCode::BAD_REQUEST,
         ));
     }
+    debug!("DELETE /api/folder deleting folder {}", real_path.display());
     remove_dir(real_path).await?;
     Ok(())
 }
@@ -254,7 +283,7 @@ mod test {
     use axum::http::{Method, StatusCode};
     use mio_common::*;
     use serde_urlencoded::to_string as url_enc;
-    use std::{collections::HashSet, path::PathBuf};
+    use std::collections::HashSet;
 
     // util function to check if dirs are the same
     #[must_use]
@@ -263,12 +292,9 @@ mod test {
             .await
             .json::<retstructs::FolderQuery>()
             .ret;
-        if let retstructs::FolderQueryRet::Tree(ret) = ret {
-            let ret = ret.into_iter().collect::<HashSet<_>>();
-            ret == HashSet::from_iter(dirs.iter().map(PathBuf::from))
-        } else {
-            panic!("did not return tree when supposted to");
-        }
+
+        let ret = ret.into_iter().collect::<HashSet<_>>();
+        ret == HashSet::from_iter(dirs.iter().map(|x| x.to_string()))
     }
 
     #[tokio::test]
@@ -414,11 +440,11 @@ mod test {
                             "/api/folder?{}",
                             url_enc(msgstructs::FolderCreateDelete {
                                 name: name.to_string(),
-                                path: path.to_string()
+                                path: path.to_string(),
                             })
                             .unwrap()
                         ),
-                        &jwt,
+                        &jwt
                     )
                     .expect_failure()
                     .await
@@ -455,7 +481,7 @@ mod test {
                             })
                             .unwrap()
                         ),
-                        &jwt,
+                        &jwt
                     )
                     .expect_failure()
                     .await
@@ -470,7 +496,7 @@ mod test {
                             "/api/folder?{}",
                             url_enc(msgstructs::FolderCreateDelete {
                                 name: name.to_string(),
-                                path: path.to_string()
+                                path: path.to_string(),
                             })
                             .unwrap()
                         ),

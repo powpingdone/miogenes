@@ -16,7 +16,7 @@ pub fn routes() -> Router<MioState> {
         .route("/album", get(album_info))
         .route("/playlist", get(playlist_info))
         .route("/coverart", get(cover_art))
-        .route("/artist", get(artist))
+        .route("/artist", get(artist_info))
 }
 
 fn uuid_map_back(x: Option<Vec<u8>>) -> Result<Option<Uuid>, MioInnerError> {
@@ -26,6 +26,18 @@ fn uuid_map_back(x: Option<Vec<u8>>) -> Result<Option<Uuid>, MioInnerError> {
     }
 }
 
+#[utoipa
+    ::path(
+        get,
+        path = "/api/query/track",
+        params(("id" = Uuid, Query, description = "Track id to query")),
+        security(("jwt" = [])),
+        responses(
+            (status = 200, response = retstructs::Track),
+            (status = 404, response = error::ErrorMsg),
+            (status = 500, response = error::ErrorMsg),
+        ),
+    )]
 async fn track_info(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -59,6 +71,18 @@ async fn track_info(
     ))
 }
 
+#[utoipa
+    ::path(
+        get,
+        path = "/api/query/album",
+        params(("id" = Uuid, Query, description = "Album id to query")),
+        security(("jwt" = [])),
+        responses(
+            (status = 200, response = retstructs::Album),
+            (status = 404, response = error::ErrorMsg),
+            (status = 500, response = error::ErrorMsg),
+        ),
+    )]
 async fn album_info(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -108,6 +132,18 @@ async fn album_info(
     ))
 }
 
+#[utoipa
+    ::path(
+        get,
+        path = "/api/query/playlist",
+        params(("id" = Uuid, Query, description = "Playlist id to query")),
+        security(("jwt" = [])),
+        responses(
+            (status = 200, response = retstructs::Playlist),
+            (status = 404, response = error::ErrorMsg),
+            (status = 500, response = error::ErrorMsg),
+        ),
+    )]
 async fn playlist_info(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -155,6 +191,18 @@ async fn playlist_info(
     ))
 }
 
+#[utoipa
+    ::path(
+        get,
+        path = "/api/query/coverart",
+        params(("id" = Uuid, Query, description = "Cover Art to query")),
+        security(("jwt" = [])),
+        responses(
+            (status = 200, response = retstructs::CoverArt),
+            (status = 404, response = error::ErrorMsg),
+            (status = 500, response = error::ErrorMsg),
+        ),
+    )]
 async fn cover_art(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -182,7 +230,19 @@ async fn cover_art(
     ))
 }
 
-async fn artist(
+#[utoipa
+    ::path(
+        get,
+        path = "/api/query/artist",
+        params(("id" = Uuid, Query, description = "Artist to query")),
+        security(("jwt" = [])),
+        responses(
+            (status = 200, response = retstructs::Artist),
+            (status = 404, response = error::ErrorMsg),
+            (status = 500, response = error::ErrorMsg),
+        ),
+    )]
+async fn artist_info(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,

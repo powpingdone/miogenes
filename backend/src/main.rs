@@ -10,7 +10,6 @@ use sqlx::SqlitePool;
 use std::str::FromStr;
 use std::sync::Arc;
 use subtasks::secret::SecretHolder;
-use utoipa::OpenApi;
 
 mod db;
 mod endpoints;
@@ -51,13 +50,7 @@ impl MioStateRegen for MioState {
     }
 }
 
-#[utoipa::path(
-    get,
-    path = "/ver",
-    responses(
-        (status = 200, response = mio_common::Vers)
-    ),
-)]
+#[utoipa::path(get, path = "/ver", responses((status = 200, response = mio_common::Vers)))]
 pub async fn get_version() -> impl IntoResponse {
     use konst::primitive::parse_u16;
     use konst::result::unwrap_ctx;
@@ -71,28 +64,76 @@ pub async fn get_version() -> impl IntoResponse {
 }
 
 pub fn gen_openapi() -> String {
+    use endpoints::*;
+    use mio_common::*;
+    use utoipa::openapi::security::HttpAuthScheme;
+    use utoipa::openapi::security::HttpBuilder;
+    use utoipa::openapi::security::SecurityScheme;
+    use utoipa::OpenApi;
+
     #[derive(OpenApi)]
-    #[openapi(paths(get_version), components(responses(mio_common::Vers)))]
+    #[openapi(
+        modifiers(&ModJWT),
+        paths(
+            get_version,
+            query::track_info,
+            query::album_info,
+            query::playlist_info,
+            query::cover_art,
+            query::artist_info,
+        ),
+        components(
+            responses(
+                crate::error::ErrorMsg,
+                Vers,
+                retstructs::Track,
+                retstructs::Album,
+                retstructs::Playlist,
+                retstructs::CoverArt,
+                retstructs::Artist,
+                retstructs::Playlists,
+                retstructs::UploadReturn,
+                retstructs::Albums,
+                retstructs::FolderQuery,
+            ),
+        ),
+        security((), ("jwt" = [])),
+    )]
     struct Api;
+    struct ModJWT;
+
+    impl utoipa::Modify for ModJWT {
+        fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+            let comps = openapi.components.as_mut().unwrap();
+            comps.add_security_scheme(
+                "jwt",
+                SecurityScheme::Http(
+                    HttpBuilder::new()
+                        .scheme(HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .build(),
+                ),
+            )
+        }
+    }
+
     Api::openapi().to_pretty_json().unwrap()
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // TODO: tracing
-    env_logger::builder()
-        .filter_level(LevelFilter::Trace)
-        .try_init()?;
-    gstreamer::init()?;
+    env_logger::builder().try_init()?;
 
     // generate openapi stuff for autogen of libraries
     #[cfg(generate_api_dot_json)]
     {
         return std::fs::write("./api.json", gen_openapi()).map_err(anyhow::Error::new);
     }
-
     #[cfg(not(generate_api_dot_json))]
     {
+        gstreamer::init()?;
+
         // create the main passing state
         let state = gen_state().await;
 
@@ -280,4 +321,3 @@ pub mod test {
         )
     }
 }
-

@@ -45,24 +45,18 @@ pub(self) fn check_dir_in_data_dir(
         cfg_if::cfg_if! {
             if #[cfg(test)] {
                 anyhow!("bad path")
-            } else {
+            }
+            else {
                 anyhow!("invalid path: {:?}", path.as_ref().as_os_str())
             }
         }
     };
-
     if ask_path.len() < real_path.len() {
-        return Err(MioInnerError::ExtIoError(
-            ret_err,
-            StatusCode::BAD_REQUEST,
-        ));
+        return Err(MioInnerError::ExtIoError(ret_err, StatusCode::BAD_REQUEST));
     }
     for (real, ask) in real_path.iter().zip(ask_path.iter()) {
         if real != ask {
-            return Err(MioInnerError::ExtIoError(
-                ret_err,
-                StatusCode::BAD_REQUEST,
-            ));
+            return Err(MioInnerError::ExtIoError(ret_err, StatusCode::BAD_REQUEST));
         }
     }
     Ok(())
