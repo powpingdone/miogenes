@@ -133,7 +133,10 @@ async fn folder_query(
         .into_iter()
         .collect::<PathBuf>();
     if let Some(Query(msgstructs::FolderQuery { path })) = path_query {
-        debug!("GET /api/folder querying folder {}, {path}", top_level.display());
+        debug!(
+            "GET /api/folder querying folder {}, {path}",
+            top_level.display()
+        );
         let path = AsRef::<std::path::Path>::as_ref(&path).absolutize()?;
         check_dir_in_data_dir(&path, userid)?;
         let mut check = top_level.clone();
@@ -147,15 +150,15 @@ async fn folder_query(
             if x.file_type().await?.is_file() {
                 trace!("GET /api/folder branch is file {logfile}");
                 ret.push(
-                    Uuid::try_parse(
-                        x.file_name().into_string().map_err(|err| {
-                            MioInnerError::IntIoError(
-                                anyhow!(
-                                    "could not convert internal file name into string to become uuid: name is {err:?}"
-                                ),
-                            )
-                        })?.as_str(),
-                    ).map(|x| x.to_string()).map_err(|err| MioInnerError::IntIoError(anyhow!("internal file name is not a uuid: {err}")))?,
+                    Uuid::try_parse(x.file_name().into_string().map_err(|err| {
+                        MioInnerError::IntIoError(
+                            anyhow!("could not convert internal file name into string to become uuid: name is {err:?}"),
+                        )
+                    })?.as_str())
+                        .map(|x| x.to_string())
+                        .map_err(
+                            |err| MioInnerError::IntIoError(anyhow!("internal file name is not a uuid: {err}")),
+                        )?,
                 );
             }
         }
@@ -292,7 +295,6 @@ mod test {
             .await
             .json::<retstructs::FolderQuery>()
             .ret;
-
         let ret = ret.into_iter().collect::<HashSet<_>>();
         ret == HashSet::from_iter(dirs.iter().map(|x| x.to_string()))
     }

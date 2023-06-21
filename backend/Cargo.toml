@@ -34,7 +34,6 @@ futures = "0.3"
 tower-http = { version = "0.4", features = ["full", "tokio"] }
 base64 = "0.21"
 tower = { version = "0.4", features = ["full", "tokio"] }
-utoipa = { version = "3.3", features = ["axum_extras", "debug", "uuid"] }
 jsonwebtoken = "8.3"
 sqlx = { version = "0.6", features = [
   "sqlite",

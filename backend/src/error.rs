@@ -3,7 +3,6 @@ use axum::{http::StatusCode, response::IntoResponse, Json};
 use log::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use utoipa::ToResponse;
 use MioInnerError::*;
 
 // Internal server errors, depending on the issue
@@ -75,7 +74,7 @@ impl From<std::io::Error> for MioInnerError {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, ToResponse)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct ErrorMsg {
     pub error: String,
 }

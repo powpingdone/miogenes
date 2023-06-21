@@ -1,12 +1,11 @@
 use serde::*;
-use utoipa::ToResponse;
 use uuid::Uuid;
 
 pub mod auth;
 pub mod msgstructs;
 pub mod retstructs;
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, ToResponse)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct Vers {
     special_key_0: Uuid,
     special_key_1: Uuid,

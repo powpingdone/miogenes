@@ -50,7 +50,6 @@ impl MioStateRegen for MioState {
     }
 }
 
-#[utoipa::path(get, path = "/ver", responses((status = 200, response = mio_common::Vers)))]
 pub async fn get_version() -> impl IntoResponse {
     use konst::primitive::parse_u16;
     use konst::result::unwrap_ctx;
@@ -63,95 +62,29 @@ pub async fn get_version() -> impl IntoResponse {
     (StatusCode::OK, Json(VSTR))
 }
 
-pub fn gen_openapi() -> String {
-    use endpoints::*;
-    use mio_common::*;
-    use utoipa::openapi::security::HttpAuthScheme;
-    use utoipa::openapi::security::HttpBuilder;
-    use utoipa::openapi::security::SecurityScheme;
-    use utoipa::OpenApi;
-
-    #[derive(OpenApi)]
-    #[openapi(
-        modifiers(&ModJWT),
-        paths(
-            get_version,
-            query::track_info,
-            query::album_info,
-            query::playlist_info,
-            query::cover_art,
-            query::artist_info,
-        ),
-        components(
-            responses(
-                crate::error::ErrorMsg,
-                Vers,
-                retstructs::Track,
-                retstructs::Album,
-                retstructs::Playlist,
-                retstructs::CoverArt,
-                retstructs::Artist,
-                retstructs::Playlists,
-                retstructs::UploadReturn,
-                retstructs::Albums,
-                retstructs::FolderQuery,
-            ),
-        ),
-        security((), ("jwt" = [])),
-    )]
-    struct Api;
-    struct ModJWT;
-
-    impl utoipa::Modify for ModJWT {
-        fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-            let comps = openapi.components.as_mut().unwrap();
-            comps.add_security_scheme(
-                "jwt",
-                SecurityScheme::Http(
-                    HttpBuilder::new()
-                        .scheme(HttpAuthScheme::Bearer)
-                        .bearer_format("JWT")
-                        .build(),
-                ),
-            )
-        }
-    }
-
-    Api::openapi().to_pretty_json().unwrap()
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // TODO: tracing
     env_logger::builder().try_init()?;
+    gstreamer::init()?;
 
-    // generate openapi stuff for autogen of libraries
-    #[cfg(generate_api_dot_json)]
-    {
-        return std::fs::write("./api.json", gen_openapi()).map_err(anyhow::Error::new);
-    }
-    #[cfg(not(generate_api_dot_json))]
-    {
-        gstreamer::init()?;
+    // create the main passing state
+    let state = gen_state().await;
 
-        // create the main passing state
-        let state = gen_state().await;
+    // setup the router
+    trace!("main: building router");
+    let router = gen_public_router(state.clone());
 
-        // setup the router
-        trace!("main: building router");
-        let router = gen_router(state.clone());
-
-        // TODO: bind to user settings
-        static BINDING: &str = "127.0.0.1:8081";
-        info!("main: starting server on {BINDING}");
-        Server::bind(&BINDING.parse().unwrap())
-            .serve(router.into_make_service())
-            .await
-            .expect("server exited improperly: {}");
-        trace!("main: cleaning up nicely");
-        state.db.close().await;
-        Ok(())
-    }
+    // TODO: bind to user settings
+    static BINDING: &str = "127.0.0.1:8081";
+    info!("main: starting server on {BINDING}");
+    Server::bind(&BINDING.parse().unwrap())
+        .serve(router.into_make_service())
+        .await
+        .expect("server exited improperly: {}");
+    trace!("main: cleaning up nicely");
+    state.db.close().await;
+    Ok(())
 }
 
 async fn gen_state() -> MioState {
@@ -178,7 +111,7 @@ async fn gen_state() -> MioState {
     }
 }
 
-fn gen_router(state: MioState) -> Router<()> {
+fn gen_public_router(state: MioState) -> Router<()> {
     #[allow(unused)]
     use axum::extract::State;
 
@@ -210,9 +143,8 @@ fn gen_router(state: MioState) -> Router<()> {
         // user management
         .nest(
             "/user",
-            Router::new()
-                .route("/login", get(user::login))
-                .route("/signup", post(user::signup)),
+            Router::new().route("/login", get(user::login))
+            .route("/signup", post(user::signup)),
         )
         // get ver
         .route("/ver", get(get_version))
@@ -234,6 +166,10 @@ fn gen_router(state: MioState) -> Router<()> {
         // always log what request is coming through
         .layer(axum::middleware::from_fn(log_req))
         .with_state(state)
+}
+
+fn gen_management_router(state: MioState) -> Router<()> {
+    todo!()
 }
 
 // small logging function that logs the method (eg, GET) and endpoint uri
@@ -266,7 +202,7 @@ pub mod test {
                 .try_init(),
         );
         TestServer::new_with_config(
-            gen_router(STATE.clone()).into_make_service(),
+            gen_public_router(STATE.clone()).into_make_service(),
             TestServerConfig {
                 ..Default::default()
             },

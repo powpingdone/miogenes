@@ -47,7 +47,7 @@ where
                 .map_err(|err| {
                     MioInnerError::UserChallengedFail(
                         anyhow!("invalid token: {err}"),
-                        StatusCode::BAD_REQUEST,
+                        StatusCode::UNAUTHORIZED,
                     )
                 })?
         };
@@ -130,6 +130,7 @@ pub async fn login(
     Ok((StatusCode::OK, Json(token)))
 }
 
+// TODO: is this a good idea to be an endpoint or to have a private thing?
 pub async fn signup(
     State(state): State<MioState>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
