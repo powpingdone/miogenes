@@ -1706,7 +1706,6 @@ dependencies = [
  "axum",
  "axum-test",
  "base64 0.21.2",
- "cfg-if",
  "chrono",
  "env_logger",
  "futures",
@@ -1740,8 +1739,11 @@ dependencies = [
 name = "mio-common"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "base64 0.21.2",
  "jsonwebtoken",
  "serde",
+ "serde_json",
  "uuid",
 ]
 

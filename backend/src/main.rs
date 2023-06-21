@@ -9,7 +9,6 @@ use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::SqlitePool;
 use std::str::FromStr;
 use std::sync::Arc;
-use subtasks::secret::SecretHolder;
 
 mod db;
 mod endpoints;
@@ -22,13 +21,10 @@ use endpoints::*;
 
 // TODO: use the user supplied dir
 static DATA_DIR: OnceCell<&str> = OnceCell::with_value({
-    cfg_if::cfg_if! {
-        if #[cfg(test)] {
-            "test_files"
-        }
-        else {
-            "files"
-        }
+    if cfg!(test) {
+        "test_files"
+    } else {
+        "files"
     }
 });
 
@@ -36,7 +32,6 @@ static DATA_DIR: OnceCell<&str> = OnceCell::with_value({
 pub struct MioState {
     db: SqlitePool,
     lock_files: Arc<tokio::sync::RwLock<()>>,
-    secret: SecretHolder,
 }
 
 // this is needed for weird axum state shenatigans
@@ -90,13 +85,12 @@ async fn main() -> anyhow::Result<()> {
 async fn gen_state() -> MioState {
     trace!("main: creating state");
     let settings = {
-        cfg_if::cfg_if! {
-            if #[cfg(test)] {
-                SqliteConnectOptions::from_str(":memory:").unwrap()
-            }
-            else {
-                SqliteConnectOptions::from_str("sqlite://files/music.db").unwrap().create_if_missing(true)
-            }
+        if cfg!(test) {
+            SqliteConnectOptions::from_str(":memory:").unwrap()
+        } else {
+            SqliteConnectOptions::from_str("sqlite://files/music.db")
+                .unwrap()
+                .create_if_missing(true)
         }
     };
     let db = SqlitePool::connect_with(settings)
@@ -107,7 +101,6 @@ async fn gen_state() -> MioState {
     MioState {
         db,
         lock_files: Arc::new(tokio::sync::RwLock::const_new(())),
-        secret: SecretHolder::new().await,
     }
 }
 
@@ -115,36 +108,39 @@ fn gen_public_router(state: MioState) -> Router<()> {
     #[allow(unused)]
     use axum::extract::State;
 
-    #[cfg(test)]
     async fn ok(State(_): State<MioState>) {}
 
     Router::new()
-        // general api stuff, like streaming and querying
-        .nest("/api", {
-            #[allow(clippy::let_and_return)]
-            let api = Router::new()
-                .nest("/track", track_manage::routes())
-                .nest("/query", query::routes())
-                .nest("/load", idquery::routes())
-                .nest("/folder", folders::routes());
+        .nest(
+            "",
+            Router::new()
+                // general api stuff, like streaming and querying
+                .nest("/api", {
+                    #[allow(clippy::let_and_return)]
+                    let api = Router::new()
+                        .nest("/track", track_manage::routes())
+                        .nest("/query", query::routes())
+                        .nest("/load", idquery::routes())
+                        .nest("/folder", folders::routes());
 
-            // this is used during testing as a quick method to test for if the auth works
-            cfg_if::cfg_if! {
-                if #[cfg(test)] {
-                    api.route("/auth_test", get(ok))
-                }
-                else {
-                    api
-                }
-            }
-        })
+                    // this is used during testing as a quick method to test for if the auth works
+                    if cfg!(test) {
+                        api.route("/auth_test", get(ok))
+                    } else {
+                        api
+                    }
+                })
+                // this is here because it needs the user id from the auth handler
+                .route("/user/refresh", patch(user::new_token)),
+        )
         // auth handler
         .route_layer(middleware::from_extractor_with_state::<user::Authenticate, _>(state.clone()))
         // user management
         .nest(
             "/user",
-            Router::new().route("/login", get(user::login))
-            .route("/signup", post(user::signup)),
+            Router::new()
+                .route("/login", get(user::login))
+                .route("/signup", post(user::signup)),
         )
         // get ver
         .route("/ver", get(get_version))
@@ -166,10 +162,6 @@ fn gen_public_router(state: MioState) -> Router<()> {
         // always log what request is coming through
         .layer(axum::middleware::from_fn(log_req))
         .with_state(state)
-}
-
-fn gen_management_router(state: MioState) -> Router<()> {
-    todo!()
 }
 
 // small logging function that logs the method (eg, GET) and endpoint uri

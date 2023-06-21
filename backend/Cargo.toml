@@ -42,7 +42,6 @@ sqlx = { version = "0.6", features = [
   "uuid",
   "migrate",
 ] }
-cfg-if = "1.0.0"
 
 [dev-dependencies]
 axum-test = "9.1"

@@ -1,3 +1,4 @@
+use base64::prelude::*;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -36,8 +37,18 @@ impl JWT {
         Self(x)
     }
 
+    pub fn whois(&self) -> Result<JWTInner, anyhow::Error> {
+        Ok(serde_json::from_slice(
+            &BASE64_URL_SAFE_NO_PAD.decode(
+                self.0
+                    .split('.')
+                    .nth(1)
+                    .ok_or_else(|| anyhow::anyhow!("no payload to decode"))?,
+            )?,
+        )?)
+    }
+
     pub fn decode(self, secret: &[u8]) -> jsonwebtoken::errors::Result<TokenData<JWTInner>> {
-        // decode
         jsonwebtoken::decode(
             &self.0,
             &DecodingKey::from_secret(secret),

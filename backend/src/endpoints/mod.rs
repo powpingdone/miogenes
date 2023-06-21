@@ -42,13 +42,10 @@ pub(self) fn check_dir_in_data_dir(
     // loop does not run out and produce an Ok when the ask path is shorter than the
     // real path.
     let ret_err = {
-        cfg_if::cfg_if! {
-            if #[cfg(test)] {
-                anyhow!("bad path")
-            }
-            else {
-                anyhow!("invalid path: {:?}", path.as_ref().as_os_str())
-            }
+        if cfg!(test) {
+            anyhow!("bad path")
+        } else {
+            anyhow!("invalid path: {:?}", path.as_ref().as_os_str())
         }
     };
     if ask_path.len() < real_path.len() {
