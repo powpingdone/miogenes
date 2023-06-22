@@ -20,30 +20,30 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kTestSetUrlMethodMioClientConstMeta;
 
-  DropFnType get dropOpaqueRwLockMioClientState;
-  ShareFnType get shareOpaqueRwLockMioClientState;
-  OpaqueTypeFinalizer get RwLockMioClientStateFinalizer;
+  DropFnType get dropOpaqueArcRwLockMioClientState;
+  ShareFnType get shareOpaqueArcRwLockMioClientState;
+  OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer;
 }
 
 @sealed
-class RwLockMioClientState extends FrbOpaque {
+class ArcRwLockMioClientState extends FrbOpaque {
   final MioGlue bridge;
-  RwLockMioClientState.fromRaw(int ptr, int size, this.bridge)
+  ArcRwLockMioClientState.fromRaw(int ptr, int size, this.bridge)
       : super.unsafe(ptr, size);
   @override
-  DropFnType get dropFn => bridge.dropOpaqueRwLockMioClientState;
+  DropFnType get dropFn => bridge.dropOpaqueArcRwLockMioClientState;
 
   @override
-  ShareFnType get shareFn => bridge.shareOpaqueRwLockMioClientState;
+  ShareFnType get shareFn => bridge.shareOpaqueArcRwLockMioClientState;
 
   @override
   OpaqueTypeFinalizer get staticFinalizer =>
-      bridge.RwLockMioClientStateFinalizer;
+      bridge.ArcRwLockMioClientStateFinalizer;
 }
 
 class MioClient {
   final MioGlue bridge;
-  final RwLockMioClientState field0;
+  final ArcRwLockMioClientState field0;
 
   const MioClient({
     required this.bridge,
@@ -102,20 +102,20 @@ class MioGlueImpl implements MioGlue {
         argNames: ["that", "url"],
       );
 
-  DropFnType get dropOpaqueRwLockMioClientState =>
-      _platform.inner.drop_opaque_RwLockMioClientState;
-  ShareFnType get shareOpaqueRwLockMioClientState =>
-      _platform.inner.share_opaque_RwLockMioClientState;
-  OpaqueTypeFinalizer get RwLockMioClientStateFinalizer =>
-      _platform.RwLockMioClientStateFinalizer;
+  DropFnType get dropOpaqueArcRwLockMioClientState =>
+      _platform.inner.drop_opaque_ArcRwLockMioClientState;
+  ShareFnType get shareOpaqueArcRwLockMioClientState =>
+      _platform.inner.share_opaque_ArcRwLockMioClientState;
+  OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer =>
+      _platform.ArcRwLockMioClientStateFinalizer;
 
   void dispose() {
     _platform.dispose();
   }
 // Section: wire2api
 
-  RwLockMioClientState _wire2api_RwLockMioClientState(dynamic raw) {
-    return RwLockMioClientState.fromRaw(raw[0], raw[1], this);
+  ArcRwLockMioClientState _wire2api_ArcRwLockMioClientState(dynamic raw) {
+    return ArcRwLockMioClientState.fromRaw(raw[0], raw[1], this);
   }
 
   MioClient _wire2api_mio_client(dynamic raw) {
@@ -124,7 +124,7 @@ class MioGlueImpl implements MioGlue {
       throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
     return MioClient(
       bridge: this,
-      field0: _wire2api_RwLockMioClientState(arr[0]),
+      field0: _wire2api_ArcRwLockMioClientState(arr[0]),
     );
   }
 
@@ -148,10 +148,10 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
 // Section: api2wire
 
   @protected
-  wire_RwLockMioClientState api2wire_RwLockMioClientState(
-      RwLockMioClientState raw) {
-    final ptr = inner.new_RwLockMioClientState();
-    _api_fill_to_wire_RwLockMioClientState(raw, ptr);
+  wire_ArcRwLockMioClientState api2wire_ArcRwLockMioClientState(
+      ArcRwLockMioClientState raw) {
+    final ptr = inner.new_ArcRwLockMioClientState();
+    _api_fill_to_wire_ArcRwLockMioClientState(raw, ptr);
     return ptr;
   }
 
@@ -175,14 +175,14 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
   }
 // Section: finalizer
 
-  late final OpaqueTypeFinalizer _RwLockMioClientStateFinalizer =
-      OpaqueTypeFinalizer(inner._drop_opaque_RwLockMioClientStatePtr);
-  OpaqueTypeFinalizer get RwLockMioClientStateFinalizer =>
-      _RwLockMioClientStateFinalizer;
+  late final OpaqueTypeFinalizer _ArcRwLockMioClientStateFinalizer =
+      OpaqueTypeFinalizer(inner._drop_opaque_ArcRwLockMioClientStatePtr);
+  OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer =>
+      _ArcRwLockMioClientStateFinalizer;
 // Section: api_fill_to_wire
 
-  void _api_fill_to_wire_RwLockMioClientState(
-      RwLockMioClientState apiObj, wire_RwLockMioClientState wireObj) {
+  void _api_fill_to_wire_ArcRwLockMioClientState(
+      ArcRwLockMioClientState apiObj, wire_ArcRwLockMioClientState wireObj) {
     wireObj.ptr = apiObj.shareOrMove();
   }
 
@@ -192,7 +192,7 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
   }
 
   void _api_fill_to_wire_mio_client(MioClient apiObj, wire_MioClient wireObj) {
-    wireObj.field0 = api2wire_RwLockMioClientState(apiObj.field0);
+    wireObj.field0 = api2wire_ArcRwLockMioClientState(apiObj.field0);
   }
 }
 
@@ -324,15 +324,15 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
           void Function(int, ffi.Pointer<wire_MioClient>,
               ffi.Pointer<wire_uint_8_list>)>();
 
-  wire_RwLockMioClientState new_RwLockMioClientState() {
-    return _new_RwLockMioClientState();
+  wire_ArcRwLockMioClientState new_ArcRwLockMioClientState() {
+    return _new_ArcRwLockMioClientState();
   }
 
-  late final _new_RwLockMioClientStatePtr =
-      _lookup<ffi.NativeFunction<wire_RwLockMioClientState Function()>>(
-          'new_RwLockMioClientState');
-  late final _new_RwLockMioClientState = _new_RwLockMioClientStatePtr
-      .asFunction<wire_RwLockMioClientState Function()>();
+  late final _new_ArcRwLockMioClientStatePtr =
+      _lookup<ffi.NativeFunction<wire_ArcRwLockMioClientState Function()>>(
+          'new_ArcRwLockMioClientState');
+  late final _new_ArcRwLockMioClientState = _new_ArcRwLockMioClientStatePtr
+      .asFunction<wire_ArcRwLockMioClientState Function()>();
 
   ffi.Pointer<wire_MioClient> new_box_autoadd_mio_client_0() {
     return _new_box_autoadd_mio_client_0();
@@ -359,35 +359,35 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
   late final _new_uint_8_list_0 = _new_uint_8_list_0Ptr
       .asFunction<ffi.Pointer<wire_uint_8_list> Function(int)>();
 
-  void drop_opaque_RwLockMioClientState(
+  void drop_opaque_ArcRwLockMioClientState(
     ffi.Pointer<ffi.Void> ptr,
   ) {
-    return _drop_opaque_RwLockMioClientState(
+    return _drop_opaque_ArcRwLockMioClientState(
       ptr,
     );
   }
 
-  late final _drop_opaque_RwLockMioClientStatePtr =
+  late final _drop_opaque_ArcRwLockMioClientStatePtr =
       _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-          'drop_opaque_RwLockMioClientState');
-  late final _drop_opaque_RwLockMioClientState =
-      _drop_opaque_RwLockMioClientStatePtr
+          'drop_opaque_ArcRwLockMioClientState');
+  late final _drop_opaque_ArcRwLockMioClientState =
+      _drop_opaque_ArcRwLockMioClientStatePtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
-  ffi.Pointer<ffi.Void> share_opaque_RwLockMioClientState(
+  ffi.Pointer<ffi.Void> share_opaque_ArcRwLockMioClientState(
     ffi.Pointer<ffi.Void> ptr,
   ) {
-    return _share_opaque_RwLockMioClientState(
+    return _share_opaque_ArcRwLockMioClientState(
       ptr,
     );
   }
 
-  late final _share_opaque_RwLockMioClientStatePtr = _lookup<
+  late final _share_opaque_ArcRwLockMioClientStatePtr = _lookup<
       ffi.NativeFunction<
           ffi.Pointer<ffi.Void> Function(
-              ffi.Pointer<ffi.Void>)>>('share_opaque_RwLockMioClientState');
-  late final _share_opaque_RwLockMioClientState =
-      _share_opaque_RwLockMioClientStatePtr
+              ffi.Pointer<ffi.Void>)>>('share_opaque_ArcRwLockMioClientState');
+  late final _share_opaque_ArcRwLockMioClientState =
+      _share_opaque_ArcRwLockMioClientStatePtr
           .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Void>)>();
 
   void free_WireSyncReturn(
@@ -407,12 +407,12 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
 
 final class _Dart_Handle extends ffi.Opaque {}
 
-final class wire_RwLockMioClientState extends ffi.Struct {
+final class wire_ArcRwLockMioClientState extends ffi.Struct {
   external ffi.Pointer<ffi.Void> ptr;
 }
 
 final class wire_MioClient extends ffi.Struct {
-  external wire_RwLockMioClientState field0;
+  external wire_ArcRwLockMioClientState field0;
 }
 
 final class wire_uint_8_list extends ffi.Struct {

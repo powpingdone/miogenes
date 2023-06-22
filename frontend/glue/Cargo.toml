@@ -10,10 +10,11 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 flutter_rust_bridge = { version = "1", features = ["uuid"]}
-tokio = { version = "1.28", features = ["full"] }
 once_cell = "1"
 num_cpus = "1.15"
-anyhow = "1.0.71"
-reqwest = { version = "0.11.18", features = ["json"] }
-konst = "0.3.5"
+anyhow = "1.0"
+konst = "0.3"
 mio-common = {path = "../../common"}
+ureq = { version = "2.7", features = ["json"] }
+chrono = "0.4.26"
+base64 = "0.21.2"

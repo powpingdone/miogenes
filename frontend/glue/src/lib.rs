@@ -1,50 +1,77 @@
 mod bridge_generated;
 
-use once_cell::sync::Lazy;
-use tokio::runtime::Runtime;
+use std::{fmt::Display, ops::DerefMut, sync::RwLock};
 
+use anyhow::anyhow;
+use mio_common::*;
+use ureq::Agent;
 mod api;
 
-// i dunno why this many worker_threads
-pub static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads((num_cpus::get_physical() / 2).min(1))
-        .enable_all()
-        .build()
-        .unwrap()
-});
-pub static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| reqwest::Client::new());
+pub enum ErrorSplit<T: Display> {
+    Ureq(ureq::Error),
+    Other(T),
+}
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MioClientState {
     url: String,
+    agent: Agent,
+    pub key: RwLock<Option<auth::JWT>>,
 }
 
 impl MioClientState {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            url: "".to_owned(),
+            agent: ureq::agent(),
+            key: RwLock::new(None),
+        }
     }
 
-    pub async fn test_set_url(&mut self, url: String) -> anyhow::Result<()> {
-        let ret = CLIENT
-            .get(format!("{url}/ver"))
-            .send()
-            .await?
-            .json::<mio_common::Vers>()
-            .await?;
-        if ret
-            == (mio_common::Vers::new(
-                konst::unwrap_ctx!(konst::primitive::parse_u16(env!("CARGO_PKG_VERSION_MAJOR"))),
-                konst::unwrap_ctx!(konst::primitive::parse_u16(env!("CARGO_PKG_VERSION_MINOR"))),
-                konst::unwrap_ctx!(konst::primitive::parse_u16(env!("CARGO_PKG_VERSION_PATCH"))),
-            ))
+    pub fn test_set_url(&mut self, url: String) -> anyhow::Result<()> {
+        use konst::primitive::parse_u16;
+        use konst::unwrap_ctx;
+
+        let vers: Vers = self
+            .agent
+            .get(&format!("{url}/ver"))
+            .call()
+            .map_err(|err| {
+                anyhow!("This miogenes server doesn't seem to exist: tried contacting, got {err}")
+            })?
+            .into_json()
+            .map_err(|err| anyhow!("This is not a miogenes server. Serialization error: {err}"))?;
+        if vers
+            != Vers::new(
+                unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_MAJOR"))),
+                unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_MINOR"))),
+                unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_PATCH"))),
+            )
         {
-            self.url = url;
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!(
-                "either the version is outdated or this is not a miogenes server"
-            ))
+            anyhow::bail!("Version mismatch! Update the mobile app or the server.")
         }
+        self.url = url;
+        Ok(())
+    }
+
+    pub fn refresh_token(&mut self) -> Result<(), ureq::Error> {
+        let new_jwt = self
+            .wrap_auth(self.agent.patch(&format!("{}/user/refresh", self.url)))
+            .call()?
+            .into_json::<auth::JWT>()?;
+        self.key.write().unwrap().deref_mut().replace(new_jwt);
+        Ok(())
+    }
+
+    fn wrap_auth(&self, req: ureq::Request) -> ureq::Request {
+        use base64::prelude::*;
+        req.set(
+            "Authorization",
+            &format!(
+                "Bearer {}",
+                BASE64_URL_SAFE_NO_PAD
+                    .encode(self.key.read().unwrap().as_ref().unwrap().to_string())
+            ),
+        )
     }
 }
