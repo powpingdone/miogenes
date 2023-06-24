@@ -37,7 +37,7 @@ where
         } else {
             return Err(MioInnerError::UserChallengedFail(
                 anyhow!(
-                    "failed to get token as auth was in err: {}",
+                    "Failed to get token as auth was in err: {}",
                     authheader.unwrap_err()
                 ),
                 StatusCode::BAD_REQUEST,
@@ -51,7 +51,7 @@ where
             .map_err(|x| {
                 debug!("USER_INJ token could not whois: {x}");
                 MioInnerError::UserChallengedFail(
-                    anyhow!("invalid auth token"),
+                    anyhow!("Invalid auth token"),
                     StatusCode::UNAUTHORIZED,
                 )
             })?
@@ -91,7 +91,7 @@ where
         }
         if auth.is_none() {
             return Err(MioInnerError::UserChallengedFail(
-                anyhow!("invalid auth token"),
+                anyhow!("Invalid auth token"),
                 StatusCode::UNAUTHORIZED,
             ));
         }
@@ -120,10 +120,10 @@ pub async fn login(
                 .fetch_optional(&mut *txn)
                 .await?
                 .ok_or_else(|| {
-                    MioInnerError::NotFound(anyhow!(
-                        "Failed to find user \"{}\" in db",
-                        auth.username()
-                    ))
+                    MioInnerError::UserChallengedFail(
+                        anyhow!("Unable to verify user on server"),
+                        StatusCode::UNAUTHORIZED,
+                    )
                 })?;
             let userid = uuid_serialize(&user.id)?;
 
@@ -133,15 +133,15 @@ pub async fn login(
                 move || {
                     let parsed = PasswordHash::new(&passwd).map_err(|err| {
                         MioInnerError::UserChallengedFail(
-                            anyhow!("unable to extract phc string: {err}"),
+                            anyhow!("Unable to extract phc string: {err}"),
                             StatusCode::INTERNAL_SERVER_ERROR,
                         )
                     })?;
                     Argon2::default()
                         .verify_password(auth.password().to_owned().as_bytes(), &parsed)
-                        .map_err(|err| {
+                        .map_err(|_| {
                             MioInnerError::UserChallengedFail(
-                                anyhow!("unable to verify password: {err}"),
+                                anyhow!("Unable to verify user on server"),
                                 StatusCode::UNAUTHORIZED,
                             )
                         })
@@ -198,11 +198,12 @@ async fn create_new_token(
     })
 }
 
+// TODO: user config to disable signing up
+//
 // TODO: is this a good idea to be an endpoint or to have a private thing?
 pub async fn signup(
     State(state): State<MioState>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
-    // TODO: user config to disable signing up
 ) -> Result<impl IntoResponse, MioInnerError> {
     // TODO: defer this generation?
     let uname = auth.username().to_owned();
@@ -235,7 +236,7 @@ pub async fn signup(
                 .is_some()
             {
                 return Err(MioInnerError::UserCreationFail(
-                    anyhow!("username already taken"),
+                    anyhow!("Username already taken."),
                     StatusCode::CONFLICT,
                 ));
             }
@@ -273,7 +274,7 @@ pub async fn signup(
                 if err.kind() != std::io::ErrorKind::AlreadyExists {
                     error!("POST /user/signup failed to create user directory: {err}");
                     return Err(MioInnerError::IntIoError(anyhow!(
-                        "failed to create user dir: {err}"
+                        "Failed to create user dir: {err}"
                     )));
                 }
             }
@@ -373,7 +374,9 @@ mod test {
     async fn user_refresh_good() {
         let cli = client().await;
         let jwt = gen_user(&cli, "user_refresh_good").await;
-        let new_jwt = jwt_header(&cli, Method::PATCH, "/user/refresh", &jwt).await.json::<auth::JWT>();
+        let new_jwt = jwt_header(&cli, Method::PATCH, "/user/refresh", &jwt)
+            .await
+            .json::<auth::JWT>();
         jwt_header(&cli, Method::GET, "/api/auth_test", &new_jwt).await;
     }
 }

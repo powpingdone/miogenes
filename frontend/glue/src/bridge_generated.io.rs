@@ -15,6 +15,26 @@ pub extern "C" fn wire_test_set_url__method__MioClient(
     wire_test_set_url__method__MioClient_impl(port_, that, url)
 }
 
+#[no_mangle]
+pub extern "C" fn wire_attempt_signup_and_login__method__MioClient(
+    port_: i64,
+    that: *mut wire_MioClient,
+    username: *mut wire_uint_8_list,
+    password: *mut wire_uint_8_list,
+) {
+    wire_attempt_signup_and_login__method__MioClient_impl(port_, that, username, password)
+}
+
+#[no_mangle]
+pub extern "C" fn wire_attempt_login__method__MioClient(
+    port_: i64,
+    that: *mut wire_MioClient,
+    username: *mut wire_uint_8_list,
+    password: *mut wire_uint_8_list,
+) {
+    wire_attempt_login__method__MioClient_impl(port_, that, username, password)
+}
+
 // Section: allocate functions
 
 #[no_mangle]

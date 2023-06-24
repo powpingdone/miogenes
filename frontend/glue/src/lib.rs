@@ -1,76 +1,50 @@
 mod bridge_generated;
 
-use std::{fmt::Display, ops::DerefMut, sync::RwLock};
-
 use anyhow::anyhow;
 use mio_common::*;
+use std::sync::OnceLock;
 use ureq::Agent;
+
 mod api;
+mod auth;
+mod error;
 
-pub enum ErrorSplit<T: Display> {
-    Ureq(ureq::Error),
-    Other(T),
-}
+pub(crate) use error::*;
 
+// The second half of the connections. This actually sends out the raw connections to the server and also handles the state for connecting to it.
 #[derive(Debug)]
 pub struct MioClientState {
     url: String,
     agent: Agent,
-    pub key: RwLock<Option<auth::JWT>>,
+    pub key: OnceLock<mio_common::auth::JWT>,
 }
 
+impl Default for MioClientState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// TODO: make client making connections redundant. Ie: any connection that fails
+// for a reason like "no connection to host" should retry after some metrics.
 impl MioClientState {
     pub fn new() -> Self {
         Self {
             url: "".to_owned(),
             agent: ureq::agent(),
-            key: RwLock::new(None),
+            key: OnceLock::new(),
         }
     }
 
-    pub fn test_set_url(&mut self, url: String) -> anyhow::Result<()> {
-        use konst::primitive::parse_u16;
-        use konst::unwrap_ctx;
-
-        let vers: Vers = self
-            .agent
-            .get(&format!("{url}/ver"))
-            .call()
-            .map_err(|err| {
-                anyhow!("This miogenes server doesn't seem to exist: tried contacting, got {err}")
-            })?
-            .into_json()
-            .map_err(|err| anyhow!("This is not a miogenes server. Serialization error: {err}"))?;
-        if vers
-            != Vers::new(
-                unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_MAJOR"))),
-                unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_MINOR"))),
-                unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_PATCH"))),
-            )
-        {
-            anyhow::bail!("Version mismatch! Update the mobile app or the server.")
-        }
-        self.url = url;
-        Ok(())
-    }
-
-    pub fn refresh_token(&mut self) -> Result<(), ureq::Error> {
-        let new_jwt = self
-            .wrap_auth(self.agent.patch(&format!("{}/user/refresh", self.url)))
-            .call()?
-            .into_json::<auth::JWT>()?;
-        self.key.write().unwrap().deref_mut().replace(new_jwt);
-        Ok(())
-    }
-
+    // wrapper function. adds the auth header to the current request
     fn wrap_auth(&self, req: ureq::Request) -> ureq::Request {
         use base64::prelude::*;
+
         req.set(
             "Authorization",
             &format!(
                 "Bearer {}",
-                BASE64_URL_SAFE_NO_PAD
-                    .encode(self.key.read().unwrap().as_ref().unwrap().to_string())
+                BASE64_URL_SAFE_NO_PAD.encode(self.key.get().unwrap().to_string())
             ),
         )
     }

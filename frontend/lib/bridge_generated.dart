@@ -20,6 +20,23 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kTestSetUrlMethodMioClientConstMeta;
 
+  Future<void> attemptSignupAndLoginMethodMioClient(
+      {required MioClient that,
+      required String username,
+      required String password,
+      dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta
+      get kAttemptSignupAndLoginMethodMioClientConstMeta;
+
+  Future<void> attemptLoginMethodMioClient(
+      {required MioClient that,
+      required String username,
+      required String password,
+      dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kAttemptLoginMethodMioClientConstMeta;
+
   DropFnType get dropOpaqueArcRwLockMioClientState;
   ShareFnType get shareOpaqueArcRwLockMioClientState;
   OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer;
@@ -54,6 +71,22 @@ class MioClient {
       bridge.testSetUrlMethodMioClient(
         that: this,
         url: url,
+      );
+
+  Future<void> attemptSignupAndLogin(
+          {required String username, required String password, dynamic hint}) =>
+      bridge.attemptSignupAndLoginMethodMioClient(
+        that: this,
+        username: username,
+        password: password,
+      );
+
+  Future<void> attemptLogin(
+          {required String username, required String password, dynamic hint}) =>
+      bridge.attemptLoginMethodMioClient(
+        that: this,
+        username: username,
+        password: password,
       );
 }
 
@@ -100,6 +133,56 @@ class MioGlueImpl implements MioGlue {
       const FlutterRustBridgeTaskConstMeta(
         debugName: "test_set_url__method__MioClient",
         argNames: ["that", "url"],
+      );
+
+  Future<void> attemptSignupAndLoginMethodMioClient(
+      {required MioClient that,
+      required String username,
+      required String password,
+      dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_String(username);
+    var arg2 = _platform.api2wire_String(password);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) => _platform.inner
+          .wire_attempt_signup_and_login__method__MioClient(
+              port_, arg0, arg1, arg2),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kAttemptSignupAndLoginMethodMioClientConstMeta,
+      argValues: [that, username, password],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta
+      get kAttemptSignupAndLoginMethodMioClientConstMeta =>
+          const FlutterRustBridgeTaskConstMeta(
+            debugName: "attempt_signup_and_login__method__MioClient",
+            argNames: ["that", "username", "password"],
+          );
+
+  Future<void> attemptLoginMethodMioClient(
+      {required MioClient that,
+      required String username,
+      required String password,
+      dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_String(username);
+    var arg2 = _platform.api2wire_String(password);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) => _platform.inner
+          .wire_attempt_login__method__MioClient(port_, arg0, arg1, arg2),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kAttemptLoginMethodMioClientConstMeta,
+      argValues: [that, username, password],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kAttemptLoginMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "attempt_login__method__MioClient",
+        argNames: ["that", "username", "password"],
       );
 
   DropFnType get dropOpaqueArcRwLockMioClientState =>
@@ -323,6 +406,60 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
       _wire_test_set_url__method__MioClientPtr.asFunction<
           void Function(int, ffi.Pointer<wire_MioClient>,
               ffi.Pointer<wire_uint_8_list>)>();
+
+  void wire_attempt_signup_and_login__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> username,
+    ffi.Pointer<wire_uint_8_list> password,
+  ) {
+    return _wire_attempt_signup_and_login__method__MioClient(
+      port_,
+      that,
+      username,
+      password,
+    );
+  }
+
+  late final _wire_attempt_signup_and_login__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(
+                  ffi.Int64,
+                  ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_attempt_signup_and_login__method__MioClient');
+  late final _wire_attempt_signup_and_login__method__MioClient =
+      _wire_attempt_signup_and_login__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>, ffi.Pointer<wire_uint_8_list>)>();
+
+  void wire_attempt_login__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> username,
+    ffi.Pointer<wire_uint_8_list> password,
+  ) {
+    return _wire_attempt_login__method__MioClient(
+      port_,
+      that,
+      username,
+      password,
+    );
+  }
+
+  late final _wire_attempt_login__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(
+                  ffi.Int64,
+                  ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_attempt_login__method__MioClient');
+  late final _wire_attempt_login__method__MioClient =
+      _wire_attempt_login__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>, ffi.Pointer<wire_uint_8_list>)>();
 
   wire_ArcRwLockMioClientState new_ArcRwLockMioClientState() {
     return _new_ArcRwLockMioClientState();

@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use log::*;
-use serde::{Deserialize, Serialize};
+use mio_common::retstructs;
 use thiserror::Error;
 use MioInnerError::*;
 
@@ -74,11 +74,6 @@ impl From<std::io::Error> for MioInnerError {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
-pub struct ErrorMsg {
-    pub error: String,
-}
-
 impl IntoResponse for MioInnerError {
     fn into_response(self) -> axum::response::Response {
         log::log!(
@@ -103,7 +98,7 @@ impl IntoResponse for MioInnerError {
                 | TrackProcessingError(_, c)
                 | ExtIoError(_, c) => c,
             },
-            Json(ErrorMsg { error: self.msg() }),
+            Json(retstructs::ErrorMsg { error: self.msg() }),
         )
             .into_response()
     }

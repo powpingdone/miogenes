@@ -282,7 +282,7 @@ async fn folder_delete(
 
 #[cfg(test)]
 mod test {
-    use crate::{error::ErrorMsg, test::*};
+    use crate::test::*;
     use axum::http::{Method, StatusCode};
     use mio_common::*;
     use serde_urlencoded::to_string as url_enc;
@@ -425,7 +425,7 @@ mod test {
         let cli = client().await;
         let jwt = gen_user(&cli, "folder_bad_path_checks").await;
         const TEST_PATHS: &[&str] = &["..", "../", "a/../..", "../../test_files"];
-        let err = crate::ErrorMsg {
+        let err = retstructs::ErrorMsg {
             error: crate::MioInnerError::ExtIoError(
                 anyhow::anyhow!("bad path"),
                 StatusCode::BAD_REQUEST,
@@ -450,7 +450,7 @@ mod test {
                     )
                     .expect_failure()
                     .await
-                    .json::<ErrorMsg>(),
+                    .json::<retstructs::ErrorMsg>(),
                     err
                 );
                 assert_eq!(
@@ -468,7 +468,7 @@ mod test {
                     )
                     .expect_failure()
                     .await
-                    .json::<ErrorMsg>(),
+                    .json::<retstructs::ErrorMsg>(),
                     err
                 );
                 assert_eq!(
@@ -487,7 +487,7 @@ mod test {
                     )
                     .expect_failure()
                     .await
-                    .json::<ErrorMsg>(),
+                    .json::<retstructs::ErrorMsg>(),
                     err
                 );
                 assert_eq!(
@@ -506,7 +506,7 @@ mod test {
                     )
                     .expect_failure()
                     .await
-                    .json::<ErrorMsg>(),
+                    .json::<retstructs::ErrorMsg>(),
                     err
                 );
             }

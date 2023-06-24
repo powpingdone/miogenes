@@ -49,6 +49,48 @@ fn wire_test_set_url__method__MioClient_impl(
         },
     )
 }
+fn wire_attempt_signup_and_login__method__MioClient_impl(
+    port_: MessagePort,
+    that: impl Wire2Api<MioClient> + UnwindSafe,
+    username: impl Wire2Api<String> + UnwindSafe,
+    password: impl Wire2Api<String> + UnwindSafe,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap(
+        WrapInfo {
+            debug_name: "attempt_signup_and_login__method__MioClient",
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_username = username.wire2api();
+            let api_password = password.wire2api();
+            move |task_callback| {
+                MioClient::attempt_signup_and_login(&api_that, api_username, api_password)
+            }
+        },
+    )
+}
+fn wire_attempt_login__method__MioClient_impl(
+    port_: MessagePort,
+    that: impl Wire2Api<MioClient> + UnwindSafe,
+    username: impl Wire2Api<String> + UnwindSafe,
+    password: impl Wire2Api<String> + UnwindSafe,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap(
+        WrapInfo {
+            debug_name: "attempt_login__method__MioClient",
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_username = username.wire2api();
+            let api_password = password.wire2api();
+            move |task_callback| MioClient::attempt_login(&api_that, api_username, api_password)
+        },
+    )
+}
 // Section: wrapper structs
 
 // Section: static checks

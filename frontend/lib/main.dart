@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
+import 'login.dart';
+import 'signup.dart';
 
 void main() {
   runApp(const MyApp());
@@ -34,9 +36,7 @@ class MioEntryPoint extends StatefulWidget {
 }
 
 // window state
-enum CurrentViewport {
-  login,
-}
+enum CurrentViewport { login, signup, mainpage}
 
 class MioTopLevel with ChangeNotifier {
   CurrentViewport viewport = CurrentViewport.login;
@@ -52,77 +52,16 @@ class _MioTopLevel extends State<MioEntryPoint> {
     Widget body;
     switch (mtl.viewport) {
       case CurrentViewport.login:
-        body = LoginPage();
+        body = const LoginPage();
+        break;
+      case CurrentViewport.signup:
+        body = SignupPage();
+        break;
+      case CurrentViewport.mainpage:
+        body = Container();
         break;
     }
 
     return Scaffold(appBar: AppBar(), body: body);
-  }
-}
-
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
-  late TextEditingController _baseUrlController,
-      _usernameController,
-      _passwordController;
-  Future<void>? isValidUrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _baseUrlController = TextEditingController();
-    _usernameController = TextEditingController();
-    _passwordController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-    _baseUrlController.dispose();
-    _usernameController.dispose();
-    _passwordController.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final mtl = Provider.of<MioTopLevel>(context);
-    var mioState = mtl.mioClient;
-
-    return Column(
-      children: [
-        const Text("Base Url:"),
-        TextField(
-          controller: _baseUrlController,
-          onSubmitted: (url) {
-            setState(() {
-              isValidUrl = mioState.testSetUrl(url: url);
-            });
-          },
-        ),
-        // Username and Password
-        FutureBuilder(
-          future: isValidUrl,
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              // build ui
-              return Text("Valid url!");
-            } else if (snapshot.hasError) {
-              return Text("Invalid url: ${snapshot.error.toString()}");
-            } else if (isValidUrl != null) {
-              return Text("Checking server...");
-            } else {
-              // do nothing
-              return Container();
-            }
-          },
-        )
-      ],
-    );
   }
 }

@@ -1697,6 +1697,7 @@ dependencies = [
  "mio-common",
  "num_cpus",
  "once_cell",
+ "serde_json",
  "ureq",
 ]
 

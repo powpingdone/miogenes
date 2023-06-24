@@ -61,3 +61,8 @@ pub struct FolderQuery {
     // this is beyond dumb, as this can be either paths or uuids
     pub ret: Vec<String>,
 }
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct ErrorMsg {
+    pub error: String,
+}
