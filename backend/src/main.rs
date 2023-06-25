@@ -60,7 +60,14 @@ pub async fn get_version() -> impl IntoResponse {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // TODO: tracing
-    env_logger::builder().try_init()?;
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(
+        if cfg!(test) || cfg!(debug_assertions) {
+            "trace"
+        } else {
+            "warn"
+        },
+    ))
+    .init();
     gstreamer::init()?;
 
     // create the main passing state

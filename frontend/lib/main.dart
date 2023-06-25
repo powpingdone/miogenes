@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
 import 'login.dart';
-import 'signup.dart';
 
 void main() {
   runApp(const MyApp());
@@ -39,34 +38,13 @@ class MioEntryPoint extends StatefulWidget {
 enum CurrentViewport { login, signup, mainpage }
 
 class MioTopLevel with ChangeNotifier {
-  CurrentViewport _viewport = CurrentViewport.login;
-  CurrentViewport get viewport => _viewport;
-  set viewport(CurrentViewport viewport) {
-    _viewport = viewport;
-    notifyListeners();
-  }
   final MioClient _mioInternal = api.newMioClient();
   MioClient get mioClient => _mioInternal;
 }
 
-class _MioTopLevel extends State<MioEntryPoint>  {
+class _MioTopLevel extends State<MioEntryPoint> {
   @override
   Widget build(BuildContext context) {
-    var mtl = context.watch<MioTopLevel>();
-
-    Widget body;
-    switch (mtl.viewport) {
-      case CurrentViewport.login:
-        body = const LoginBaseUrl();
-        break;
-      case CurrentViewport.signup:
-        body = const SignupPage();
-        break;
-      case CurrentViewport.mainpage:
-        body = Container();
-        break;
-    }
-
-    return Scaffold(appBar: AppBar(), body: body);
+    return Scaffold(appBar: AppBar(), body: const LoginBaseUrl());
   }
 }

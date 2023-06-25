@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/login.dart';
+import 'package:frontend/mainpage/mainpage.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
 import 'main.dart';
@@ -81,31 +83,37 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       Row(
         children: [
           ElevatedButton(
-              onPressed: () => mtl.viewport = CurrentViewport.login,
+              onPressed: () => 
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (context) => const LoginBaseUrl()))
+              ,
               child: const Text("Back To Login")),
           ElevatedButton(
               onPressed: () => setTask(mioState), child: const Text("Sign Up"))
         ],
       ),
-      FutureBuilder(builder: ((context, snapshot) {
-        _spinner.stop();
-        if (snapshot.hasError) {
-          return Text(
-              "Could not signup and login: ${extractMsg(snapshot.error)}");
-        } else if (snapshot.connectionState == ConnectionState.done) {
-          // switch to mainpage
-          mtl.viewport = CurrentViewport.mainpage;
-          return Container();
-        } else if (signupCall == null) {
-          return Container();
-        } else {
-          // show checking
-          _spinner.forward();
-          return CircularProgressIndicator(
-            value: _spinner.value,
-          );
-        }
-      }))
+      FutureBuilder(
+          future: signupCall,
+          builder: ((context, snapshot) {
+            _spinner.stop();
+            if (snapshot.hasError) {
+              return Text(
+                  "Could not signup and login: ${extractMsg(snapshot.error)}");
+            } else if (snapshot.connectionState == ConnectionState.done) {
+              // switch to mainpage
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (context) => const MainPage()));
+              return Container();
+            } else if (signupCall == null) {
+              return Container();
+            } else {
+              // show checking
+              _spinner.forward();
+              return CircularProgressIndicator(
+                value: _spinner.value,
+              );
+            }
+          }))
     ]);
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/mainpage/mainpage.dart';
+import 'package:frontend/signup.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
 import 'main.dart';
@@ -44,7 +46,7 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
 
       // make sure that the url is prepended with a https://
       if (!url.startsWith(RegExp(r"https?:\/\/"))) {
-        url = "https://${url}";
+        url = "https://$url";
       }
       // remove trailing slashes
       while (url.endsWith("/")) {
@@ -113,7 +115,8 @@ class LoginCreds extends StatefulWidget {
   State<StatefulWidget> createState() => _LoginCredsState();
 }
 
-class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
+class _LoginCredsState extends State<LoginCreds>
+    with TickerProviderStateMixin {
   late TextEditingController _usernameController, _passwordController;
   late AnimationController _spinner;
 
@@ -168,31 +171,36 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
       ),
       Row(children: [
         ElevatedButton(
-            onPressed: () => mtl.viewport = CurrentViewport.signup,
+            onPressed: () => 
+            Navigator.pushReplacement(context,
+                MaterialPageRoute(builder: (context) => const SignupPage())),
             child: const Text("Sign Up")),
         ElevatedButton(
           onPressed: () => setTask(mioState),
           child: const Text("Sign In"),
         ),
       ]),
-      FutureBuilder(builder: (context, snapshot) {
-        _spinner.stop();
-        if (snapshot.hasError) {
-          return Text("Could not login: ${extractMsg(snapshot.error)}");
-        } else if (snapshot.connectionState == ConnectionState.done) {
-          // switch to mainpage
-          mtl.viewport = CurrentViewport.mainpage;
-          return Container();
-        } else if (loginCall == null) {
-          return Container();
-        } else {
-          // show checking
-          _spinner.forward();
-          return CircularProgressIndicator(
-            value: _spinner.value,
-          );
-        }
-      })
+      FutureBuilder(
+          future: loginCall,
+          builder: (context, snapshot) {
+            _spinner.stop();
+            if (snapshot.hasError) {
+              return Text("Could not login: ${extractMsg(snapshot.error)}");
+            } else if (snapshot.connectionState == ConnectionState.done) {
+              // switch to mainpage
+            Navigator.pushReplacement(context,
+                MaterialPageRoute(builder: (context) => const MainPage()));
+              return Container();
+            } else if (loginCall == null) {
+              return Container();
+            } else {
+              // show checking
+              _spinner.forward();
+              return CircularProgressIndicator(
+                value: _spinner.value,
+              );
+            }
+          })
     ]);
   }
 }
