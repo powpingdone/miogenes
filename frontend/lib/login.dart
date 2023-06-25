@@ -31,10 +31,9 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
 
   @override
   void dispose() {
-    super.dispose();
-    
     _baseUrlController.dispose();
     _spinner.dispose();
+    super.dispose();
   }
 
   void setTask(MioClient mioState) {
@@ -114,8 +113,7 @@ class LoginCreds extends StatefulWidget {
   State<StatefulWidget> createState() => _LoginCredsState();
 }
 
-class _LoginCredsState extends State<LoginCreds>
-    with TickerProviderStateMixin, ChangeNotifier {
+class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
   late TextEditingController _usernameController, _passwordController;
   late AnimationController _spinner;
 
@@ -136,10 +134,10 @@ class _LoginCredsState extends State<LoginCreds>
 
   @override
   void dispose() {
-    super.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     _spinner.dispose();
+    super.dispose();
   }
 
   void setTask(MioClient mioState) {
