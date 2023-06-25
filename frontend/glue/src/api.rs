@@ -19,6 +19,10 @@ pub fn new_mio_client() -> SyncReturn<MioClient> {
 }
 
 impl MioClient {
+    pub fn get_url(&self) -> SyncReturn<String> {
+        SyncReturn(self.0.read().unwrap().url.clone())
+    }
+
     pub fn test_set_url(&self, url: String) -> anyhow::Result<()> {
         let mut lock = self.0.write().unwrap();
         lock.test_set_url(url)
@@ -28,7 +32,14 @@ impl MioClient {
         &self,
         username: String,
         password: String,
+        password2: String,
     ) -> anyhow::Result<()> {
+        if username.is_empty()||password.is_empty() || password2.is_empty() {
+            bail!("No field may be empty.");
+        }
+        if password != password2 {
+            bail!("The passwords do not match.");
+        }
         let lock = self.0.read().unwrap();
         if let Err(err) = lock.attempt_signup(&username, &password) {
             rewrap_error(err, |status, resp| match status {
@@ -100,14 +111,14 @@ where
                     .and_then(|error_json| {
                         serde_json::from_str::<retstructs::ErrorMsg>(&error_json)
                             .map(|x| x.error)
-                            .map_err(|err| format!("Error message could not be extracted: {err}"))
+                            .map_err(|err| format!("Error message could not be extracted: {err}. Original message: {error_json}"))
                     });
 
                 // they're all sinners in the end. doesn't matter. merge 'em
                 let resp_str = match resp_dump {
                     Ok(x) | Err(x) => x,
                 };
-                
+
                 // actual handler
                 match cb(status, resp_str) {
                     Err(err) => Err(err),

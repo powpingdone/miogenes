@@ -36,15 +36,20 @@ class MioEntryPoint extends StatefulWidget {
 }
 
 // window state
-enum CurrentViewport { login, signup, mainpage}
+enum CurrentViewport { login, signup, mainpage }
 
 class MioTopLevel with ChangeNotifier {
-  CurrentViewport viewport = CurrentViewport.login;
+  CurrentViewport _viewport = CurrentViewport.login;
+  CurrentViewport get viewport => _viewport;
+  set viewport(CurrentViewport viewport) {
+    _viewport = viewport;
+    notifyListeners();
+  }
   final MioClient _mioInternal = api.newMioClient();
   MioClient get mioClient => _mioInternal;
 }
 
-class _MioTopLevel extends State<MioEntryPoint> {
+class _MioTopLevel extends State<MioEntryPoint>  {
   @override
   Widget build(BuildContext context) {
     var mtl = context.watch<MioTopLevel>();
@@ -52,10 +57,10 @@ class _MioTopLevel extends State<MioEntryPoint> {
     Widget body;
     switch (mtl.viewport) {
       case CurrentViewport.login:
-        body = const LoginPage();
+        body = const LoginBaseUrl();
         break;
       case CurrentViewport.signup:
-        body = SignupPage();
+        body = const SignupPage();
         break;
       case CurrentViewport.mainpage:
         body = Container();

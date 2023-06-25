@@ -7,6 +7,13 @@ pub extern "C" fn wire_new_mio_client() -> support::WireSyncReturn {
 }
 
 #[no_mangle]
+pub extern "C" fn wire_get_url__method__MioClient(
+    that: *mut wire_MioClient,
+) -> support::WireSyncReturn {
+    wire_get_url__method__MioClient_impl(that)
+}
+
+#[no_mangle]
 pub extern "C" fn wire_test_set_url__method__MioClient(
     port_: i64,
     that: *mut wire_MioClient,
@@ -21,8 +28,11 @@ pub extern "C" fn wire_attempt_signup_and_login__method__MioClient(
     that: *mut wire_MioClient,
     username: *mut wire_uint_8_list,
     password: *mut wire_uint_8_list,
+    password2: *mut wire_uint_8_list,
 ) {
-    wire_attempt_signup_and_login__method__MioClient_impl(port_, that, username, password)
+    wire_attempt_signup_and_login__method__MioClient_impl(
+        port_, that, username, password, password2,
+    )
 }
 
 #[no_mangle]
