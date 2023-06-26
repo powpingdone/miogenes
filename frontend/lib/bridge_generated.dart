@@ -42,6 +42,31 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kAttemptLoginMethodMioClientConstMeta;
 
+  Future<Albums> getAlbumsMethodMioClient(
+      {required MioClient that, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kGetAlbumsMethodMioClientConstMeta;
+
+  Future<Album> getAlbumMethodMioClient(
+      {required MioClient that, required UuidValue id, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kGetAlbumMethodMioClientConstMeta;
+
+  Future<Track> getTrackMethodMioClient(
+      {required MioClient that, required UuidValue id, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kGetTrackMethodMioClientConstMeta;
+
+  Future<Artist> getArtistMethodMioClient(
+      {required MioClient that, required UuidValue id, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kGetArtistMethodMioClientConstMeta;
+
+  Future<CoverArt> getCoverArtMethodMioClient(
+      {required MioClient that, required UuidValue id, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kGetCoverArtMethodMioClientConstMeta;
+
   DropFnType get dropOpaqueArcRwLockMioClientState;
   ShareFnType get shareOpaqueArcRwLockMioClientState;
   OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer;
@@ -61,6 +86,48 @@ class ArcRwLockMioClientState extends FrbOpaque {
   @override
   OpaqueTypeFinalizer get staticFinalizer =>
       bridge.ArcRwLockMioClientStateFinalizer;
+}
+
+class Album {
+  final UuidValue id;
+  final String title;
+  final List<UuidValue> tracks;
+
+  const Album({
+    required this.id,
+    required this.title,
+    required this.tracks,
+  });
+}
+
+class Albums {
+  final List<UuidValue> albums;
+
+  const Albums({
+    required this.albums,
+  });
+}
+
+class Artist {
+  final UuidValue id;
+  final String name;
+  final String? sortName;
+
+  const Artist({
+    required this.id,
+    required this.name,
+    this.sortName,
+  });
+}
+
+class CoverArt {
+  final UuidValue id;
+  final Uint8List webmBlob;
+
+  const CoverArt({
+    required this.id,
+    required this.webmBlob,
+  });
 }
 
 class MioClient {
@@ -101,6 +168,54 @@ class MioClient {
         username: username,
         password: password,
       );
+
+  Future<Albums> getAlbums({dynamic hint}) => bridge.getAlbumsMethodMioClient(
+        that: this,
+      );
+
+  Future<Album> getAlbum({required UuidValue id, dynamic hint}) =>
+      bridge.getAlbumMethodMioClient(
+        that: this,
+        id: id,
+      );
+
+  Future<Track> getTrack({required UuidValue id, dynamic hint}) =>
+      bridge.getTrackMethodMioClient(
+        that: this,
+        id: id,
+      );
+
+  Future<Artist> getArtist({required UuidValue id, dynamic hint}) =>
+      bridge.getArtistMethodMioClient(
+        that: this,
+        id: id,
+      );
+
+  Future<CoverArt> getCoverArt({required UuidValue id, dynamic hint}) =>
+      bridge.getCoverArtMethodMioClient(
+        that: this,
+        id: id,
+      );
+}
+
+class Track {
+  final UuidValue id;
+  final UuidValue? album;
+  final UuidValue? coverArt;
+  final UuidValue? artist;
+  final String title;
+  final int? disk;
+  final int? track;
+
+  const Track({
+    required this.id,
+    this.album,
+    this.coverArt,
+    this.artist,
+    required this.title,
+    this.disk,
+    this.track,
+  });
 }
 
 class MioGlueImpl implements MioGlue {
@@ -217,6 +332,105 @@ class MioGlueImpl implements MioGlue {
         argNames: ["that", "username", "password"],
       );
 
+  Future<Albums> getAlbumsMethodMioClient(
+      {required MioClient that, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) =>
+          _platform.inner.wire_get_albums__method__MioClient(port_, arg0),
+      parseSuccessData: _wire2api_albums,
+      constMeta: kGetAlbumsMethodMioClientConstMeta,
+      argValues: [that],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kGetAlbumsMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "get_albums__method__MioClient",
+        argNames: ["that"],
+      );
+
+  Future<Album> getAlbumMethodMioClient(
+      {required MioClient that, required UuidValue id, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_Uuid(id);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) =>
+          _platform.inner.wire_get_album__method__MioClient(port_, arg0, arg1),
+      parseSuccessData: _wire2api_album,
+      constMeta: kGetAlbumMethodMioClientConstMeta,
+      argValues: [that, id],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kGetAlbumMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "get_album__method__MioClient",
+        argNames: ["that", "id"],
+      );
+
+  Future<Track> getTrackMethodMioClient(
+      {required MioClient that, required UuidValue id, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_Uuid(id);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) =>
+          _platform.inner.wire_get_track__method__MioClient(port_, arg0, arg1),
+      parseSuccessData: _wire2api_track,
+      constMeta: kGetTrackMethodMioClientConstMeta,
+      argValues: [that, id],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kGetTrackMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "get_track__method__MioClient",
+        argNames: ["that", "id"],
+      );
+
+  Future<Artist> getArtistMethodMioClient(
+      {required MioClient that, required UuidValue id, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_Uuid(id);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) =>
+          _platform.inner.wire_get_artist__method__MioClient(port_, arg0, arg1),
+      parseSuccessData: _wire2api_artist,
+      constMeta: kGetArtistMethodMioClientConstMeta,
+      argValues: [that, id],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kGetArtistMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "get_artist__method__MioClient",
+        argNames: ["that", "id"],
+      );
+
+  Future<CoverArt> getCoverArtMethodMioClient(
+      {required MioClient that, required UuidValue id, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_Uuid(id);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) => _platform.inner
+          .wire_get_cover_art__method__MioClient(port_, arg0, arg1),
+      parseSuccessData: _wire2api_cover_art,
+      constMeta: kGetCoverArtMethodMioClientConstMeta,
+      argValues: [that, id],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kGetCoverArtMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "get_cover_art__method__MioClient",
+        argNames: ["that", "id"],
+      );
+
   DropFnType get dropOpaqueArcRwLockMioClientState =>
       _platform.inner.drop_opaque_ArcRwLockMioClientState;
   ShareFnType get shareOpaqueArcRwLockMioClientState =>
@@ -237,6 +451,64 @@ class MioGlueImpl implements MioGlue {
     return raw as String;
   }
 
+  UuidValue _wire2api_Uuid(dynamic raw) {
+    return UuidValue.fromByteList(_wire2api_uint_8_list(raw));
+  }
+
+  List<UuidValue> _wire2api_Uuids(dynamic raw) {
+    final bytes = _wire2api_uint_8_list(raw);
+    return wire2apiUuids(bytes);
+  }
+
+  Album _wire2api_album(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return Album(
+      id: _wire2api_Uuid(arr[0]),
+      title: _wire2api_String(arr[1]),
+      tracks: _wire2api_Uuids(arr[2]),
+    );
+  }
+
+  Albums _wire2api_albums(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return Albums(
+      albums: _wire2api_Uuids(arr[0]),
+    );
+  }
+
+  Artist _wire2api_artist(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return Artist(
+      id: _wire2api_Uuid(arr[0]),
+      name: _wire2api_String(arr[1]),
+      sortName: _wire2api_opt_String(arr[2]),
+    );
+  }
+
+  int _wire2api_box_autoadd_i64(dynamic raw) {
+    return _wire2api_i64(raw);
+  }
+
+  CoverArt _wire2api_cover_art(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return CoverArt(
+      id: _wire2api_Uuid(arr[0]),
+      webmBlob: _wire2api_uint_8_list(arr[1]),
+    );
+  }
+
+  int _wire2api_i64(dynamic raw) {
+    return castInt(raw);
+  }
+
   MioClient _wire2api_mio_client(dynamic raw) {
     final arr = raw as List<dynamic>;
     if (arr.length != 1)
@@ -244,6 +516,33 @@ class MioGlueImpl implements MioGlue {
     return MioClient(
       bridge: this,
       field0: _wire2api_ArcRwLockMioClientState(arr[0]),
+    );
+  }
+
+  String? _wire2api_opt_String(dynamic raw) {
+    return raw == null ? null : _wire2api_String(raw);
+  }
+
+  UuidValue? _wire2api_opt_Uuid(dynamic raw) {
+    return raw == null ? null : _wire2api_Uuid(raw);
+  }
+
+  int? _wire2api_opt_box_autoadd_i64(dynamic raw) {
+    return raw == null ? null : _wire2api_box_autoadd_i64(raw);
+  }
+
+  Track _wire2api_track(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return Track(
+      id: _wire2api_Uuid(arr[0]),
+      album: _wire2api_opt_Uuid(arr[1]),
+      coverArt: _wire2api_opt_Uuid(arr[2]),
+      artist: _wire2api_opt_Uuid(arr[3]),
+      title: _wire2api_String(arr[4]),
+      disk: _wire2api_opt_box_autoadd_i64(arr[5]),
+      track: _wire2api_opt_box_autoadd_i64(arr[6]),
     );
   }
 
@@ -285,6 +584,11 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
   @protected
   ffi.Pointer<wire_uint_8_list> api2wire_String(String raw) {
     return api2wire_uint_8_list(utf8.encoder.convert(raw));
+  }
+
+  @protected
+  ffi.Pointer<wire_uint_8_list> api2wire_Uuid(UuidValue raw) {
+    return api2wire_uint_8_list(raw.toBytes());
   }
 
   @protected
@@ -527,6 +831,112 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
       _wire_attempt_login__method__MioClientPtr.asFunction<
           void Function(int, ffi.Pointer<wire_MioClient>,
               ffi.Pointer<wire_uint_8_list>, ffi.Pointer<wire_uint_8_list>)>();
+
+  void wire_get_albums__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+  ) {
+    return _wire_get_albums__method__MioClient(
+      port_,
+      that,
+    );
+  }
+
+  late final _wire_get_albums__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioClient>)>>(
+      'wire_get_albums__method__MioClient');
+  late final _wire_get_albums__method__MioClient =
+      _wire_get_albums__method__MioClientPtr
+          .asFunction<void Function(int, ffi.Pointer<wire_MioClient>)>();
+
+  void wire_get_album__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> id,
+  ) {
+    return _wire_get_album__method__MioClient(
+      port_,
+      that,
+      id,
+    );
+  }
+
+  late final _wire_get_album__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_get_album__method__MioClient');
+  late final _wire_get_album__method__MioClient =
+      _wire_get_album__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>)>();
+
+  void wire_get_track__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> id,
+  ) {
+    return _wire_get_track__method__MioClient(
+      port_,
+      that,
+      id,
+    );
+  }
+
+  late final _wire_get_track__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_get_track__method__MioClient');
+  late final _wire_get_track__method__MioClient =
+      _wire_get_track__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>)>();
+
+  void wire_get_artist__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> id,
+  ) {
+    return _wire_get_artist__method__MioClient(
+      port_,
+      that,
+      id,
+    );
+  }
+
+  late final _wire_get_artist__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_get_artist__method__MioClient');
+  late final _wire_get_artist__method__MioClient =
+      _wire_get_artist__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>)>();
+
+  void wire_get_cover_art__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> id,
+  ) {
+    return _wire_get_cover_art__method__MioClient(
+      port_,
+      that,
+      id,
+    );
+  }
+
+  late final _wire_get_cover_art__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_get_cover_art__method__MioClient');
+  late final _wire_get_cover_art__method__MioClient =
+      _wire_get_cover_art__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>)>();
 
   wire_ArcRwLockMioClientState new_ArcRwLockMioClientState() {
     return _new_ArcRwLockMioClientState();

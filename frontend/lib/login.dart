@@ -115,8 +115,7 @@ class LoginCreds extends StatefulWidget {
   State<StatefulWidget> createState() => _LoginCredsState();
 }
 
-class _LoginCredsState extends State<LoginCreds>
-    with TickerProviderStateMixin {
+class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
   late TextEditingController _usernameController, _passwordController;
   late AnimationController _spinner;
 
@@ -171,8 +170,7 @@ class _LoginCredsState extends State<LoginCreds>
       ),
       Row(children: [
         ElevatedButton(
-            onPressed: () => 
-            Navigator.pushReplacement(context,
+            onPressed: () => Navigator.pushReplacement(context,
                 MaterialPageRoute(builder: (context) => const SignupPage())),
             child: const Text("Sign Up")),
         ElevatedButton(
@@ -188,8 +186,8 @@ class _LoginCredsState extends State<LoginCreds>
               return Text("Could not login: ${extractMsg(snapshot.error)}");
             } else if (snapshot.connectionState == ConnectionState.done) {
               // switch to mainpage
-            Navigator.pushReplacement(context,
-                MaterialPageRoute(builder: (context) => const MainPage()));
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (context) => const MainPage()));
               return Container();
             } else if (loginCall == null) {
               return Container();

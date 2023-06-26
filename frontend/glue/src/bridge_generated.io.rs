@@ -45,6 +45,47 @@ pub extern "C" fn wire_attempt_login__method__MioClient(
     wire_attempt_login__method__MioClient_impl(port_, that, username, password)
 }
 
+#[no_mangle]
+pub extern "C" fn wire_get_albums__method__MioClient(port_: i64, that: *mut wire_MioClient) {
+    wire_get_albums__method__MioClient_impl(port_, that)
+}
+
+#[no_mangle]
+pub extern "C" fn wire_get_album__method__MioClient(
+    port_: i64,
+    that: *mut wire_MioClient,
+    id: *mut wire_uint_8_list,
+) {
+    wire_get_album__method__MioClient_impl(port_, that, id)
+}
+
+#[no_mangle]
+pub extern "C" fn wire_get_track__method__MioClient(
+    port_: i64,
+    that: *mut wire_MioClient,
+    id: *mut wire_uint_8_list,
+) {
+    wire_get_track__method__MioClient_impl(port_, that, id)
+}
+
+#[no_mangle]
+pub extern "C" fn wire_get_artist__method__MioClient(
+    port_: i64,
+    that: *mut wire_MioClient,
+    id: *mut wire_uint_8_list,
+) {
+    wire_get_artist__method__MioClient_impl(port_, that, id)
+}
+
+#[no_mangle]
+pub extern "C" fn wire_get_cover_art__method__MioClient(
+    port_: i64,
+    that: *mut wire_MioClient,
+    id: *mut wire_uint_8_list,
+) {
+    wire_get_cover_art__method__MioClient_impl(port_, that, id)
+}
+
 // Section: allocate functions
 
 #[no_mangle]
@@ -94,6 +135,12 @@ impl Wire2Api<String> for *mut wire_uint_8_list {
     fn wire2api(self) -> String {
         let vec: Vec<u8> = self.wire2api();
         String::from_utf8_lossy(&vec).into_owned()
+    }
+}
+impl Wire2Api<uuid::Uuid> for *mut wire_uint_8_list {
+    fn wire2api(self) -> uuid::Uuid {
+        let single: Vec<u8> = self.wire2api();
+        wire2api_uuid_ref(single.as_slice())
     }
 }
 impl Wire2Api<MioClient> for *mut wire_MioClient {

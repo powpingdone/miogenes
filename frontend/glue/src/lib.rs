@@ -1,17 +1,15 @@
 mod bridge_generated;
 
-use anyhow::anyhow;
-use mio_common::*;
 use std::sync::OnceLock;
 use ureq::Agent;
 
 mod api;
-mod auth;
 mod error;
+mod server;
+mod mirror;
 
-pub(crate) use error::*;
-
-// The second half of the connections. This actually sends out the raw connections to the server and also handles the state for connecting to it.
+// The second half of the connections. This actually sends out the raw connections
+// to the server and also handles the state for connecting to it.
 #[derive(Debug)]
 pub struct MioClientState {
     url: String,

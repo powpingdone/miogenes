@@ -19,6 +19,12 @@ use std::sync::Arc;
 
 // Section: imports
 
+use crate::mirror::Album;
+use crate::mirror::Albums;
+use crate::mirror::Artist;
+use crate::mirror::CoverArt;
+use crate::mirror::Track;
+
 // Section: wire functions
 
 fn wire_new_mio_client_impl() -> support::WireSyncReturn {
@@ -113,10 +119,150 @@ fn wire_attempt_login__method__MioClient_impl(
         },
     )
 }
+fn wire_get_albums__method__MioClient_impl(
+    port_: MessagePort,
+    that: impl Wire2Api<MioClient> + UnwindSafe,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap(
+        WrapInfo {
+            debug_name: "get_albums__method__MioClient",
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
+        },
+        move || {
+            let api_that = that.wire2api();
+            move |task_callback| Ok(mirror_Albums(MioClient::get_albums(&api_that)?))
+        },
+    )
+}
+fn wire_get_album__method__MioClient_impl(
+    port_: MessagePort,
+    that: impl Wire2Api<MioClient> + UnwindSafe,
+    id: impl Wire2Api<uuid::Uuid> + UnwindSafe,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap(
+        WrapInfo {
+            debug_name: "get_album__method__MioClient",
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_id = id.wire2api();
+            move |task_callback| Ok(mirror_Album(MioClient::get_album(&api_that, api_id)?))
+        },
+    )
+}
+fn wire_get_track__method__MioClient_impl(
+    port_: MessagePort,
+    that: impl Wire2Api<MioClient> + UnwindSafe,
+    id: impl Wire2Api<uuid::Uuid> + UnwindSafe,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap(
+        WrapInfo {
+            debug_name: "get_track__method__MioClient",
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_id = id.wire2api();
+            move |task_callback| Ok(mirror_Track(MioClient::get_track(&api_that, api_id)?))
+        },
+    )
+}
+fn wire_get_artist__method__MioClient_impl(
+    port_: MessagePort,
+    that: impl Wire2Api<MioClient> + UnwindSafe,
+    id: impl Wire2Api<uuid::Uuid> + UnwindSafe,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap(
+        WrapInfo {
+            debug_name: "get_artist__method__MioClient",
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_id = id.wire2api();
+            move |task_callback| Ok(mirror_Artist(MioClient::get_artist(&api_that, api_id)?))
+        },
+    )
+}
+fn wire_get_cover_art__method__MioClient_impl(
+    port_: MessagePort,
+    that: impl Wire2Api<MioClient> + UnwindSafe,
+    id: impl Wire2Api<uuid::Uuid> + UnwindSafe,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap(
+        WrapInfo {
+            debug_name: "get_cover_art__method__MioClient",
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_id = id.wire2api();
+            move |task_callback| {
+                Ok(mirror_CoverArt(MioClient::get_cover_art(
+                    &api_that, api_id,
+                )?))
+            }
+        },
+    )
+}
 // Section: wrapper structs
+
+#[derive(Clone)]
+struct mirror_Album(Album);
+
+#[derive(Clone)]
+struct mirror_Albums(Albums);
+
+#[derive(Clone)]
+struct mirror_Artist(Artist);
+
+#[derive(Clone)]
+struct mirror_CoverArt(CoverArt);
+
+#[derive(Clone)]
+struct mirror_Track(Track);
 
 // Section: static checks
 
+const _: fn() = || {
+    {
+        let Album = None::<Album>.unwrap();
+        let _: uuid::Uuid = Album.id;
+        let _: String = Album.title;
+        let _: Vec<uuid::Uuid> = Album.tracks;
+    }
+    {
+        let Albums = None::<Albums>.unwrap();
+        let _: Vec<uuid::Uuid> = Albums.albums;
+    }
+    {
+        let Artist = None::<Artist>.unwrap();
+        let _: uuid::Uuid = Artist.id;
+        let _: String = Artist.name;
+        let _: Option<String> = Artist.sort_name;
+    }
+    {
+        let CoverArt = None::<CoverArt>.unwrap();
+        let _: uuid::Uuid = CoverArt.id;
+        let _: Vec<u8> = CoverArt.webm_blob;
+    }
+    {
+        let Track = None::<Track>.unwrap();
+        let _: uuid::Uuid = Track.id;
+        let _: Option<uuid::Uuid> = Track.album;
+        let _: Option<uuid::Uuid> = Track.cover_art;
+        let _: Option<uuid::Uuid> = Track.artist;
+        let _: String = Track.title;
+        let _: Option<i64> = Track.disk;
+        let _: Option<i64> = Track.track;
+    }
+};
 // Section: allocate functions
 
 // Section: related functions
@@ -144,12 +290,66 @@ impl Wire2Api<u8> for u8 {
 
 // Section: impl IntoDart
 
+impl support::IntoDart for mirror_Album {
+    fn into_dart(self) -> support::DartAbi {
+        vec![
+            self.0.id.into_dart(),
+            self.0.title.into_dart(),
+            self.0.tracks.into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl support::IntoDartExceptPrimitive for mirror_Album {}
+
+impl support::IntoDart for mirror_Albums {
+    fn into_dart(self) -> support::DartAbi {
+        vec![self.0.albums.into_dart()].into_dart()
+    }
+}
+impl support::IntoDartExceptPrimitive for mirror_Albums {}
+
+impl support::IntoDart for mirror_Artist {
+    fn into_dart(self) -> support::DartAbi {
+        vec![
+            self.0.id.into_dart(),
+            self.0.name.into_dart(),
+            self.0.sort_name.into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl support::IntoDartExceptPrimitive for mirror_Artist {}
+
+impl support::IntoDart for mirror_CoverArt {
+    fn into_dart(self) -> support::DartAbi {
+        vec![self.0.id.into_dart(), self.0.webm_blob.into_dart()].into_dart()
+    }
+}
+impl support::IntoDartExceptPrimitive for mirror_CoverArt {}
+
 impl support::IntoDart for MioClient {
     fn into_dart(self) -> support::DartAbi {
         vec![self.0.into_dart()].into_dart()
     }
 }
 impl support::IntoDartExceptPrimitive for MioClient {}
+
+impl support::IntoDart for mirror_Track {
+    fn into_dart(self) -> support::DartAbi {
+        vec![
+            self.0.id.into_dart(),
+            self.0.album.into_dart(),
+            self.0.cover_art.into_dart(),
+            self.0.artist.into_dart(),
+            self.0.title.into_dart(),
+            self.0.disk.into_dart(),
+            self.0.track.into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl support::IntoDartExceptPrimitive for mirror_Track {}
 
 // Section: executor
 

@@ -5,9 +5,10 @@ pub use crate::MioClientState;
 use anyhow::bail;
 pub use flutter_rust_bridge::RustOpaque;
 pub use flutter_rust_bridge::SyncReturn;
-use mio_common::retstructs;
+pub use mio_common::*;
 pub use std::sync::Arc;
 pub use std::sync::RwLock;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct MioClient(pub RustOpaque<Arc<RwLock<MioClientState>>>);
@@ -34,7 +35,7 @@ impl MioClient {
         password: String,
         password2: String,
     ) -> anyhow::Result<()> {
-        if username.is_empty()||password.is_empty() || password2.is_empty() {
+        if username.is_empty() || password.is_empty() || password2.is_empty() {
             bail!("No field may be empty.");
         }
         if password != password2 {
@@ -62,6 +63,56 @@ impl MioClient {
         } else {
             Ok(())
         }
+    }
+
+    pub fn get_albums(&self) -> anyhow::Result<retstructs::Albums> {
+        self.wrap_refresh(|lock| match lock.fetch_all_albums() {
+            Ok(ok) => Ok(ok),
+            Err(err) => rewrap_error(err, |status, resp| match status {
+                404 => bail!("{resp}"),
+                _ => Ok((status, resp)),
+            }),
+        })
+    }
+
+    pub fn get_album(&self, id: Uuid) -> anyhow::Result<retstructs::Album> {
+        self.wrap_refresh(|lock| match lock.get_album_data(id) {
+            Ok(ok) => Ok(ok),
+            Err(err) => rewrap_error(err, |status, resp| match status {
+                404 => bail!("{resp}"),
+                _ => Ok((status, resp)),
+            }),
+        })
+    }
+
+    pub fn get_track(&self, id: Uuid) -> anyhow::Result<retstructs::Track> {
+        self.wrap_refresh(|lock| match lock.get_track_data(id) {
+            Ok(ok) => Ok(ok),
+            Err(err) => rewrap_error(err, |status, resp| match status {
+                404 => bail!("{resp}"),
+                _ => Ok((status, resp)),
+            }),
+        })
+    }
+
+    pub fn get_artist(&self, id: Uuid) -> anyhow::Result<retstructs::Artist> {
+        self.wrap_refresh(|lock| match lock.get_artist_data(id) {
+            Ok(ok) => Ok(ok),
+            Err(err) => rewrap_error(err, |status, resp| match status {
+                404 => bail!("{resp}"),
+                _ => Ok((status, resp)),
+            }),
+        })
+    }
+
+    pub fn get_cover_art(&self, id: Uuid) -> anyhow::Result<retstructs::CoverArt> {
+        self.wrap_refresh(|lock| match lock.get_cover_art_data(id) {
+            Ok(ok) => Ok(ok),
+            Err(err) => rewrap_error(err, |status, resp| match status {
+                404 => bail!("{resp}"),
+                _ => Ok((status, resp)),
+            }),
+        })
     }
 
     // wrap endpoints so that it can autorefresh tokens
@@ -105,14 +156,19 @@ where
             // any other error besides a "not OK" statuscode is what we're handling here
             ureq::Error::Status(status, resp) => {
                 // extract _any_ string
-                let resp_dump = resp
-                    .into_string()
-                    .map_err(|err| format!("Error could not be decoded: {err}"))
-                    .and_then(|error_json| {
-                        serde_json::from_str::<retstructs::ErrorMsg>(&error_json)
-                            .map(|x| x.error)
-                            .map_err(|err| format!("Error message could not be extracted: {err}. Original message: {error_json}"))
-                    });
+                let resp_dump =
+                    resp
+                        .into_string()
+                        .map_err(|err| format!("Error could not be decoded: {err}"))
+                        .and_then(|error_json| {
+                            serde_json::from_str::<retstructs::ErrorMsg>(&error_json)
+                                .map(|x| x.error)
+                                .map_err(
+                                    |err| format!(
+                                        "Error message could not be extracted: {err}. Original message: {error_json}"
+                                    ),
+                                )
+                        });
 
                 // they're all sinners in the end. doesn't matter. merge 'em
                 let resp_str = match resp_dump {
@@ -123,6 +179,7 @@ where
                 match cb(status, resp_str) {
                     Err(err) => Err(err),
                     Ok((status, resp)) => match status {
+                        401 => bail!("The key failed to be used, please re-login: {resp}"),
                         500 => bail!("INTERNAL SERVER ERROR: {resp}"),
                         _ => bail!("The server returned an unexpected error code {status}: {resp}"),
                     },

@@ -15,7 +15,6 @@ impl From<ureq::Error> for ErrorSplit {
 impl From<anyhow::Error> for ErrorSplit {
     fn from(value: anyhow::Error) -> Self {
         ErrorSplit::Other(value)
-    
     }
 }
 

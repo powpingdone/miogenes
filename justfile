@@ -8,3 +8,8 @@ spin: gen
 
 drun: gen 
     cargo run -p mio-backend 
+
+fmt:
+    genemichaels -p
+    cargo fmt
+    dart format frontend/

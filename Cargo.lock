@@ -1698,7 +1698,9 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "serde_json",
+ "serde_urlencoded",
  "ureq",
+ "uuid",
 ]
 
 [[package]]
