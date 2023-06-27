@@ -91,7 +91,7 @@ async fn album_info(
                             tracks: sqlx::query!(
                                 "SELECT track.id FROM track
                                 JOIN album ON track.album = album.id
-                                WHERE album.id = ? AND track.owner=?;",
+                                WHERE album.id = ? AND track.owner = ?;",
                                 id,
                                 userid
                             )
