@@ -4,16 +4,17 @@ import 'package:frontend/main.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
-class MainPage extends StatefulWidget {
-  const MainPage({super.key});
+class MainNav extends StatefulWidget {
+  const MainNav({super.key});
 
   @override
-  State<MainPage> createState() => _MainPageState();
+  State<MainNav> createState() => _MainNavState();
 }
 
-class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
+class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
   late AnimationController _spinner;
   Future<Albums>? albums;
+  var pageIndex = 0;
 
   @override
   void initState() {
@@ -38,6 +39,62 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     var mioState = mtl.mioClient;
     albums ??= mioState.getAlbums();
 
+    Widget page;
+    switch (pageIndex) {
+      case 0:
+        page = MainPage(albums: albums, spinner: _spinner);
+        break;
+      case 1:
+        page = UploadPage();
+        break;
+      default:
+        throw UnimplementedError("page $pageIndex is not implemented");
+    }
+
+    return Scaffold(
+        body: Row(
+      children: [
+        SafeArea(
+            child: NavigationRail(
+          extended: false,
+          destinations: const [
+            NavigationRailDestination(
+                icon: Icon(Icons.album), label: Text("Album")),
+            NavigationRailDestination(
+                icon: Icon(Icons.upload), label: Text("Upload files"))
+          ],
+          selectedIndex: 0,
+          onDestinationSelected: (value) => setState(() => pageIndex = value),
+        )),
+        Expanded(child: page),
+      ],
+    ));
+  }
+}
+
+class UploadPage extends StatelessWidget {
+  const UploadPage({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Placeholder();
+  }
+}
+
+class MainPage extends StatelessWidget {
+  const MainPage({
+    super.key,
+    required this.albums,
+    required AnimationController spinner,
+  }) : _spinner = spinner;
+
+  final Future<Albums>? albums;
+  final AnimationController _spinner;
+
+  @override
+  Widget build(BuildContext context) {
     return FutureBuilder(
         future: albums,
         builder: (context, snapshot) {
@@ -163,6 +220,7 @@ class _CoverArtImgState extends State<CoverArtImg> {
           if (snapshot.hasData) {
             return Image.memory(snapshot.data!.webmBlob);
           }
+          // TODO: show error and loading image
           return Container();
         }));
   }

@@ -83,10 +83,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       Row(
         children: [
           ElevatedButton(
-              onPressed: () => Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const LoginBaseUrl())),
+              onPressed: () =>
+                  Navigator.of(context).pushReplacementNamed("login"),
               child: const Text("Back To Login")),
           ElevatedButton(
               onPressed: () => setTask(mioState), child: const Text("Sign Up"))
@@ -101,8 +99,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                   "Could not signup and login: ${extractMsg(snapshot.error)}");
             } else if (snapshot.connectionState == ConnectionState.done) {
               // switch to mainpage
-              Navigator.pushReplacement(context,
-                  MaterialPageRoute(builder: (context) => const MainPage()));
+              Navigator.of(context).pushReplacementNamed("mainpage");
               return Container();
             } else if (signupCall == null) {
               return Container();

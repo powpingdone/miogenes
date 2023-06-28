@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/mainpage/mainpage.dart';
+import 'package:frontend/signup.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
 import 'login.dart';
@@ -45,6 +47,28 @@ class MioTopLevel with ChangeNotifier {
 class _MioTopLevel extends State<MioEntryPoint> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(appBar: AppBar(), body: const LoginBaseUrl());
+    return Scaffold(
+        appBar: AppBar(),
+        body: Navigator(
+          initialRoute: "login",
+          onGenerateRoute: (settings) {
+            WidgetBuilder builder;
+            switch (settings.name) {
+              case "login":
+                builder = (context) => const LoginBaseUrl();
+                break;
+              case "signup":
+                builder = (context) => const SignupPage();
+                break;
+              case "mainpage":
+                builder = (context) => const MainNav();
+                break;
+              default:
+                throw UnimplementedError(
+                    "No such route ${settings.name} exists");
+            }
+            return MaterialPageRoute(builder: builder, settings: settings);
+          },
+        ));
   }
 }

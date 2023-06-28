@@ -170,8 +170,8 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
       ),
       Row(children: [
         ElevatedButton(
-            onPressed: () => Navigator.pushReplacement(context,
-                MaterialPageRoute(builder: (context) => const SignupPage())),
+            onPressed: () => 
+              Navigator.of(context).pushReplacementNamed("signup"),
             child: const Text("Sign Up")),
         ElevatedButton(
           onPressed: () => setTask(mioState),
@@ -186,8 +186,7 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
               return Text("Could not login: ${extractMsg(snapshot.error)}");
             } else if (snapshot.connectionState == ConnectionState.done) {
               // switch to mainpage
-              Navigator.pushReplacement(context,
-                  MaterialPageRoute(builder: (context) => const MainPage()));
+              Navigator.of(context).pushReplacementNamed("mainpage");
               return Container();
             } else if (loginCall == null) {
               return Container();
