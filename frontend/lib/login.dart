@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/mainpage/mainpage.dart';
-import 'package:frontend/signup.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
 import 'main.dart';
@@ -144,11 +142,17 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
 
   void setTask(MioClient mioState) {
     setState(() {
-      loginCall = mioState.attemptLogin(
-        username: _usernameController.text,
-        password: _passwordController.text,
-      );
+      loginCall = attemptLogin(mioState);
     });
+  }
+
+  Future<void> attemptLogin(MioClient mioState) async {
+    var nav = Navigator.of(context);
+    await mioState.attemptLogin(
+      username: _usernameController.text,
+      password: _passwordController.text,
+    );
+    nav.pushReplacementNamed("mainpage");
   }
 
   @override
@@ -170,8 +174,8 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
       ),
       Row(children: [
         ElevatedButton(
-            onPressed: () => 
-              Navigator.of(context).pushReplacementNamed("signup"),
+            onPressed: () =>
+                Navigator.of(context).pushReplacementNamed("signup"),
             child: const Text("Sign Up")),
         ElevatedButton(
           onPressed: () => setTask(mioState),
@@ -186,7 +190,6 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
               return Text("Could not login: ${extractMsg(snapshot.error)}");
             } else if (snapshot.connectionState == ConnectionState.done) {
               // switch to mainpage
-              Navigator.of(context).pushReplacementNamed("mainpage");
               return Container();
             } else if (loginCall == null) {
               return Container();

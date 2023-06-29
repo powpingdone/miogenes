@@ -5,8 +5,8 @@ use ureq::Agent;
 
 mod api;
 mod error;
-mod server;
 mod mirror;
+mod server;
 
 // The second half of the connections. This actually sends out the raw connections
 // to the server and also handles the state for connecting to it.
@@ -36,14 +36,9 @@ impl MioClientState {
 
     // wrapper function. adds the auth header to the current request
     fn wrap_auth(&self, req: ureq::Request) -> ureq::Request {
-        use base64::prelude::*;
-
         req.set(
             "Authorization",
-            &format!(
-                "Bearer {}",
-                BASE64_URL_SAFE_NO_PAD.encode(self.key.get().unwrap().to_string())
-            ),
+            &format!("Bearer {}", self.key.get().unwrap().to_string()),
         )
     }
 }

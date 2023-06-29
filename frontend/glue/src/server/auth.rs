@@ -38,6 +38,8 @@ impl MioClientState {
             .into_json::<auth::JWT>()?;
         if let Some(key) = self.key.get_mut() {
             *key = new_jwt;
+        } else {
+            self.key.set(new_jwt).unwrap();
         }
         Ok(())
     }
@@ -58,6 +60,8 @@ impl MioClientState {
             .into_json::<auth::JWT>()?;
         if let Some(key) = self.key.get_mut() {
             *key = jwt;
+        } else {
+            self.key.set(jwt).unwrap();
         }
         Ok(())
     }

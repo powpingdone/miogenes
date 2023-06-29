@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/login.dart';
-import 'package:frontend/mainpage/mainpage.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
 import 'main.dart';
@@ -47,11 +45,17 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
 
   void setTask(MioClient mioState) {
     setState(() {
-      signupCall = mioState.attemptSignupAndLogin(
-          username: _usernameController.text,
-          password: _passwordController.text,
-          password2: _password2Controller.text);
+      signupCall = callMio(mioState);
     });
+  }
+
+  Future<void> callMio(MioClient mioState) async {
+    var nav = Navigator.of(context);
+    await mioState.attemptSignupAndLogin(
+        username: _usernameController.text,
+        password: _passwordController.text,
+        password2: _password2Controller.text);
+    nav.pushReplacementNamed("mainpage");
   }
 
   @override
@@ -99,7 +103,6 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                   "Could not signup and login: ${extractMsg(snapshot.error)}");
             } else if (snapshot.connectionState == ConnectionState.done) {
               // switch to mainpage
-              Navigator.of(context).pushReplacementNamed("mainpage");
               return Container();
             } else if (signupCall == null) {
               return Container();
