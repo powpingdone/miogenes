@@ -17,12 +17,6 @@ pub struct MioClientState {
     pub key: OnceLock<mio_common::auth::JWT>,
 }
 
-impl Default for MioClientState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 // TODO: make client making connections redundant. Ie: any connection that fails
 // for a reason like "no connection to host" should retry after some metrics.
 impl MioClientState {

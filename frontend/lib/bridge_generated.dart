@@ -67,6 +67,11 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kGetCoverArtMethodMioClientConstMeta;
 
+  Future<List<String>> getFilesAtDirMethodMioClient(
+      {required MioClient that, required String path, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kGetFilesAtDirMethodMioClientConstMeta;
+
   DropFnType get dropOpaqueArcRwLockMioClientState;
   ShareFnType get shareOpaqueArcRwLockMioClientState;
   OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer;
@@ -195,6 +200,12 @@ class MioClient {
       bridge.getCoverArtMethodMioClient(
         that: this,
         id: id,
+      );
+
+  Future<List<String>> getFilesAtDir({required String path, dynamic hint}) =>
+      bridge.getFilesAtDirMethodMioClient(
+        that: this,
+        path: path,
       );
 }
 
@@ -431,6 +442,26 @@ class MioGlueImpl implements MioGlue {
         argNames: ["that", "id"],
       );
 
+  Future<List<String>> getFilesAtDirMethodMioClient(
+      {required MioClient that, required String path, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_String(path);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) => _platform.inner
+          .wire_get_files_at_dir__method__MioClient(port_, arg0, arg1),
+      parseSuccessData: _wire2api_StringList,
+      constMeta: kGetFilesAtDirMethodMioClientConstMeta,
+      argValues: [that, path],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kGetFilesAtDirMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "get_files_at_dir__method__MioClient",
+        argNames: ["that", "path"],
+      );
+
   DropFnType get dropOpaqueArcRwLockMioClientState =>
       _platform.inner.drop_opaque_ArcRwLockMioClientState;
   ShareFnType get shareOpaqueArcRwLockMioClientState =>
@@ -449,6 +480,10 @@ class MioGlueImpl implements MioGlue {
 
   String _wire2api_String(dynamic raw) {
     return raw as String;
+  }
+
+  List<String> _wire2api_StringList(dynamic raw) {
+    return (raw as List<dynamic>).cast<String>();
   }
 
   UuidValue _wire2api_Uuid(dynamic raw) {
@@ -935,6 +970,28 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
       'wire_get_cover_art__method__MioClient');
   late final _wire_get_cover_art__method__MioClient =
       _wire_get_cover_art__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>)>();
+
+  void wire_get_files_at_dir__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> path,
+  ) {
+    return _wire_get_files_at_dir__method__MioClient(
+      port_,
+      that,
+      path,
+    );
+  }
+
+  late final _wire_get_files_at_dir__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_get_files_at_dir__method__MioClient');
+  late final _wire_get_files_at_dir__method__MioClient =
+      _wire_get_files_at_dir__method__MioClientPtr.asFunction<
           void Function(int, ffi.Pointer<wire_MioClient>,
               ffi.Pointer<wire_uint_8_list>)>();
 

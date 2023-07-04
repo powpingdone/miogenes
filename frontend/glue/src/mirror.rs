@@ -6,7 +6,6 @@ pub use mio_common::retstructs::{
 use uuid::Uuid;
 
 // this is a copy of mio_common::retstructs. frb makes sure that this matches
-
 #[frb(mirror(Track))]
 pub struct _Track {
     pub id: Uuid,
@@ -16,7 +15,7 @@ pub struct _Track {
     pub title: String,
     pub disk: Option<i64>,
     pub track: Option<i64>,
-    //pub tags: RustOpaque<HashMap<String, String>>,
+    // pub tags: RustOpaque<HashMap<String, String>>,
 }
 
 #[frb(mirror(Album))]

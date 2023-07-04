@@ -40,8 +40,7 @@ impl JWT {
     pub fn whois(&self) -> Result<JWTInner, anyhow::Error> {
         Ok(serde_json::from_slice(
             &BASE64_URL_SAFE_NO_PAD.decode(
-                self
-                    .0
+                self.0
                     .split('.')
                     .nth(1)
                     .ok_or_else(|| anyhow::anyhow!("no payload to decode"))?,

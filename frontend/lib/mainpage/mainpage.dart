@@ -1,8 +1,12 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:frontend/ffi.dart';
 import 'package:frontend/main.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+
+import 'upload.dart';
 
 class MainNav extends StatefulWidget {
   const MainNav({super.key});
@@ -13,8 +17,21 @@ class MainNav extends StatefulWidget {
 
 class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
   late AnimationController _spinner;
-  Future<Albums>? albums;
   var pageIndex = 0;
+  final List<String> _commonExts = [
+    // lossless
+    "wav", "flac", "alac",
+    // typical lossy
+    "mp3", "ogg", "aac", "opus", "m4a"
+  ];
+
+  // Albums
+  Future<Albums>? albums;
+
+  // Upload tasks
+  List<UploadTask> tasks = const [];
+  Future<List<String>>? folderSearch;
+  bool folderSearchActive = false, folderSearchTaken = true;
 
   @override
   void initState() {
@@ -24,6 +41,7 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
       ..addListener(() {
         setState(() {});
       })
+      // TODO: repeat is not correct for this
       ..repeat();
   }
 
@@ -39,54 +57,103 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
     var mioState = mtl.mioClient;
     albums ??= mioState.getAlbums();
 
+    // page selection
     Widget page;
     switch (pageIndex) {
       case 0:
         page = MainPage(albums: albums, spinner: _spinner);
         break;
       case 1:
-        page = UploadPage();
+        page = UploadPage(
+          tasks: tasks,
+          folderSearch: folderSearch,
+        );
         break;
       default:
         throw UnimplementedError("page $pageIndex is not implemented");
     }
 
+    // dynamic adding of the fab children if future is not finished
+    List<SpeedDialChild> fabChildren = [
+      SpeedDialChild(
+        child: const Icon(Icons.audiotrack),
+        label: "Upload Individual Files",
+        onTap: () => FilePicker.platform
+            .pickFiles(
+                allowMultiple: true,
+                type: FileType.custom,
+                allowedExtensions: _commonExts)
+            .then((files) {
+          if (files != null) {
+            // filter out all nulls
+            tasks.addAll(files.paths
+                .where((x) => x != null)
+                .map((x) => UploadTask(path: x!)));
+          }
+        }),
+      )
+    ];
+    // dynamic part
+    if (!folderSearchActive) {
+      fabChildren.add(SpeedDialChild(
+        child: const Icon(Icons.folder),
+        label: "Upload Folder",
+        onTap: () => FilePicker.platform.getDirectoryPath().then((folder) {
+          if (folder != null) {
+            folderSearchActive = true;
+            folderSearch = mioState
+                .getFilesAtDir(path: folder)
+                .whenComplete(() => setState(() {
+                      folderSearchActive = false;
+                      folderSearchTaken = false;
+                    }));
+          }
+        }),
+      ));
+    }
     return Scaffold(
+        // FAB for upload
+        floatingActionButton:
+            pageIndex == 1 ? SpeedDial(children: fabChildren) : null,
+        // nav rail, and child
         body: Row(
-      children: [
-        SafeArea(
-            child: NavigationRail(
-          extended: false,
-          destinations: const [
-            NavigationRailDestination(
-                icon: Icon(Icons.album), label: Text("Album")),
-            NavigationRailDestination(
-                icon: Icon(Icons.upload), label: Text("Upload files"))
+          children: [
+            SafeArea(
+                child: NavigationRail(
+              extended: false,
+              destinations: const [
+                NavigationRailDestination(
+                    icon: Icon(Icons.album), label: Text("Album")),
+                NavigationRailDestination(
+                    icon: Icon(Icons.upload), label: Text("Upload files"))
+              ],
+              selectedIndex: 0,
+              onDestinationSelected: (value) =>
+                  setState(() => pageIndex = value),
+            )),
+            Expanded(
+                // poll folder searching future
+                child: FutureBuilder(
+              future: folderSearch,
+              builder: (context, snapshot) {
+                if (snapshot.hasData && !folderSearchTaken) {
+                  folderSearchTaken = true;
+                  tasks.addAll(snapshot.data!.map((e) => UploadTask(path: e)));
+                } else if (snapshot.hasError) {
+                  // TODO: report errors
+                }
+                return page;
+              },
+            )),
           ],
-          selectedIndex: 0,
-          onDestinationSelected: (value) => setState(() => pageIndex = value),
-        )),
-        Expanded(child: page),
-      ],
-    ));
-  }
-}
-
-class UploadPage extends StatelessWidget {
-  const UploadPage({
-    super.key,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Placeholder();
+        ));
   }
 }
 
 class MainPage extends StatelessWidget {
   const MainPage({
     super.key,
-    required this.albums,
+    this.albums,
     required AnimationController spinner,
   }) : _spinner = spinner;
 

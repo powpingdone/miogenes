@@ -115,6 +115,14 @@ impl MioClient {
         })
     }
 
+    pub fn get_files_at_dir(&self, path: String) -> anyhow::Result<Vec<String>> {
+        let lock = self.0.read().unwrap();
+        match lock.search_folder(path) {
+            Ok(ok) => Ok(ok),
+            Err(err) => rewrap_error(err, |status, resp| Ok((status, resp))),
+        }
+    }
+
     // wrap endpoints so that it can autorefresh tokens
     fn wrap_refresh<Callback, Ret>(&self, cb: Callback) -> anyhow::Result<Ret>
     where
