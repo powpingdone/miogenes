@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/signup.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
 import 'main.dart';
+import 'mainpage/mainpage.dart';
 
 class LoginBaseUrl extends StatefulWidget {
   const LoginBaseUrl({super.key});
@@ -152,7 +154,8 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
       username: _usernameController.text,
       password: _passwordController.text,
     );
-    nav.pushReplacementNamed("mainpage");
+    nav.pushReplacement(
+        MaterialPageRoute(builder: (context) => const MainNav()));
   }
 
   @override
@@ -174,8 +177,8 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
       ),
       Row(children: [
         ElevatedButton(
-            onPressed: () =>
-                Navigator.of(context).pushReplacementNamed("signup"),
+            onPressed: () => Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => const SignupPage())),
             child: const Text("Sign Up")),
         ElevatedButton(
           onPressed: () => setTask(mioState),

@@ -86,9 +86,10 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
             .then((files) {
           if (files != null) {
             // filter out all nulls
+            // TODO: UPDATE THIS WITH THE NEW path
             tasks.addAll(files.paths
                 .where((x) => x != null)
-                .map((x) => UploadTask(path: x!)));
+                .map((x) => UploadTask(rootLevel: "", path: x!)));
           }
         }),
       )
@@ -138,7 +139,9 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
               builder: (context, snapshot) {
                 if (snapshot.hasData && !folderSearchTaken) {
                   folderSearchTaken = true;
-                  tasks.addAll(snapshot.data!.map((e) => UploadTask(path: e)));
+                  tasks.addAll(snapshot.data!
+                      // TODO: UPDATE THIS WITH THE NEW path
+                      .map((e) => UploadTask(rootLevel: "", path: e)));
                 } else if (snapshot.hasError) {
                   // TODO: report errors
                 }

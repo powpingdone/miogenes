@@ -36,3 +36,9 @@ impl MioClientState {
         )
     }
 }
+
+impl Default for MioClientState {
+    fn default() -> Self {
+        Self::new()
+    }
+}

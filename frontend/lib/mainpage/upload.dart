@@ -1,6 +1,17 @@
 import "package:flutter/material.dart";
 
-class UploadPage extends StatefulWidget {
+
+class UploadToWhereOverlayPage extends StatelessWidget {
+  const UploadToWhereOverlayPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // TODO: implement build
+    throw UnimplementedError();
+  }
+}
+
+class UploadPage extends StatelessWidget {
   const UploadPage({
     super.key,
     this.folderSearch,
@@ -11,23 +22,20 @@ class UploadPage extends StatefulWidget {
   final Future<List<String>>? folderSearch;
 
   @override
-  State<UploadPage> createState() => _UploadPageState();
-}
-
-class _UploadPageState extends State<UploadPage> {
-  @override
   Widget build(BuildContext context) {
-    return Container();
+    return ListView(
+      children: tasks,
+    );
   }
 }
 
 class UploadTask extends StatefulWidget {
-  const UploadTask({
-    super.key,
-    required this.path,
-  });
+  const UploadTask({super.key, required this.rootLevel, required this.path});
 
+  // path to the file to upload
   final String path;
+  // parent of path to file, used to seperate the folder system
+  final String rootLevel;
 
   @override
   State<UploadTask> createState() => _UploadTaskState();
@@ -38,7 +46,6 @@ class _UploadTaskState extends State<UploadTask> {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
-    throw UnimplementedError();
+    return Container();
   }
 }

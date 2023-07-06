@@ -72,6 +72,19 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kGetFilesAtDirMethodMioClientConstMeta;
 
+  Future<UploadReturn> uploadFileMethodMioClient(
+      {required MioClient that,
+      required String fullpath,
+      required String dir,
+      dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kUploadFileMethodMioClientConstMeta;
+
+  Future<List<FakeMapItem>> getFoldersMethodMioClient(
+      {required MioClient that, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kGetFoldersMethodMioClientConstMeta;
+
   DropFnType get dropOpaqueArcRwLockMioClientState;
   ShareFnType get shareOpaqueArcRwLockMioClientState;
   OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer;
@@ -132,6 +145,16 @@ class CoverArt {
   const CoverArt({
     required this.id,
     required this.webmBlob,
+  });
+}
+
+class FakeMapItem {
+  final String key;
+  final List<FakeMapItem>? value;
+
+  const FakeMapItem({
+    required this.key,
+    this.value,
   });
 }
 
@@ -207,6 +230,19 @@ class MioClient {
         that: this,
         path: path,
       );
+
+  Future<UploadReturn> uploadFile(
+          {required String fullpath, required String dir, dynamic hint}) =>
+      bridge.uploadFileMethodMioClient(
+        that: this,
+        fullpath: fullpath,
+        dir: dir,
+      );
+
+  Future<List<FakeMapItem>> getFolders({dynamic hint}) =>
+      bridge.getFoldersMethodMioClient(
+        that: this,
+      );
 }
 
 class Track {
@@ -226,6 +262,14 @@ class Track {
     required this.title,
     this.disk,
     this.track,
+  });
+}
+
+class UploadReturn {
+  final UuidValue uuid;
+
+  const UploadReturn({
+    required this.uuid,
   });
 }
 
@@ -462,6 +506,49 @@ class MioGlueImpl implements MioGlue {
         argNames: ["that", "path"],
       );
 
+  Future<UploadReturn> uploadFileMethodMioClient(
+      {required MioClient that,
+      required String fullpath,
+      required String dir,
+      dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_String(fullpath);
+    var arg2 = _platform.api2wire_String(dir);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) => _platform.inner
+          .wire_upload_file__method__MioClient(port_, arg0, arg1, arg2),
+      parseSuccessData: _wire2api_upload_return,
+      constMeta: kUploadFileMethodMioClientConstMeta,
+      argValues: [that, fullpath, dir],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kUploadFileMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "upload_file__method__MioClient",
+        argNames: ["that", "fullpath", "dir"],
+      );
+
+  Future<List<FakeMapItem>> getFoldersMethodMioClient(
+      {required MioClient that, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) =>
+          _platform.inner.wire_get_folders__method__MioClient(port_, arg0),
+      parseSuccessData: _wire2api_list_fake_map_item,
+      constMeta: kGetFoldersMethodMioClientConstMeta,
+      argValues: [that],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kGetFoldersMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "get_folders__method__MioClient",
+        argNames: ["that"],
+      );
+
   DropFnType get dropOpaqueArcRwLockMioClientState =>
       _platform.inner.drop_opaque_ArcRwLockMioClientState;
   ShareFnType get shareOpaqueArcRwLockMioClientState =>
@@ -540,8 +627,22 @@ class MioGlueImpl implements MioGlue {
     );
   }
 
+  FakeMapItem _wire2api_fake_map_item(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return FakeMapItem(
+      key: _wire2api_String(arr[0]),
+      value: _wire2api_opt_list_fake_map_item(arr[1]),
+    );
+  }
+
   int _wire2api_i64(dynamic raw) {
     return castInt(raw);
+  }
+
+  List<FakeMapItem> _wire2api_list_fake_map_item(dynamic raw) {
+    return (raw as List<dynamic>).map(_wire2api_fake_map_item).toList();
   }
 
   MioClient _wire2api_mio_client(dynamic raw) {
@@ -564,6 +665,10 @@ class MioGlueImpl implements MioGlue {
 
   int? _wire2api_opt_box_autoadd_i64(dynamic raw) {
     return raw == null ? null : _wire2api_box_autoadd_i64(raw);
+  }
+
+  List<FakeMapItem>? _wire2api_opt_list_fake_map_item(dynamic raw) {
+    return raw == null ? null : _wire2api_list_fake_map_item(raw);
   }
 
   Track _wire2api_track(dynamic raw) {
@@ -591,6 +696,15 @@ class MioGlueImpl implements MioGlue {
 
   void _wire2api_unit(dynamic raw) {
     return;
+  }
+
+  UploadReturn _wire2api_upload_return(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return UploadReturn(
+      uuid: _wire2api_Uuid(arr[0]),
+    );
   }
 }
 
@@ -994,6 +1108,51 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
       _wire_get_files_at_dir__method__MioClientPtr.asFunction<
           void Function(int, ffi.Pointer<wire_MioClient>,
               ffi.Pointer<wire_uint_8_list>)>();
+
+  void wire_upload_file__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> fullpath,
+    ffi.Pointer<wire_uint_8_list> dir,
+  ) {
+    return _wire_upload_file__method__MioClient(
+      port_,
+      that,
+      fullpath,
+      dir,
+    );
+  }
+
+  late final _wire_upload_file__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(
+                  ffi.Int64,
+                  ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_upload_file__method__MioClient');
+  late final _wire_upload_file__method__MioClient =
+      _wire_upload_file__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>, ffi.Pointer<wire_uint_8_list>)>();
+
+  void wire_get_folders__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+  ) {
+    return _wire_get_folders__method__MioClient(
+      port_,
+      that,
+    );
+  }
+
+  late final _wire_get_folders__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioClient>)>>(
+      'wire_get_folders__method__MioClient');
+  late final _wire_get_folders__method__MioClient =
+      _wire_get_folders__method__MioClientPtr
+          .asFunction<void Function(int, ffi.Pointer<wire_MioClient>)>();
 
   wire_ArcRwLockMioClientState new_ArcRwLockMioClientState() {
     return _new_ArcRwLockMioClientState();

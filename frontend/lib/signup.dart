@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/login.dart';
+import 'package:frontend/mainpage/mainpage.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
 import 'main.dart';
@@ -55,7 +57,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         username: _usernameController.text,
         password: _passwordController.text,
         password2: _password2Controller.text);
-    nav.pushReplacementNamed("mainpage");
+    nav.pushReplacement(MaterialPageRoute(builder: (context) => const MainNav()));
   }
 
   @override
@@ -88,7 +90,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         children: [
           ElevatedButton(
               onPressed: () =>
-                  Navigator.of(context).pushReplacementNamed("login"),
+                  Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const LoginBaseUrl())),
               child: const Text("Back To Login")),
           ElevatedButton(
               onPressed: () => setTask(mioState), child: const Text("Sign Up"))

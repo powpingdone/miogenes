@@ -6,6 +6,7 @@ use anyhow::bail;
 pub use flutter_rust_bridge::RustOpaque;
 pub use flutter_rust_bridge::SyncReturn;
 pub use mio_common::*;
+use std::path::Path;
 pub use std::sync::Arc;
 pub use std::sync::RwLock;
 use uuid::Uuid;
@@ -123,6 +124,33 @@ impl MioClient {
         }
     }
 
+    pub fn upload_file(
+        &self,
+        fullpath: String,
+        dir: String,
+    ) -> anyhow::Result<retstructs::UploadReturn> {
+        let path = Path::new(&fullpath);
+        let fname = path.file_name().map(|x| x.to_string_lossy().to_string());
+        self.wrap_refresh(move |lock| {
+            match lock.upload_file(fullpath.clone(), dir.to_owned(), fname.to_owned()) {
+                Ok(ok) => Ok(ok),
+                Err(err) => rewrap_error(err, |status, resp| match status {
+                    400 | 409 => bail!("{resp}"),
+                    _ => Ok((status, resp)),
+                }),
+            }
+        })
+    }
+
+    pub fn get_folders(&self) -> anyhow::Result<Vec<crate::server::folder::FakeMapItem>> {
+        self.wrap_refresh(|lock| {
+            match lock.get_folders() {
+                Ok(ok) => Ok(ok),
+                Err(err) => rewrap_error(err, |status, resp| Ok((status, resp)))
+            }
+        })
+    }
+
     // wrap endpoints so that it can autorefresh tokens
     fn wrap_refresh<Callback, Ret>(&self, cb: Callback) -> anyhow::Result<Ret>
     where
@@ -161,7 +189,7 @@ where
 {
     match err {
         ErrorSplit::Ureq(resp) => match *resp {
-            // any other error besides a "not OK" statuscode is what we're handling here
+            // any other error besides a "OK" statuscode is what we're handling here
             ureq::Error::Status(status, resp) => {
                 // extract _any_ string
                 let resp_dump =

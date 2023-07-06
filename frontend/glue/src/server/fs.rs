@@ -16,7 +16,7 @@ impl MioClientState {
         let path = path.as_ref();
         const COMMON_EXTS: &[&str] = &["wav", "flac", "alac", "mp3", "ogg", "aac", "opus", "m4a"];
         let mut ret = vec![];
-        let dir = read_dir(path.clone())?;
+        let dir = read_dir(path)?;
         for item in dir {
             let item = item?;
             let ftype = item.file_type()?;
@@ -55,14 +55,15 @@ impl MioClientState {
         fullpath: impl AsRef<Path>,
         dir: String,
         fname: Option<String>,
-    ) -> Result<(), ErrorSplit> {
+    ) -> Result<retstructs::UploadReturn, ErrorSplit> {
         let buf = read(fullpath).map_err(|err| anyhow!("Failed to read file: {err}"))?;
-        self.wrap_auth(self.agent.post(&format!(
-            "{}/api/track?{}",
-            self.url,
-            serde_urlencoded::to_string(msgstructs::TrackUploadQuery { dir, fname }).unwrap()
-        )))
-        .send_bytes(&buf)?;
-        Ok(())
+        Ok(self
+            .wrap_auth(self.agent.post(&format!(
+                "{}/api/track?{}",
+                self.url,
+                serde_urlencoded::to_string(msgstructs::TrackUploadQuery { dir, fname }).unwrap()
+            )))
+            .send_bytes(&buf)?
+            .into_json::<retstructs::UploadReturn>()?)
     }
 }
