@@ -23,7 +23,7 @@ class _MyAppState extends State<MyApp> {
       child: MaterialApp(
         title: 'Miogenes',
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightGreen),
           useMaterial3: true,
         ),
         home: const LoginBaseUrl(),

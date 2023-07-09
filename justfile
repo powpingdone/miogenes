@@ -6,7 +6,7 @@ gen:
 spin: gen 
     cd frontend && flutter run
 
-drun: gen 
+drun: 
     cargo run -p mio-backend 
 
 fmt:

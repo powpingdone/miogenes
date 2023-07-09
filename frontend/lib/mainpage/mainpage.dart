@@ -30,7 +30,7 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
   Future<Albums>? albums;
 
   // Upload tasks
-  List<UploadTask> tasks = const [];
+  List<UploadTask> tasks = [];
   bool folderSearchActive = false;
 
   @override
@@ -123,6 +123,12 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
       ));
     }
     return Scaffold(
+        appBar: AppBar(
+            title: switch (pageIndex) {
+          0 => const Text("Albums"),
+          1 => const Text("Upload Files"),
+          _ => throw UnimplementedError(),
+        }, backgroundColor: Theme.of(context).colorScheme.primary ,),
         // FAB for upload
         floatingActionButton:
             pageIndex == 1 ? SpeedDial(children: fabChildren) : null,

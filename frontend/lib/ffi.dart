@@ -58,7 +58,7 @@ class StrMapContainer {
 
 // actual conv code
 Map<String, StrMapContainer?> fakeMapConv(List<FakeMapItem> root) { 
-  Map<String, StrMapContainer?> ret = const {};
+  Map<String, StrMapContainer?> ret = {};
   for (FakeMapItem node in root) {
     ret[node.key] = node.value == null ? null : StrMapContainer(fakeMapConv(node.value!));
   }

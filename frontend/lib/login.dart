@@ -69,41 +69,43 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
       _baseUrlController.text = url;
     }
 
-    return Column(
-      children: [
-        TextField(
-          controller: _baseUrlController,
-          onSubmitted: (_) => setTask(mioState),
-          decoration: const InputDecoration(
-              border: OutlineInputBorder(), labelText: "Base Url"),
-        ),
-        // Check if server exists
-        FutureBuilder(
-          future: isValidUrl,
-          builder: (context, snapshot) {
-            _spinner.stop();
-            if (snapshot.hasError) {
-              return Text("Invalid url: ${extractMsg(snapshot.error)}");
-            } else if (snapshot.connectionState == ConnectionState.done) {
-              // build ui for login
-              return const LoginCreds();
-            } else if (isValidUrl == null) {
-              return Container();
-            } else {
-              // show checking
-              _spinner.forward();
-              return CircularProgressIndicator(
-                value: _spinner.value,
-              );
-            }
-          },
-        ),
-        Row(children: [
-          ElevatedButton(
-              onPressed: () => setTask(mioState),
-              child: const Text("Check Url")),
-        ])
-      ],
+    return Scaffold(
+      body: Column(
+        children: [
+          TextField(
+            controller: _baseUrlController,
+            onSubmitted: (_) => setTask(mioState),
+            decoration: const InputDecoration(
+                border: OutlineInputBorder(), labelText: "Base Url"),
+          ),
+          // Check if server exists
+          FutureBuilder(
+            future: isValidUrl,
+            builder: (context, snapshot) {
+              _spinner.stop();
+              if (snapshot.hasError) {
+                return Text("Invalid url: ${extractMsg(snapshot.error)}");
+              } else if (snapshot.connectionState == ConnectionState.done) {
+                // build ui for login
+                return const LoginCreds();
+              } else if (isValidUrl == null) {
+                return Container();
+              } else {
+                // show checking
+                _spinner.forward();
+                return CircularProgressIndicator(
+                  value: _spinner.value,
+                );
+              }
+            },
+          ),
+          Row(children: [
+            ElevatedButton(
+                onPressed: () => setTask(mioState),
+                child: const Text("Check Url")),
+          ])
+        ],
+      ),
     );
   }
 }

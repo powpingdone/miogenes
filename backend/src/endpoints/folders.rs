@@ -224,16 +224,24 @@ fn folder_tree_inner(
             })
             .collect::<Vec<_>>();
         let mut dirs_finished = vec![];
+        let mut full_len: usize = 1;
         for fut in dir_futs {
-            dirs_finished.push(fut.await??);
+            let ret = fut.await??;
+            full_len += ret.len();
+            dirs_finished.push(ret);
         }
 
-        // 3: flatten. the current path is appended too
-        let mut ret: Vec<String> = vec![curr_path
-            .clone()
-            .to_str()
-            .map(|x| x.to_owned())
-            .ok_or_else(|| fail_to_utf8(curr_path))?];
+        // 3: flatten. the current path is appended too if not blank
+        let mut ret = Vec::with_capacity(full_len);
+        if curr_path.to_string_lossy() != "" {
+            ret.push(
+                curr_path
+                    .clone()
+                    .to_str()
+                    .map(|x| x.to_owned())
+                    .ok_or_else(|| fail_to_utf8(curr_path))?,
+            )
+        }
         ret.extend(dirs_finished.into_iter().flatten());
         Ok(ret)
     })

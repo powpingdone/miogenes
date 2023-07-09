@@ -15,7 +15,7 @@ class _FolderViewSelectPageState extends State<FolderViewSelectPage>
   late AnimationController _spinner;
 
   Future<List<FakeMapItem>>? folderFuture;
-  List<String> currPath = const [];
+  List<String> currPath = [];
   Map<String, StrMapContainer?>? tree;
 
   @override
