@@ -1,6 +1,5 @@
 import "package:flutter/material.dart";
 
-
 class UploadToWhereOverlayPage extends StatelessWidget {
   const UploadToWhereOverlayPage({super.key});
 
@@ -14,12 +13,10 @@ class UploadToWhereOverlayPage extends StatelessWidget {
 class UploadPage extends StatelessWidget {
   const UploadPage({
     super.key,
-    this.folderSearch,
     required this.tasks,
   });
 
   final List<UploadTask> tasks;
-  final Future<List<String>>? folderSearch;
 
   @override
   Widget build(BuildContext context) {

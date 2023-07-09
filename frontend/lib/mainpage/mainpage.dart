@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:frontend/ffi.dart';
 import 'package:frontend/main.dart';
+import 'package:frontend/mainpage/folderview.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -30,8 +31,7 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
 
   // Upload tasks
   List<UploadTask> tasks = const [];
-  Future<List<String>>? folderSearch;
-  bool folderSearchActive = false, folderSearchTaken = true;
+  bool folderSearchActive = false;
 
   @override
   void initState() {
@@ -40,9 +40,8 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
         vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
       ..addListener(() {
         setState(() {});
-      })
-      // TODO: repeat is not correct for this
-      ..repeat();
+      });
+    _spinner.repeat(reverse: true);
   }
 
   @override
@@ -66,7 +65,6 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
       case 1:
         page = UploadPage(
           tasks: tasks,
-          folderSearch: folderSearch,
         );
         break;
       default:
@@ -78,20 +76,24 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
       SpeedDialChild(
         child: const Icon(Icons.audiotrack),
         label: "Upload Individual Files",
-        onTap: () => FilePicker.platform
-            .pickFiles(
-                allowMultiple: true,
-                type: FileType.custom,
-                allowedExtensions: _commonExts)
-            .then((files) {
+        onTap: () async {
+          var navFut = Navigator.of(context);
+          var files = await FilePicker.platform.pickFiles(
+              allowMultiple: true,
+              type: FileType.custom,
+              allowedExtensions: _commonExts);
           if (files != null) {
-            // filter out all nulls
-            // TODO: UPDATE THIS WITH THE NEW path
-            tasks.addAll(files.paths
-                .where((x) => x != null)
-                .map((x) => UploadTask(rootLevel: "", path: x!)));
+            // get path to upload to
+            String? rootLevel = await navFut.push(MaterialPageRoute(
+                builder: (context) => const FolderViewSelectPage()));
+            if (rootLevel != null) {
+              tasks.addAll(files.paths
+                  // filter out all nulls
+                  .where((x) => x != null)
+                  .map((x) => UploadTask(rootLevel: rootLevel, path: x!)));
+            }
           }
-        }),
+        },
       )
     ];
     // dynamic part
@@ -99,17 +101,25 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
       fabChildren.add(SpeedDialChild(
         child: const Icon(Icons.folder),
         label: "Upload Folder",
-        onTap: () => FilePicker.platform.getDirectoryPath().then((folder) {
+        onTap: () async {
+          var navFut = Navigator.of(context);
+          var folder = await FilePicker.platform.getDirectoryPath();
           if (folder != null) {
             folderSearchActive = true;
-            folderSearch = mioState
+            var fut = mioState
                 .getFilesAtDir(path: folder)
                 .whenComplete(() => setState(() {
                       folderSearchActive = false;
-                      folderSearchTaken = false;
                     }));
+            String? rootLevel = await navFut.push(MaterialPageRoute(
+                builder: (context) => const FolderViewSelectPage()));
+            if (rootLevel != null) {
+              var paths = await fut;
+              tasks.addAll(
+                  paths.map((e) => UploadTask(rootLevel: rootLevel, path: e)));
+            }
           }
-        }),
+        },
       ));
     }
     return Scaffold(
@@ -132,22 +142,7 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
               onDestinationSelected: (value) =>
                   setState(() => pageIndex = value),
             )),
-            Expanded(
-                // poll folder searching future
-                child: FutureBuilder(
-              future: folderSearch,
-              builder: (context, snapshot) {
-                if (snapshot.hasData && !folderSearchTaken) {
-                  folderSearchTaken = true;
-                  tasks.addAll(snapshot.data!
-                      // TODO: UPDATE THIS WITH THE NEW path
-                      .map((e) => UploadTask(rootLevel: "", path: e)));
-                } else if (snapshot.hasError) {
-                  // TODO: report errors
-                }
-                return page;
-              },
-            )),
+            Expanded(child: page),
           ],
         ));
   }

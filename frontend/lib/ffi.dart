@@ -43,3 +43,24 @@ String extractMsg(dynamic error) {
   // whatever. if the error reaches here this is definitely a bug.
   return error.toString();
 }
+
+// fakemap conversion code
+// because a rust HashMap can't be directly converted between rust and dart, I use a
+// intermediate type that allows for such a structure to be converted, and this is the
+// conversion code back into a dart Map.
+// ...should this be generic? I dunno. I don't "Think" it can be.
+
+// container class for recursive Maps
+class StrMapContainer {
+  const StrMapContainer (this.next);
+  final Map<String, StrMapContainer?> next;
+}
+
+// actual conv code
+Map<String, StrMapContainer?> fakeMapConv(List<FakeMapItem> root) { 
+  Map<String, StrMapContainer?> ret = const {};
+  for (FakeMapItem node in root) {
+    ret[node.key] = node.value == null ? null : StrMapContainer(fakeMapConv(node.value!));
+  }
+  return ret;
+}

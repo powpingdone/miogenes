@@ -32,8 +32,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
       ..addListener(() {
         setState(() {});
-      })
-      ..repeat();
+      });
+    _spinner.repeat(reverse: true);
   }
 
   @override
@@ -57,7 +57,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         username: _usernameController.text,
         password: _passwordController.text,
         password2: _password2Controller.text);
-    nav.pushReplacement(MaterialPageRoute(builder: (context) => const MainNav()));
+    nav.pushReplacement(
+        MaterialPageRoute(builder: (context) => const MainNav()));
   }
 
   @override
@@ -89,8 +90,9 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       Row(
         children: [
           ElevatedButton(
-              onPressed: () =>
-                  Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const LoginBaseUrl())),
+              onPressed: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                      builder: (context) => const LoginBaseUrl())),
               child: const Text("Back To Login")),
           ElevatedButton(
               onPressed: () => setTask(mioState), child: const Text("Sign Up"))

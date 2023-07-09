@@ -27,8 +27,8 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
         vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
       ..addListener(() {
         setState(() {});
-      })
-      ..repeat();
+      });
+    _spinner.repeat(reverse: true);
   }
 
   @override
@@ -130,8 +130,8 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
         vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
       ..addListener(() {
         setState(() {});
-      })
-      ..repeat();
+      });
+    _spinner.repeat(reverse: true);
   }
 
   @override
