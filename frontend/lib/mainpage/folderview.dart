@@ -69,18 +69,20 @@ class _FolderViewSelectPageState extends State<FolderViewSelectPage>
                     for (String folder in _navigatePath())
                       TextButton(
                         onPressed: () => setState(() => currPath.add(folder)),
-                        child:
-                            Row(children: [const Icon(Icons.folder), Text(folder)]),
+                        child: Row(
+                            children: [const Icon(Icons.folder), Text(folder)]),
                       )
                   ],
                 )),
                 ButtonBar(children: [
                   // Choose directory
                   ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(currPath.join("/")), child: const Icon(Icons.upload_file)),
+                      onPressed: () =>
+                          Navigator.of(context).pop(currPath.join("/")),
+                      child: const Icon(Icons.upload_file)),
                   // create new folder
                   ElevatedButton(
-                      onPressed: () {throw UnimplementedError();},
+                      onPressed: () => throw UnimplementedError(),
                       child: const Icon(Icons.create_new_folder)),
                   // go up a directory
                   ElevatedButton(
@@ -89,7 +91,8 @@ class _FolderViewSelectPageState extends State<FolderViewSelectPage>
                   // cancel
                   ,
                   ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(), child: const Icon(Icons.cancel))
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Icon(Icons.cancel))
                 ])
               ],
             );

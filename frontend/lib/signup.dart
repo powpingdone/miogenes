@@ -66,58 +66,61 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     final mtl = Provider.of<MioTopLevel>(context);
     var mioState = mtl.mioClient;
 
-    return Column(children: [
-      TextField(
-        controller: _usernameController,
-        decoration: const InputDecoration(
-            border: OutlineInputBorder(), labelText: "Username"),
-        onSubmitted: (_) => setTask(mioState),
-      ),
-      TextField(
-        controller: _passwordController,
-        obscureText: true,
-        decoration: const InputDecoration(
-            border: OutlineInputBorder(), labelText: "Password"),
-        onSubmitted: (_) => setTask(mioState),
-      ),
-      TextField(
-        controller: _password2Controller,
-        obscureText: true,
-        decoration: const InputDecoration(
-            border: OutlineInputBorder(), labelText: "Repeat Password"),
-        onSubmitted: (_) => setTask(mioState),
-      ),
-      Row(
-        children: [
-          ElevatedButton(
-              onPressed: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                      builder: (context) => const LoginBaseUrl())),
-              child: const Text("Back To Login")),
-          ElevatedButton(
-              onPressed: () => setTask(mioState), child: const Text("Sign Up"))
-        ],
-      ),
-      FutureBuilder(
-          future: signupCall,
-          builder: ((context, snapshot) {
-            _spinner.stop();
-            if (snapshot.hasError) {
-              return Text(
-                  "Could not signup and login: ${extractMsg(snapshot.error)}");
-            } else if (snapshot.connectionState == ConnectionState.done) {
-              // switch to mainpage
-              return Container();
-            } else if (signupCall == null) {
-              return Container();
-            } else {
-              // show checking
-              _spinner.forward();
-              return CircularProgressIndicator(
-                value: _spinner.value,
-              );
-            }
-          }))
-    ]);
+    return Scaffold(
+      body: Column(children: [
+        TextField(
+          controller: _usernameController,
+          decoration: const InputDecoration(
+              border: OutlineInputBorder(), labelText: "Username"),
+          onSubmitted: (_) => setTask(mioState),
+        ),
+        TextField(
+          controller: _passwordController,
+          obscureText: true,
+          decoration: const InputDecoration(
+              border: OutlineInputBorder(), labelText: "Password"),
+          onSubmitted: (_) => setTask(mioState),
+        ),
+        TextField(
+          controller: _password2Controller,
+          obscureText: true,
+          decoration: const InputDecoration(
+              border: OutlineInputBorder(), labelText: "Repeat Password"),
+          onSubmitted: (_) => setTask(mioState),
+        ),
+        Row(
+          children: [
+            ElevatedButton(
+                onPressed: () => Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                        builder: (context) => const LoginBaseUrl())),
+                child: const Text("Back To Login")),
+            ElevatedButton(
+                onPressed: () => setTask(mioState),
+                child: const Text("Sign Up"))
+          ],
+        ),
+        FutureBuilder(
+            future: signupCall,
+            builder: ((context, snapshot) {
+              _spinner.stop();
+              if (snapshot.hasError) {
+                return Text(
+                    "Could not signup and login: ${extractMsg(snapshot.error)}");
+              } else if (snapshot.connectionState == ConnectionState.done) {
+                // switch to mainpage
+                return Container();
+              } else if (signupCall == null) {
+                return Container();
+              } else {
+                // show checking
+                _spinner.forward();
+                return CircularProgressIndicator(
+                  value: _spinner.value,
+                );
+              }
+            }))
+      ]),
+    );
   }
 }

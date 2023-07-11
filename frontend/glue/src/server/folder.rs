@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{error::ErrorSplit, MioClientState};
 use anyhow::anyhow;
 use mio_common::*;
+use std::collections::HashMap;
 
 pub struct FakeMapItem {
     pub key: String,
@@ -24,6 +23,7 @@ impl MioClientState {
 
         // turn into hashmap tree
         struct Interm(Option<HashMap<String, Interm>>);
+
         let mut hmap_master = Some(HashMap::<String, Interm>::new());
         for branch in split_tree {
             let mut curr_hmap: &mut Option<HashMap<String, Interm>> = &mut hmap_master;
@@ -32,11 +32,13 @@ impl MioClientState {
                 if curr_hmap.is_none() {
                     *curr_hmap = Some(HashMap::new());
                 }
+
                 // check if branch contains the folder
                 let mutref = curr_hmap.as_mut().unwrap();
                 if !mutref.contains_key(leaf) {
                     mutref.insert(leaf.to_owned(), Interm(None));
                 }
+
                 // finally, get next branch
                 curr_hmap = mutref.get_mut(leaf).map(|x| &mut x.0).unwrap();
             }

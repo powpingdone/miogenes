@@ -143,11 +143,9 @@ impl MioClient {
     }
 
     pub fn get_folders(&self) -> anyhow::Result<Vec<crate::server::folder::FakeMapItem>> {
-        self.wrap_refresh(|lock| {
-            match lock.get_folders() {
-                Ok(ok) => Ok(ok),
-                Err(err) => rewrap_error(err, |status, resp| Ok((status, resp)))
-            }
+        self.wrap_refresh(|lock| match lock.get_folders() {
+            Ok(ok) => Ok(ok),
+            Err(err) => rewrap_error(err, |status, resp| Ok((status, resp))),
         })
     }
 

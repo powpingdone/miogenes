@@ -18,7 +18,7 @@ class MainNav extends StatefulWidget {
 
 class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
   late AnimationController _spinner;
-  var pageIndex = 0;
+  var _pageIndex = 0;
   final List<String> _commonExts = [
     // lossless
     "wav", "flac", "alac",
@@ -30,7 +30,7 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
   Future<Albums>? albums;
 
   // Upload tasks
-  List<UploadTask> tasks = [];
+  List<UploadTaskStateHolder> tasks = [];
   bool folderSearchActive = false;
 
   @override
@@ -58,7 +58,7 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
 
     // page selection
     Widget page;
-    switch (pageIndex) {
+    switch (_pageIndex) {
       case 0:
         page = MainPage(albums: albums, spinner: _spinner);
         break;
@@ -68,7 +68,7 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
         );
         break;
       default:
-        throw UnimplementedError("page $pageIndex is not implemented");
+        throw UnimplementedError("page $_pageIndex is not implemented");
     }
 
     // dynamic adding of the fab children if future is not finished
@@ -84,13 +84,17 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
               allowedExtensions: _commonExts);
           if (files != null) {
             // get path to upload to
-            String? rootLevel = await navFut.push(MaterialPageRoute(
+            String? serverPath = await navFut.push(MaterialPageRoute(
                 builder: (context) => const FolderViewSelectPage()));
-            if (rootLevel != null) {
-              tasks.addAll(files.paths
+            if (serverPath != null) {
+              setState(() => tasks.addAll(files.paths
                   // filter out all nulls
                   .where((x) => x != null)
-                  .map((x) => UploadTask(rootLevel: rootLevel, path: x!)));
+                  .map((x) => UploadTaskStateHolder(
+                      serverPath: serverPath,
+                      path: x!,
+                      uploadFuture:
+                          mioState.uploadFile(fullpath: x, dir: serverPath)))));
             }
           }
         },
@@ -105,18 +109,22 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
           var navFut = Navigator.of(context);
           var folder = await FilePicker.platform.getDirectoryPath();
           if (folder != null) {
-            folderSearchActive = true;
+            setState(() => folderSearchActive = true);
             var fut = mioState
                 .getFilesAtDir(path: folder)
                 .whenComplete(() => setState(() {
                       folderSearchActive = false;
                     }));
-            String? rootLevel = await navFut.push(MaterialPageRoute(
+            String? serverPath = await navFut.push(MaterialPageRoute(
                 builder: (context) => const FolderViewSelectPage()));
-            if (rootLevel != null) {
+            if (serverPath != null) {
               var paths = await fut;
-              tasks.addAll(
-                  paths.map((e) => UploadTask(rootLevel: rootLevel, path: e)));
+              setState(() => tasks.addAll(paths.map((path) =>
+                  UploadTaskStateHolder(
+                      serverPath: serverPath,
+                      path: path,
+                      uploadFuture: mioState.uploadFile(
+                          fullpath: path, dir: serverPath)))));
             }
           }
         },
@@ -124,14 +132,20 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
     }
     return Scaffold(
         appBar: AppBar(
-            title: switch (pageIndex) {
-          0 => const Text("Albums"),
-          1 => const Text("Upload Files"),
-          _ => throw UnimplementedError(),
-        }, backgroundColor: Theme.of(context).colorScheme.primary ,),
+          title: switch (_pageIndex) {
+            0 => const Text("Albums"),
+            1 => const Text("Upload Files"),
+            _ => throw UnimplementedError(),
+          },
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
         // FAB for upload
-        floatingActionButton:
-            pageIndex == 1 ? SpeedDial(children: fabChildren) : null,
+        floatingActionButton: _pageIndex == 1
+            ? SpeedDial(
+                children: fabChildren,
+                icon: Icons.upload,
+              )
+            : null,
         // nav rail, and child
         body: Row(
           children: [
@@ -142,11 +156,11 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
                 NavigationRailDestination(
                     icon: Icon(Icons.album), label: Text("Album")),
                 NavigationRailDestination(
-                    icon: Icon(Icons.upload), label: Text("Upload files"))
+                    icon: Icon(Icons.upload_file), label: Text("Upload files"))
               ],
               selectedIndex: 0,
               onDestinationSelected: (value) =>
-                  setState(() => pageIndex = value),
+                  setState(() => _pageIndex = value),
             )),
             Expanded(child: page),
           ],
@@ -216,8 +230,8 @@ class _AlbumPreviewState extends State<AlbumPreview>
         vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
       ..addListener(() {
         setState(() {});
-      })
-      ..repeat();
+      });
+    _spinner.repeat(reverse: true);
   }
 
   @override

@@ -9,6 +9,9 @@ spin: gen
 drun: 
     cargo run -p mio-backend 
 
+rrun:
+    RUST_LOG="trace" cargo run -p mio-backend --release
+
 fmt:
     genemichaels -p
     cargo fmt

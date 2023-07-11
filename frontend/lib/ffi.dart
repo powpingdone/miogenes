@@ -52,15 +52,16 @@ String extractMsg(dynamic error) {
 
 // container class for recursive Maps
 class StrMapContainer {
-  const StrMapContainer (this.next);
+  const StrMapContainer(this.next);
   final Map<String, StrMapContainer?> next;
 }
 
 // actual conv code
-Map<String, StrMapContainer?> fakeMapConv(List<FakeMapItem> root) { 
+Map<String, StrMapContainer?> fakeMapConv(List<FakeMapItem> root) {
   Map<String, StrMapContainer?> ret = {};
   for (FakeMapItem node in root) {
-    ret[node.key] = node.value == null ? null : StrMapContainer(fakeMapConv(node.value!));
+    ret[node.key] =
+        node.value == null ? null : StrMapContainer(fakeMapConv(node.value!));
   }
   return ret;
 }
