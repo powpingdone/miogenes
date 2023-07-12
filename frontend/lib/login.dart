@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:frontend/signup.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
@@ -15,7 +16,6 @@ class LoginBaseUrl extends StatefulWidget {
 class _LoginBaseUrlState extends State<LoginBaseUrl>
     with TickerProviderStateMixin {
   late TextEditingController _baseUrlController;
-  late AnimationController _spinner;
 
   Future<void>? isValidUrl;
 
@@ -23,18 +23,11 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
   void initState() {
     super.initState();
     _baseUrlController = TextEditingController();
-    _spinner = AnimationController(
-        vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
-      ..addListener(() {
-        setState(() {});
-      });
-    _spinner.repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _baseUrlController.dispose();
-    _spinner.dispose();
     super.dispose();
   }
 
@@ -82,7 +75,6 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
           FutureBuilder(
             future: isValidUrl,
             builder: (context, snapshot) {
-              _spinner.stop();
               if (snapshot.hasError) {
                 return Text("Invalid url: ${extractMsg(snapshot.error)}");
               } else if (snapshot.connectionState == ConnectionState.done) {
@@ -92,9 +84,8 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
                 return Container();
               } else {
                 // show checking
-                _spinner.forward();
-                return CircularProgressIndicator(
-                  value: _spinner.value,
+                return SpinKitWanderingCubes(
+                  color: Theme.of(context).colorScheme.primary,
                 );
               }
             },
@@ -117,9 +108,8 @@ class LoginCreds extends StatefulWidget {
   State<StatefulWidget> createState() => _LoginCredsState();
 }
 
-class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
+class _LoginCredsState extends State<LoginCreds> {
   late TextEditingController _usernameController, _passwordController;
-  late AnimationController _spinner;
 
   Future<void>? loginCall;
 
@@ -128,19 +118,12 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
     super.initState();
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
-    _spinner = AnimationController(
-        vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
-      ..addListener(() {
-        setState(() {});
-      });
-    _spinner.repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
-    _spinner.dispose();
     super.dispose();
   }
 
@@ -190,7 +173,6 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
       FutureBuilder(
           future: loginCall,
           builder: (context, snapshot) {
-            _spinner.stop();
             if (snapshot.hasError) {
               return Text("Could not login: ${extractMsg(snapshot.error)}");
             } else if (snapshot.connectionState == ConnectionState.done) {
@@ -200,9 +182,8 @@ class _LoginCredsState extends State<LoginCreds> with TickerProviderStateMixin {
               return Container();
             } else {
               // show checking
-              _spinner.forward();
-              return CircularProgressIndicator(
-                value: _spinner.value,
+              return SpinKitWanderingCubes(
+                color: Theme.of(context).colorScheme.primary,
               );
             }
           })

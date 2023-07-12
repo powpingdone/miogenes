@@ -1,5 +1,4 @@
 use crate::{error::ErrorSplit, MioClientState};
-use anyhow::anyhow;
 use mio_common::*;
 use std::collections::HashMap;
 
@@ -9,6 +8,16 @@ pub struct FakeMapItem {
 }
 
 impl MioClientState {
+    pub fn make_dir(&self, name: String, path: String) -> Result<(), ErrorSplit> {
+        self.wrap_auth(self.agent.put(&format!(
+            "{}/api/folder?{}",
+            self.url,
+            serde_urlencoded::to_string(msgstructs::FolderCreateDelete { name, path }).unwrap()
+        )))
+        .call()?;
+        Ok(())
+    }
+
     pub fn get_folders(&self) -> Result<Vec<FakeMapItem>, ErrorSplit> {
         // fetch from server
         let raw_tree = self

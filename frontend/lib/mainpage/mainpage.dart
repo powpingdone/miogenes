@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:frontend/ffi.dart';
 import 'package:frontend/main.dart';
 import 'package:frontend/mainpage/folderview.dart';
@@ -16,8 +17,7 @@ class MainNav extends StatefulWidget {
   State<MainNav> createState() => _MainNavState();
 }
 
-class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
-  late AnimationController _spinner;
+class _MainNavState extends State<MainNav> {
   var _pageIndex = 0;
   final List<String> _commonExts = [
     // lossless
@@ -34,23 +34,6 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
   bool folderSearchActive = false;
 
   @override
-  void initState() {
-    super.initState();
-    _spinner = AnimationController(
-        vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
-      ..addListener(() {
-        setState(() {});
-      });
-    _spinner.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-    _spinner.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final mtl = Provider.of<MioTopLevel>(context);
     var mioState = mtl.mioClient;
@@ -60,7 +43,7 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
     Widget page;
     switch (_pageIndex) {
       case 0:
-        page = MainPage(albums: albums, spinner: _spinner);
+        page = MainPage(albums: albums);
         break;
       case 1:
         page = UploadPage(
@@ -76,6 +59,7 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
       SpeedDialChild(
         child: const Icon(Icons.audiotrack),
         label: "Upload Individual Files",
+        // individual file upload
         onTap: () async {
           var navFut = Navigator.of(context);
           var files = await FilePicker.platform.pickFiles(
@@ -91,10 +75,10 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
                   // filter out all nulls
                   .where((x) => x != null)
                   .map((x) => UploadTaskStateHolder(
-                      serverPath: serverPath,
-                      path: x!,
-                      uploadFuture:
-                          mioState.uploadFile(fullpath: x, dir: serverPath)))));
+                        serverPath: serverPath,
+                        path: x!,
+                        mioClient: mioState,
+                      ))));
             }
           }
         },
@@ -105,6 +89,7 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
       fabChildren.add(SpeedDialChild(
         child: const Icon(Icons.folder),
         label: "Upload Folder",
+        // folder upload
         onTap: () async {
           var navFut = Navigator.of(context);
           var folder = await FilePicker.platform.getDirectoryPath();
@@ -119,12 +104,13 @@ class _MainNavState extends State<MainNav> with TickerProviderStateMixin {
                 builder: (context) => const FolderViewSelectPage()));
             if (serverPath != null) {
               var paths = await fut;
-              setState(() => tasks.addAll(paths.map((path) =>
-                  UploadTaskStateHolder(
-                      serverPath: serverPath,
-                      path: path,
-                      uploadFuture: mioState.uploadFile(
-                          fullpath: path, dir: serverPath)))));
+              tasks.addAll(paths.map((path) => UploadTaskStateHolder(
+                    serverPath: serverPath,
+                    path: path,
+                    mioClient: mioState,
+                    highestLevel: folder,
+                  )));
+              setState(() {});
             }
           }
         },
@@ -172,11 +158,9 @@ class MainPage extends StatelessWidget {
   const MainPage({
     super.key,
     this.albums,
-    required AnimationController spinner,
-  }) : _spinner = spinner;
+  });
 
   final Future<Albums>? albums;
-  final AnimationController _spinner;
 
   @override
   Widget build(BuildContext context) {
@@ -196,9 +180,8 @@ class MainPage extends StatelessWidget {
             );
           } else {
             // show checking
-            _spinner.forward();
-            return CircularProgressIndicator(
-              value: _spinner.value,
+            return SpinKitWanderingCubes(
+              color: Theme.of(context).colorScheme.primary,
             );
           }
         });
@@ -217,28 +200,9 @@ class AlbumPreview extends StatefulWidget {
   State<AlbumPreview> createState() => _AlbumPreviewState();
 }
 
-class _AlbumPreviewState extends State<AlbumPreview>
-    with TickerProviderStateMixin {
-  late AnimationController _spinner;
+class _AlbumPreviewState extends State<AlbumPreview> {
   Future<Album>? album;
   Future<Track>? sampleTrack;
-
-  @override
-  void initState() {
-    super.initState();
-    _spinner = AnimationController(
-        vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
-      ..addListener(() {
-        setState(() {});
-      });
-    _spinner.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-    _spinner.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -268,9 +232,8 @@ class _AlbumPreviewState extends State<AlbumPreview>
                   ]);
                 });
           } else {
-            _spinner.forward();
-            return CircularProgressIndicator(
-              value: _spinner.value,
+            return SpinKitWanderingCubes(
+              color: Theme.of(context).colorScheme.primary,
             );
           }
         });

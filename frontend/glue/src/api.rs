@@ -149,6 +149,18 @@ impl MioClient {
         })
     }
 
+    pub fn make_dir(&self, name: String, path: String) -> anyhow::Result<()> {
+        self.wrap_refresh(
+            |lock| match lock.make_dir(name.to_owned(), path.to_owned()) {
+                Ok(ok) => Ok(ok),
+                Err(err) => rewrap_error(err, |status, resp| match status {
+                    400 | 409 => bail!("{resp}"),
+                    _ => Ok((status, resp)),
+                }),
+            },
+        )
+    }
+
     // wrap endpoints so that it can autorefresh tokens
     fn wrap_refresh<Callback, Ret>(&self, cb: Callback) -> anyhow::Result<Ret>
     where

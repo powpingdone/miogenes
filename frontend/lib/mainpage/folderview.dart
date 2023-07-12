@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:flutter_spinkit/flutter_spinkit.dart";
 import "package:frontend/ffi.dart";
 import "package:frontend/main.dart";
 import "package:provider/provider.dart";
@@ -10,30 +11,10 @@ class FolderViewSelectPage extends StatefulWidget {
   State<FolderViewSelectPage> createState() => _FolderViewSelectPageState();
 }
 
-class _FolderViewSelectPageState extends State<FolderViewSelectPage>
-    with TickerProviderStateMixin {
-  late AnimationController _spinner;
-
+class _FolderViewSelectPageState extends State<FolderViewSelectPage> {
   Future<List<FakeMapItem>>? folderFuture;
   List<String> currPath = [];
   Map<String, StrMapContainer?>? tree;
-
-  @override
-  void initState() {
-    super.initState();
-    _spinner = AnimationController(
-        vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
-      ..addListener(() {
-        setState(() {});
-      });
-    _spinner.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _spinner.dispose();
-    super.dispose();
-  }
 
   List<String> _navigatePath() {
     // given the current nav state, return the folders at that nav
@@ -100,9 +81,8 @@ class _FolderViewSelectPageState extends State<FolderViewSelectPage>
             return Text(
                 "Failed to contact server: ${extractMsg(snapshot.error)}");
           } else {
-            _spinner.forward();
-            return CircularProgressIndicator(
-              value: _spinner.value,
+            return SpinKitWanderingCubes(
+              color: Theme.of(context).colorScheme.primary,
             );
           }
         });

@@ -85,6 +85,14 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kGetFoldersMethodMioClientConstMeta;
 
+  Future<void> makeDirMethodMioClient(
+      {required MioClient that,
+      required String name,
+      required String path,
+      dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kMakeDirMethodMioClientConstMeta;
+
   DropFnType get dropOpaqueArcRwLockMioClientState;
   ShareFnType get shareOpaqueArcRwLockMioClientState;
   OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer;
@@ -242,6 +250,14 @@ class MioClient {
   Future<List<FakeMapItem>> getFolders({dynamic hint}) =>
       bridge.getFoldersMethodMioClient(
         that: this,
+      );
+
+  Future<void> makeDir(
+          {required String name, required String path, dynamic hint}) =>
+      bridge.makeDirMethodMioClient(
+        that: this,
+        name: name,
+        path: path,
       );
 }
 
@@ -547,6 +563,30 @@ class MioGlueImpl implements MioGlue {
       const FlutterRustBridgeTaskConstMeta(
         debugName: "get_folders__method__MioClient",
         argNames: ["that"],
+      );
+
+  Future<void> makeDirMethodMioClient(
+      {required MioClient that,
+      required String name,
+      required String path,
+      dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_String(name);
+    var arg2 = _platform.api2wire_String(path);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) => _platform.inner
+          .wire_make_dir__method__MioClient(port_, arg0, arg1, arg2),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kMakeDirMethodMioClientConstMeta,
+      argValues: [that, name, path],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kMakeDirMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "make_dir__method__MioClient",
+        argNames: ["that", "name", "path"],
       );
 
   DropFnType get dropOpaqueArcRwLockMioClientState =>
@@ -1153,6 +1193,33 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
   late final _wire_get_folders__method__MioClient =
       _wire_get_folders__method__MioClientPtr
           .asFunction<void Function(int, ffi.Pointer<wire_MioClient>)>();
+
+  void wire_make_dir__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> name,
+    ffi.Pointer<wire_uint_8_list> path,
+  ) {
+    return _wire_make_dir__method__MioClient(
+      port_,
+      that,
+      name,
+      path,
+    );
+  }
+
+  late final _wire_make_dir__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(
+                  ffi.Int64,
+                  ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_make_dir__method__MioClient');
+  late final _wire_make_dir__method__MioClient =
+      _wire_make_dir__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>, ffi.Pointer<wire_uint_8_list>)>();
 
   wire_ArcRwLockMioClientState new_ArcRwLockMioClientState() {
     return _new_ArcRwLockMioClientState();

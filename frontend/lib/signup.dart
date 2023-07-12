@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:frontend/login.dart';
 import 'package:frontend/mainpage/mainpage.dart';
 import 'package:provider/provider.dart';
@@ -18,7 +19,6 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   late TextEditingController _usernameController,
       _passwordController,
       _password2Controller;
-  late AnimationController _spinner;
 
   Future<void>? signupCall;
 
@@ -28,12 +28,6 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
     _password2Controller = TextEditingController();
-    _spinner = AnimationController(
-        vsync: this, duration: const Duration(seconds: 2, milliseconds: 500))
-      ..addListener(() {
-        setState(() {});
-      });
-    _spinner.repeat(reverse: true);
   }
 
   @override
@@ -41,7 +35,6 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     _usernameController.dispose();
     _passwordController.dispose();
     _password2Controller.dispose();
-    _spinner.dispose();
     super.dispose();
   }
 
@@ -103,7 +96,6 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         FutureBuilder(
             future: signupCall,
             builder: ((context, snapshot) {
-              _spinner.stop();
               if (snapshot.hasError) {
                 return Text(
                     "Could not signup and login: ${extractMsg(snapshot.error)}");
@@ -114,10 +106,12 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                 return Container();
               } else {
                 // show checking
-                _spinner.forward();
-                return CircularProgressIndicator(
-                  value: _spinner.value,
-                );
+                return 
+                SpinKitWanderingCubes(
+                  color: Theme.of(context).colorScheme.primary,
+                )
+                ;
+
               }
             }))
       ]),
