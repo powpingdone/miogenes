@@ -5,7 +5,6 @@ use anyhow::anyhow;
 use axum::http::StatusCode;
 use glib::SendValue;
 use gstreamer::glib;
-use gstreamer_app::AppSink;
 use gstreamer_pbutils::prelude::*;
 use gstreamer_pbutils::DiscovererResult;
 #[allow(unused)]
@@ -23,7 +22,6 @@ use uuid::*;
 #[derive(Default)]
 struct Metadata {
     title: String,
-    audiohash: [u8; 32],
     other_tags: String,
     artist: Option<String>,
     artist_sort: Option<String>,
@@ -218,89 +216,8 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
         warn!("{orig_path}: this song has no \"title\" tag, using filename");
         orig_path.to_string()
     });
-    drop(discover);
-
-    // audiohash
-    trace!("{orig_path}: beginning audiohash");
-    let pipeline = gstreamer::parse_launch(&format!(
-        "uridecodebin3 uri={fname} ! audioconvert ! appsink name=sink"
-    ))?
-    .downcast::<gstreamer::Pipeline>()
-    .expect("Expected a gst::Pipeline");
-
-    // sink extractor
-    let audiohash = Arc::new(std::sync::Mutex::new(None));
-    let sink = pipeline
-        .by_name("sink")
-        .expect("sink element not found")
-        .dynamic_cast::<AppSink>()
-        .expect("failed dynamic cast to AppSink");
-    sink.set_property("sync", false);
-    sink.set_callbacks({
-        let orig_path = orig_path.to_owned();
-        let audiohash = Arc::downgrade(&audiohash);
-        gstreamer_app::AppSinkCallbacks::builder()
-            .new_sample(move |sink| {
-                trace!("{orig_path}: sink match from main loop entered");
-                match sink.pull_sample() {
-                    Ok(sample) => match sample.buffer() {
-                        Some(buflist) => {
-                            trace!("{orig_path}: found some buffers, sending over");
-                            let hold = audiohash.upgrade().unwrap();
-                            let mut lock = hold.lock().unwrap();
-                            if lock.is_none() {
-                                *lock = Some(
-                                    buflist
-                                        .iter_memories()
-                                        .flat_map(|buf| {
-                                            buf.map_readable()
-                                                .expect("memory should be readable")
-                                                .iter()
-                                                .copied()
-                                                .collect::<Vec<_>>()
-                                        })
-                                        .collect::<Vec<_>>(),
-                                );
-                            }
-                            Err(gstreamer::FlowError::Eos)
-                        }
-                        None => {
-                            debug!("{orig_path}: failed to get buffer list as none was produced");
-                            Err(gstreamer::FlowError::Error)
-                        }
-                    },
-                    Err(err) => {
-                        debug!("{orig_path}: failed to grab sample: {err}");
-                        Err(gstreamer::FlowError::Error)
-                    }
-                }
-            })
-            .build()
-    });
-
-    // begin the actual fetching
-    pipeline.set_state(gstreamer::State::Playing)?;
-    debug!("{orig_path}: entering waveform capture loop");
-    let bus = pipeline.bus().expect("pipeline without a bus");
-    for msg in bus.iter_timed(gstreamer::ClockTime::NONE) {
-        use gstreamer::MessageView;
-
-        match msg.view() {
-            MessageView::Eos(_) => break,
-            MessageView::Error(err) => anyhow::bail!("failed to execute pipeline: {err:#?}"),
-            _ => (),
-        }
-    }
-    debug!("{orig_path}: exiting waveform capture loop");
-    pipeline.set_state(gstreamer::State::Null)?;
-    trace!("{orig_path}: collecting iter");
-    let waveform = audiohash.lock().unwrap().clone().unwrap();
-    trace!("{orig_path}: hashing");
-    let audiohash = hash(&waveform);
-    trace!("{orig_path}: audiohash is {:?}", audiohash);
     Ok(Metadata {
         title,
-        audiohash,
         other_tags,
         artist,
         artist_sort,
@@ -451,63 +368,36 @@ async fn insert_into_db(
             };
 
             // insert track, check on audiohash
-            let audiohash = metadata.audiohash.as_slice();
-            match {
-                sqlx::query!(
-                    "SELECT id FROM track
-                    WHERE owner = ? AND audio_hash = ?;",
-                    userid,
-                    audiohash
-                )
-                .fetch_optional(&mut *txn)
-                .await?
-            } {
-                Some(x) => {
-                    return Err(MioInnerError::TrackProcessingError(
-                        anyhow::anyhow!(
-                            "this track already seems to be in conflict with {}, not uploading",
-                            uuid_serialize(&x.id)?
-                        ),
-                        StatusCode::CONFLICT,
-                    ))
-                }
-                None => {
-                    let ahold = metadata.audiohash;
-                    let audiohash = ahold.as_slice();
-                    let other_tags = metadata.other_tags;
-                    sqlx::query!(
-                        "INSERT INTO track 
-                            (id,
-                            title, 
-                            disk, 
-                            track, 
-                            tags, 
-                            audio_hash, 
-                            orig_fname, 
-                            album, 
-                            artist, 
-                            cover_art, 
-                            owner,
-                            path) 
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?);",
-                        id,
-                        metadata.title,
-                        metadata.disk_track.0,
-                        metadata.disk_track.1,
-                        other_tags,
-                        audiohash,
-                        orig_filename,
-                        album_id,
-                        artist_id,
-                        cover_art_id,
-                        userid,
-                        dir
-                    )
-                    .execute(&mut *txn)
-                    .await?;
-                    trace!("{orig_filename}: new track created: {id}")
-                }
-            }
+            let other_tags = metadata.other_tags;
+            sqlx::query!(
+                "INSERT INTO track 
+                    (id,
+                    title, 
+                    disk, 
+                    track, 
+                    tags, 
+                    orig_fname, 
+                    album, 
+                    artist, 
+                    cover_art, 
+                    owner,
+                    path) 
+                VALUES (?,?,?,?,?,?,?,?,?,?,?);",
+                id,
+                metadata.title,
+                metadata.disk_track.0,
+                metadata.disk_track.1,
+                other_tags,
+                orig_filename,
+                album_id,
+                artist_id,
+                cover_art_id,
+                userid,
+                dir
+            )
+            .execute(&mut *txn)
+            .await?;
+            trace!("{orig_filename}: new track created: {id}");
             Ok(())
         })
     })

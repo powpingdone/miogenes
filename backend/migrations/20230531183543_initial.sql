@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS track (
     path TEXT NOT NULL,
     owner BLOB NOT NULL,
     orig_fname TEXT NOT NULL,
-    audio_hash BLOB UNIQUE NOT NULL CHECK (length(audio_hash) == 32),
+    -- not in use due to issues related to somehow getting 
+    -- the *same hash* on different tracks
+    -- audio_hash BLOB UNIQUE NOT NULL CHECK (length(audio_hash) == 32),
     disk INTEGER NULL,
     track INTEGER NULL,
     -- extra tags, as json
