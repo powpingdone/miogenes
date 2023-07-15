@@ -144,7 +144,7 @@ class _MainNavState extends State<MainNav> {
                 NavigationRailDestination(
                     icon: Icon(Icons.upload_file), label: Text("Upload files"))
               ],
-              selectedIndex: 0,
+              selectedIndex: _pageIndex,
               onDestinationSelected: (value) =>
                   setState(() => _pageIndex = value),
             )),

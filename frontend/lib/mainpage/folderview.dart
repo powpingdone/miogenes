@@ -62,15 +62,15 @@ class _FolderViewSelectPageState extends State<FolderViewSelectPage> {
                           Navigator.of(context).pop(currPath.join("/")),
                       child: const Icon(Icons.upload_file)),
                   // create new folder
+                  // TODO: implement folder creation
                   ElevatedButton(
                       onPressed: () => throw UnimplementedError(),
                       child: const Icon(Icons.create_new_folder)),
                   // go up a directory
                   ElevatedButton(
                       onPressed: () => setState(() => currPath.removeLast()),
-                      child: const Icon(Icons.arrow_back))
+                      child: const Icon(Icons.arrow_back)),
                   // cancel
-                  ,
                   ElevatedButton(
                       onPressed: () => Navigator.of(context).pop(),
                       child: const Icon(Icons.cancel))

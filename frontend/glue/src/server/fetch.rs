@@ -1,5 +1,8 @@
 use crate::{error::ErrorSplit, MioClientState};
+use anyhow::anyhow;
+use flutter_rust_bridge::StreamSink;
 use mio_common::*;
+use std::io::Read;
 use uuid::Uuid;
 
 impl MioClientState {
@@ -53,5 +56,42 @@ impl MioClientState {
             )))
             .call()?
             .into_json()?)
+    }
+
+    pub fn stream(&self, id: Uuid, sink_back: StreamSink<Vec<u8>>) -> Result<(), ErrorSplit> {
+        let mut reader = self
+            .wrap_auth(self.agent.get(&format!(
+                "{}/api/track?{}",
+                self.url,
+                serde_urlencoded::to_string(msgstructs::IdInfoQuery { id }).unwrap()
+            )))
+            .call()?
+            .into_reader()
+            .bytes();
+        let mut buf = Vec::<u8>::with_capacity(16384);
+        'read_loop: loop {
+            // copy without reallocation
+            for _ in 0..buf.capacity() {
+                if let Some(byte) = reader.next() {
+                    buf.push(byte?);
+                } else {
+                    // no more bytes
+                    sink_back
+                        .add(buf)
+                        .then_some(())
+                        .ok_or(anyhow!("sink closed before stream finished"))?;
+                    sink_back.close();
+                    break 'read_loop;
+                }
+            }
+
+            // send back chunk
+            sink_back
+                .add(buf.clone())
+                .then_some(())
+                .ok_or(anyhow!("sink closed before stream finished"))?;
+            buf.clear();
+        }
+        Ok(())
     }
 }

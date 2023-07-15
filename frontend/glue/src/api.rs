@@ -4,6 +4,7 @@ use crate::error::ErrorSplit;
 pub use crate::MioClientState;
 use anyhow::bail;
 pub use flutter_rust_bridge::RustOpaque;
+use flutter_rust_bridge::StreamSink;
 pub use flutter_rust_bridge::SyncReturn;
 pub use mio_common::*;
 use std::path::Path;
@@ -146,6 +147,16 @@ impl MioClient {
         self.wrap_refresh(|lock| match lock.get_folders() {
             Ok(ok) => Ok(ok),
             Err(err) => rewrap_error(err, |status, resp| Ok((status, resp))),
+        })
+    }
+
+    pub fn stream(&self, id: Uuid, sink: StreamSink<Vec<u8>>) -> anyhow::Result<()> {
+        self.wrap_refresh(move |lock| match lock.stream(id, sink.to_owned()) {
+            Ok(ok) => Ok(ok),
+            Err(err) => rewrap_error(err, |status, resp| match status {
+                404 => bail!("{resp}"),
+                _ => Ok((status, resp)),
+            }),
         })
     }
 

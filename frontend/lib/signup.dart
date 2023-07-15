@@ -106,12 +106,9 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                 return Container();
               } else {
                 // show checking
-                return 
-                SpinKitWanderingCubes(
+                return SpinKitWanderingCubes(
                   color: Theme.of(context).colorScheme.primary,
-                )
-                ;
-
+                );
               }
             }))
       ]),

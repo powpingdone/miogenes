@@ -85,6 +85,11 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kGetFoldersMethodMioClientConstMeta;
 
+  Stream<Uint8List> streamMethodMioClient(
+      {required MioClient that, required UuidValue id, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kStreamMethodMioClientConstMeta;
+
   Future<void> makeDirMethodMioClient(
       {required MioClient that,
       required String name,
@@ -250,6 +255,12 @@ class MioClient {
   Future<List<FakeMapItem>> getFolders({dynamic hint}) =>
       bridge.getFoldersMethodMioClient(
         that: this,
+      );
+
+  Stream<Uint8List> stream({required UuidValue id, dynamic hint}) =>
+      bridge.streamMethodMioClient(
+        that: this,
+        id: id,
       );
 
   Future<void> makeDir(
@@ -563,6 +574,26 @@ class MioGlueImpl implements MioGlue {
       const FlutterRustBridgeTaskConstMeta(
         debugName: "get_folders__method__MioClient",
         argNames: ["that"],
+      );
+
+  Stream<Uint8List> streamMethodMioClient(
+      {required MioClient that, required UuidValue id, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_Uuid(id);
+    return _platform.executeStream(FlutterRustBridgeTask(
+      callFfi: (port_) =>
+          _platform.inner.wire_stream__method__MioClient(port_, arg0, arg1),
+      parseSuccessData: _wire2api_uint_8_list,
+      constMeta: kStreamMethodMioClientConstMeta,
+      argValues: [that, id],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kStreamMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "stream__method__MioClient",
+        argNames: ["that", "id"],
       );
 
   Future<void> makeDirMethodMioClient(
@@ -1193,6 +1224,28 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
   late final _wire_get_folders__method__MioClient =
       _wire_get_folders__method__MioClientPtr
           .asFunction<void Function(int, ffi.Pointer<wire_MioClient>)>();
+
+  void wire_stream__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> id,
+  ) {
+    return _wire_stream__method__MioClient(
+      port_,
+      that,
+      id,
+    );
+  }
+
+  late final _wire_stream__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_stream__method__MioClient');
+  late final _wire_stream__method__MioClient =
+      _wire_stream__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>)>();
 
   void wire_make_dir__method__MioClient(
     int port_,
