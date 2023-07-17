@@ -4,7 +4,7 @@ import 'package:frontend/signup.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
 import 'main.dart';
-import 'mainpage/mainpage.dart';
+import 'mainpage/toplevel.dart';
 
 class LoginBaseUrl extends StatefulWidget {
   const LoginBaseUrl({super.key});
@@ -140,7 +140,7 @@ class _LoginCredsState extends State<LoginCreds> {
       password: _passwordController.text,
     );
     nav.pushReplacement(
-        MaterialPageRoute(builder: (context) => const MainNav()));
+        MaterialPageRoute(builder: (context) => const MainNavWidgetPage()));
   }
 
   @override

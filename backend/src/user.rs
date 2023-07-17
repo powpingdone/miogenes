@@ -205,7 +205,6 @@ pub async fn signup(
     State(state): State<MioState>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
 ) -> Result<impl IntoResponse, MioInnerError> {
-    // TODO: defer this generation?
     let uname = auth.username().to_owned();
     let passwd = auth.password().to_owned();
 
@@ -235,6 +234,8 @@ pub async fn signup(
                 .await?
                 .is_some()
             {
+                phc_string.abort();
+                drop(phc_string);
                 return Err(MioInnerError::UserCreationFail(
                     anyhow!("Username already taken."),
                     StatusCode::CONFLICT,

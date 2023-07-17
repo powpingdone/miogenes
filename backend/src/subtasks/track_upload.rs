@@ -56,7 +56,7 @@ pub async fn track_upload_process(
     })?
     .map_err(|err| MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))?;
 
-    // insert into the database
+    // Quite Ok Audio encoding insert into the database
     insert_into_db(state.db, id, userid, dir, mdata, orig_filename).await
 }
 
@@ -250,6 +250,10 @@ fn proc_tag(data: SendValue) -> Option<String> {
         trace!("no string created");
         None
     }
+}
+
+fn create_qoa(file: PathBuf) -> Result<Uuid, anyhow::Error> {
+    todo!()
 }
 
 async fn insert_into_db(

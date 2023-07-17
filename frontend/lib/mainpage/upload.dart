@@ -1,20 +1,20 @@
 import "package:flutter/material.dart";
 import "package:frontend/ffi.dart";
+import 'package:frontend/mainpage/toplevel.dart';
 import "package:path/path.dart" as path_util;
 import "package:flutter_spinkit/flutter_spinkit.dart";
+import "package:provider/provider.dart";
 
 class UploadPage extends StatelessWidget {
   const UploadPage({
     super.key,
-    required this.tasks,
   });
-
-  final List<UploadTaskStateHolder> tasks;
 
   @override
   Widget build(BuildContext context) {
+    var mainState = Provider.of<MainNavTopLevel>(context);
     return ListView(
-      children: [for (var state in tasks) UploadTask(self: state)],
+      children: [for (var state in mainState.tasks) UploadTask(self: state)],
     );
   }
 }
@@ -34,6 +34,8 @@ class UploadTaskStateHolder {
   final String serverPath;
   // the highest level on all the paths selected
   final String? highestLevel;
+  // when future is finished, cleanup this
+  bool finished = false;
   // the actual future
   late Future<UploadReturn> uploadFuture;
 
@@ -59,8 +61,10 @@ class UploadTaskStateHolder {
         // doesn't really matter
       }
     }
-    return await mioClient.uploadFile(
-        fullpath: path, dir: serverNodes.join("/"));
+    var ret =
+        await mioClient.uploadFile(fullpath: path, dir: serverNodes.join("/"));
+    finished = true;
+    return ret;
   }
 }
 

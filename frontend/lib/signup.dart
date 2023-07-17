@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:frontend/login.dart';
-import 'package:frontend/mainpage/mainpage.dart';
+import 'package:frontend/mainpage/toplevel.dart';
 import 'package:provider/provider.dart';
 import 'ffi.dart';
 import 'main.dart';
@@ -51,7 +51,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         password: _passwordController.text,
         password2: _password2Controller.text);
     nav.pushReplacement(
-        MaterialPageRoute(builder: (context) => const MainNav()));
+        MaterialPageRoute(builder: (context) => const MainNavWidgetPage()));
   }
 
   @override
