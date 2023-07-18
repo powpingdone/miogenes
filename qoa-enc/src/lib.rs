@@ -70,7 +70,8 @@ impl Default for LMSFilter {
     fn default() -> Self {
         Self {
             history: [0, 0, 0, 0],
-            weights: [0, 0, -1, 2],
+            // weights init is wrong. the comment says {0,0,-1,2}, but it's actually
+            weights: [0, 0, -8192, 16384],
         }
     }
 }
@@ -121,6 +122,11 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
             "waveform length must be between 0 and u32::MAX",
         ));
     }
+    if waveform.len() % desc.channels as usize != 0 {
+        return Err(QOAError::InvalidOpts(
+            "waveform length must be a multiple of the channels",
+        ));
+    }
     if !(0 < desc.sample_rate && desc.sample_rate <= 0xFFFFFF) {
         return Err(QOAError::InvalidOpts(
             "sample rate must be between 0 and 0xFFFFFF",
@@ -144,7 +150,7 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
 
     // write header
     ret.write_into(QOA_MAGIC);
-    ret.write_into::<u32>(waveform.len().try_into().unwrap());
+    ret.write_into::<u32>(waveform.len() as u32 / desc.channels);
 
     // get number of vec slices needed
     let slice_incs = if waveform.len() % QOA_FRAME_LEN != 0 {
@@ -158,17 +164,23 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
     for slice in (0..slice_incs).map(|x| {
         let sample_index = x * QOA_FRAME_LEN;
         &waveform[(sample_index * desc.channels as usize)
-            ..((sample_index + QOA_FRAME_LEN) * desc.channels as usize + desc.channels as usize)
-                .clamp(0, waveform.len())]
+            ..((sample_index + QOA_FRAME_LEN) * desc.channels as usize + desc.channels as usize
+                - 1)
+            .clamp(0, waveform.len())]
     }) {
+        let frame_len = slice.len() / desc.channels as usize; 
+        let frame_size = (8
+            + QOA_LMS_LEN * 4 * desc.channels as usize
+            + 8 * (((frame_len) + QOA_SLICE_LEN - 1) / QOA_SLICE_LEN)
+                * desc.channels as usize) as u64;
         // write frame header
         //
         // setup is u8, u24, u16, u16
         ret.write_into(
             (desc.channels as u64) << 56
                 | (desc.sample_rate as u64) << 32
-                | (waveform.len() as u64) << 16
-                | slice.len() as u64,
+                | (frame_len as u64) << 16
+                | frame_size,
         );
 
         // reset weights if too large, see https://github.com/phoboslab/qoa/issues/25
@@ -193,11 +205,9 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
             .map(|offset| {
                 (0..desc.channels as usize)
                     .map(|c| {
-                        &slice[dbg!(
-                            offset + c
-                                ..(offset + c + QOA_SLICE_LEN * desc.channels as usize)
-                                    .clamp(0, slice.len() - (desc.channels as usize - c - 1))
-                        )]
+                        &slice[offset + c
+                            ..(offset + c + QOA_SLICE_LEN * desc.channels as usize)
+                                .clamp(0, slice.len() - (desc.channels as usize - c - 1))]
                     })
                     .collect::<Vec<_>>()
             })
@@ -235,21 +245,20 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
                         let residual = sample - pred;
                         // qoa_div
                         let scaled = {
-                            let n = (residual * QOA_RECIPROCAL_TAB[scalefactor as usize]
-                                + (1 << 15))
-                                >> 16;
-                            n + ((residual > 0) as i32 - (residual < 0) as i32)
-                                - ((n > 0) as i32 - (n < 0) as i32)
+                            let right = QOA_RECIPROCAL_TAB[scalefactor as usize] as i64;
+                            let n = (residual as i64 * right + (1 << 15)) >> 16;
+                            n + ((residual > 0) as i64 - (residual < 0) as i64)
+                                - ((n > 0) as i64 - (n < 0) as i64)
                         };
                         let clamped = scaled.clamp(-8, 8);
-                        let quantized = QOA_QUANT_TAB[clamped as usize + 8];
+                        let quantized = QOA_QUANT_TAB[(clamped + 8) as usize];
                         let dequantized = QOA_DEQUANT_TAB[scalefactor as usize][quantized];
                         let reconstructed =
                             (pred + dequantized).clamp(i16::MIN as i32, i16::MAX as i32);
 
                         // break on worse error
-                        let err = (sample - reconstructed) as u64;
-                        curr_error += err;
+                        let err = (sample - reconstructed) as i64;
+                        curr_error += err.pow(2) as u64;
                         if curr_error > best_error {
                             break;
                         }
@@ -258,9 +267,12 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
                         let delta = dequantized >> 4;
                         lms.weights
                             .iter_mut()
-                            .for_each(|x| *x += if *x < 0 { -delta } else { delta });
+                            .zip(lms.history.iter())
+                            .for_each(|(weig, hist)| {
+                                *weig += if *hist < 0 { -delta } else { delta }
+                            });
                         (0..QOA_LMS_LEN - 1).for_each(|x| lms.history[x] = lms.history[x + 1]);
-                        lms.history[QOA_LMS_LEN - 1] = sample;
+                        lms.history[QOA_LMS_LEN - 1] = reconstructed;
                         slice = (slice << 3) | quantized as u64;
                     }
                     if curr_error < best_error {
@@ -277,7 +289,7 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
                     *x += best_error;
                 }
                 // if short, shift bytes
-                best_slice <<= (QOA_SLICE_LEN - slice.len()) * 3;
+                best_slice <<= (QOA_SLICE_LEN - soa_slice.len() / desc.channels as usize) * 3;
                 ret.write_into(best_slice);
             }
         }
@@ -287,18 +299,91 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
 
 #[cfg(test)]
 mod test {
-    use crate::QOADesc;
+    use std::{
+        ffi::OsStr,
+        fs::{read, read_dir},
+        path::PathBuf,
+    };
+
+    use super::*;
 
     #[test]
-    fn test() {
+    fn functional() {
         super::encode(
             vec![0i16; 644706],
             &QOADesc {
                 channels: 2,
                 sample_rate: 44100,
-                compute_error: false,
+                compute_error: true,
             },
         )
         .unwrap();
+    }
+
+    #[test]
+    fn verify_against_suite() {
+        use hound::WavReader;
+        for x in read_dir("./wav").unwrap() {
+            let x = x.unwrap().path();
+            let path_disp_inner = x.clone();
+            let path_disp = path_disp_inner.display();
+            println!("trying {}", path_disp);
+            let mut wav = WavReader::open(x.clone()).unwrap();
+            let verify = std::thread::spawn(move || {
+                let mut fname = x.file_stem().unwrap().to_owned();
+                fname.push(".qoa");
+                let path = [OsStr::new("./qoa"), &fname]
+                    .into_iter()
+                    .collect::<PathBuf>();
+                read(path).unwrap()
+            });
+
+            let enc = super::encode(
+                wav.samples().map(|x| x.unwrap()).collect::<Vec<i16>>(),
+                &QOADesc {
+                    channels: wav.spec().channels as u32,
+                    sample_rate: wav.spec().sample_rate,
+                    compute_error: false,
+                },
+            )
+            .unwrap();
+            let verify = verify.join().unwrap();
+            assert_eq!(verify.len(), enc.raw_file.len());
+            for ((i, gen), actual) in enc.raw_file.iter().enumerate().zip(&verify) {
+                // on error
+                if *gen != *actual {
+                    let err_range =
+                        i.saturating_sub(QOA_SLICE_LEN)..(i + QOA_SLICE_LEN).clamp(0, verify.len());
+                    let fmt = format!(
+                        "{}, byte {i} does not match. expected {actual:02x} got {gen:02x}.",
+                        path_disp
+                    );
+                    let fmt = format!("{fmt}\n\tsurrounding bytes:\n");
+                    let here = format!(
+                        "{}{}{}",
+                        "        ".to_owned(),
+                        if i < 20 {
+                            (0..(i.saturating_sub(QOA_SLICE_LEN)).clamp(i, QOA_SLICE_LEN))
+                                .map(|_| "   ")
+                                .collect::<String>()
+                        } else {
+                            (0..QOA_SLICE_LEN).map(|_| "   ").collect::<String>()
+                        },
+                        "**"
+                    );
+                    panic!(
+                        "{fmt}{here}\nactual: {}\nencode: {}",
+                        &verify[err_range.clone()]
+                            .iter()
+                            .map(|x| format!("{x:02x} "))
+                            .collect::<String>(),
+                        &enc.raw_file[err_range]
+                            .iter()
+                            .map(|x| format!("{x:02x} "))
+                            .collect::<String>()
+                    );
+                }
+            }
+        }
     }
 }
