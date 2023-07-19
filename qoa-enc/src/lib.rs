@@ -137,14 +137,13 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
     }
 
     // setup return type
+    let u_channels = desc.channels as usize;
     let mut ret = QOAEncoded {
         error: if desc.compute_error { Some(0) } else { None },
         raw_file: Vec::with_capacity({
             let frames = (waveform.len() + QOA_FRAME_LEN - 1) / QOA_FRAME_LEN;
             let slices = (waveform.len() + QOA_SLICE_LEN - 1) / QOA_SLICE_LEN;
-            8 + frames * 8
-                + frames * QOA_LMS_LEN * 4 * desc.channels as usize
-                + slices * 8 * desc.channels as usize
+            8 + frames * 8 + frames * QOA_LMS_LEN * 4 * u_channels + slices * 8 * u_channels
         }),
     };
 
@@ -160,19 +159,20 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
     };
 
     // write frames
-    let mut lms_channel = vec![LMSFilter::default(); desc.channels as usize];
+    let mut lms_channel = vec![LMSFilter::default(); u_channels];
     for slice in (0..slice_incs).map(|x| {
         let sample_index = x * QOA_FRAME_LEN;
-        &waveform[(sample_index * desc.channels as usize)
-            ..((sample_index + QOA_FRAME_LEN) * desc.channels as usize + desc.channels as usize
-                - 1)
-            .clamp(0, waveform.len())]
+        &waveform[dbg!(
+            (sample_index * u_channels)
+                ..((sample_index + QOA_FRAME_LEN) * u_channels + u_channels - 1)
+                    .clamp(0, waveform.len())
+        )]
     }) {
-        let frame_len = slice.len() / desc.channels as usize; 
+        let frame_len = slice.len() / u_channels;
         let frame_size = (8
-            + QOA_LMS_LEN * 4 * desc.channels as usize
-            + 8 * (((frame_len) + QOA_SLICE_LEN - 1) / QOA_SLICE_LEN)
-                * desc.channels as usize) as u64;
+            + QOA_LMS_LEN * 4 * u_channels
+            + 8 * (((frame_len) + QOA_SLICE_LEN - 1) / QOA_SLICE_LEN) * u_channels)
+            as u64;
         // write frame header
         //
         // setup is u8, u24, u16, u16
@@ -199,25 +199,27 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
         }
 
         // get true SOA slices
-        let mut prev_scalefactor = vec![0u64; desc.channels as usize];
-        for soa_slices in (0..slice.len() - desc.channels as usize)
-            .step_by(QOA_SLICE_LEN * desc.channels as usize)
+        let mut prev_scalefactor = vec![0u64; u_channels];
+        for (slice_len, soa_slices) in (0..slice.len() - (u_channels - 1))
+            .step_by(QOA_SLICE_LEN * u_channels)
             .map(|offset| {
-                (0..desc.channels as usize)
-                    .map(|c| {
-                        &slice[offset + c
-                            ..(offset + c + QOA_SLICE_LEN * desc.channels as usize)
-                                .clamp(0, slice.len() - (desc.channels as usize - c - 1))]
-                    })
-                    .collect::<Vec<_>>()
+                (
+                    (offset + QOA_SLICE_LEN * u_channels).clamp(0, slice.len()) - offset,
+                    (0..u_channels)
+                        .map(|c| {
+                            &slice[offset + c
+                                ..(offset + c + QOA_SLICE_LEN * u_channels).clamp(0, slice.len())]
+                        })
+                        .collect::<Vec<_>>(),
+                )
             })
         {
-            let mut best_error = u64::MAX;
-            let mut best_slice = 0u64;
-            let mut best_lms = LMSFilter::default();
-            let mut best_scalefactor = 0u64;
             for (channel, soa_slice) in soa_slices.into_iter().enumerate() {
-                let channel = channel % desc.channels as usize;
+                let channel = channel % u_channels;
+                let mut best_error = u64::MAX;
+                let mut best_slice = 0u64;
+                let mut best_lms = LMSFilter::default();
+                let mut best_scalefactor = 0u64;
 
                 // TODO: poss optimization: order the scale factors and check their errors for
                 // early bailout
@@ -229,11 +231,7 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
                     let mut lms = lms_channel[channel].clone();
                     let mut slice = scalefactor;
                     let mut curr_error = 0u64;
-                    for sample in soa_slice
-                        .iter()
-                        .step_by(desc.channels as usize)
-                        .map(|x| *x as i32)
-                    {
+                    for sample in soa_slice.iter().step_by(u_channels).map(|x| *x as i32) {
                         // qoa_lms_predict
                         let pred = lms
                             .history
@@ -289,7 +287,7 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
                     *x += best_error;
                 }
                 // if short, shift bytes
-                best_slice <<= (QOA_SLICE_LEN - soa_slice.len() / desc.channels as usize) * 3;
+                best_slice <<= (QOA_SLICE_LEN - slice_len / u_channels) * 3;
                 ret.write_into(best_slice);
             }
         }
