@@ -173,6 +173,7 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
             + QOA_LMS_LEN * 4 * u_channels
             + 8 * (((frame_len) + QOA_SLICE_LEN - 1) / QOA_SLICE_LEN) * u_channels)
             as u64;
+
         // write frame header
         //
         // setup is u8, u24, u16, u16
@@ -241,6 +242,7 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
                             .sum::<i32>()
                             >> 13;
                         let residual = sample - pred;
+
                         // qoa_div
                         let scaled = {
                             let right = QOA_RECIPROCAL_TAB[scalefactor as usize] as i64;
@@ -280,12 +282,14 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
                         best_scalefactor = scalefactor;
                     }
                 }
+
                 // finalize slice
                 prev_scalefactor[channel] = best_scalefactor;
                 lms_channel[channel] = best_lms.clone();
                 if let Some(ref mut x) = ret.error {
                     *x += best_error;
                 }
+
                 // if short, shift bytes
                 best_slice <<= (QOA_SLICE_LEN - slice_len / u_channels) * 3;
                 ret.write_into(best_slice);
@@ -297,13 +301,12 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use std::{
         ffi::OsStr,
         fs::{read, read_dir},
         path::PathBuf,
     };
-
-    use super::*;
 
     #[test]
     fn functional() {
@@ -321,6 +324,7 @@ mod test {
     #[test]
     fn verify_against_suite() {
         use hound::WavReader;
+
         for x in read_dir("./wav").unwrap() {
             let x = x.unwrap().path();
             let path_disp_inner = x.clone();
@@ -335,7 +339,6 @@ mod test {
                     .collect::<PathBuf>();
                 read(path).unwrap()
             });
-
             let enc = super::encode(
                 wav.samples().map(|x| x.unwrap()).collect::<Vec<i16>>(),
                 &QOADesc {

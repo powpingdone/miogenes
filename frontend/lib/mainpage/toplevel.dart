@@ -15,7 +15,8 @@ class MainNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-        create: (_) => MainNavTopLevel(), child: const MainNavWidgetPage());
+        create: (_) => MainNavTopLevel(),
+        builder: (_, __) => const MainNavWidgetPage());
   }
 }
 

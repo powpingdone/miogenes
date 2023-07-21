@@ -16,6 +16,13 @@ use std::fmt::Debug;
 use std::io::Cursor;
 use std::path::Path;
 use std::path::PathBuf;
+use symphonia::core::audio::Channels;
+use symphonia::core::audio::SampleBuffer;
+use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::formats::FormatOptions;
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
 use uuid::*;
 
 // metadata parsed from the individual file
@@ -45,6 +52,7 @@ pub async fn track_upload_process(
     // process metadata
     let mdata = tokio::task::spawn_blocking({
         let orig_filename = orig_filename.clone();
+        let path = path.clone();
         move || get_metadata(path, orig_filename)
     })
     .await
@@ -55,6 +63,7 @@ pub async fn track_upload_process(
         )
     })?
     .map_err(|err| MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))?;
+    drop(dbg!(create_qoa(path)));
 
     // Quite Ok Audio encoding insert into the database
     insert_into_db(state.db, id, userid, dir, mdata, orig_filename).await
@@ -253,7 +262,194 @@ fn proc_tag(data: SendValue) -> Option<String> {
 }
 
 fn create_qoa(file: PathBuf) -> Result<Uuid, anyhow::Error> {
-    todo!()
+    use symphonia::core::errors::Error;
+
+    // why can't this be const
+    let poss_channels = [
+        // MONO
+        (1usize, Channels::FRONT_LEFT),
+        // 2
+        (2, Channels::FRONT_LEFT | Channels::FRONT_RIGHT),
+        // 3
+        (
+            3,
+            Channels::FRONT_LEFT | Channels::FRONT_RIGHT | Channels::FRONT_CENTRE,
+        ),
+        // 4
+        (
+            4,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::REAR_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            4,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::REAR_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        (
+            4,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::SIDE_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            4,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::SIDE_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        // 5
+        (
+            5,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::REAR_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            5,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::REAR_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        (
+            5,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::SIDE_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            5,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::SIDE_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        // 6
+        (
+            6,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::REAR_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            6,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::REAR_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        (
+            6,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::SIDE_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            6,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::SIDE_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        // 7
+        (
+            7,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::REAR_CENTRE
+                | Channels::SIDE_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        // 8
+        (
+            8,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::REAR_LEFT
+                | Channels::REAR_RIGHT
+                | Channels::SIDE_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+    ];
+
+    let file = Box::new(std::fs::File::open(file)?);
+    let mss = MediaSourceStream::new(file, Default::default());
+    let fops: FormatOptions = Default::default();
+    let mops: MetadataOptions = Default::default();
+    let dops: DecoderOptions = Default::default();
+    let probe = symphonia::default::get_probe().format(&Hint::new(), mss, &fops, &mops)?;
+    let mut fmt = probe.format;
+    let track = fmt
+        .default_track()
+        .ok_or_else(|| anyhow!("no track found"))?;
+    let track_id = track.id;
+    let channel_check = track
+        .codec_params
+        .channels
+        .ok_or_else(|| anyhow!("channels are expected in a audio file"))?;
+    let channel_num = poss_channels.iter().fold(None, |accum, x| {
+        if accum.is_none() && x.1 == channel_check {
+            Some(x.0)
+        } else {
+            None
+        }
+    });
+    if channel_num.is_none() {
+        anyhow::bail!("unsupported channel configuration: {channel_check}");
+    }
+    let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &dops)?;
+    let mut sample_buf = None;
+    loop {
+        let packet = fmt.next_packet()?;
+        if packet.track_id() != track_id {
+            continue;
+        }
+        match decoder.decode(&packet) {
+            Ok(buf) => {
+                if sample_buf.is_none() {
+                    let spec = *buf.spec();
+                    let duration = buf.capacity() as u64;
+                    sample_buf = Some(SampleBuffer::<i16>::new(duration, spec));
+                }
+                if let Some(ref mut sample_buf) = sample_buf {
+                    sample_buf.copy_interleaved_ref(buf);
+                }
+            }
+            Err(Error::DecodeError(err)) => {
+                return Err(anyhow::Error::from(Error::DecodeError(err)))
+            }
+            Err(_) => break,
+        }
+    }
+
+    Ok(Uuid::nil())
 }
 
 async fn insert_into_db(

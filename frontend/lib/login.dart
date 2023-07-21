@@ -140,7 +140,7 @@ class _LoginCredsState extends State<LoginCreds> {
       password: _passwordController.text,
     );
     nav.pushReplacement(
-        MaterialPageRoute(builder: (context) => const MainNavWidgetPage()));
+        MaterialPageRoute(builder: (context) => const MainNav()));
   }
 
   @override
