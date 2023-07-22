@@ -9,6 +9,7 @@ use gstreamer_pbutils::prelude::*;
 use gstreamer_pbutils::DiscovererResult;
 #[allow(unused)]
 use log::*;
+use once_cell::sync::Lazy;
 use path_absolutize::Absolutize;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -23,6 +24,7 @@ use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
+use tokio::io::AsyncWriteExt;
 use uuid::*;
 
 // metadata parsed from the individual file
@@ -50,10 +52,20 @@ pub async fn track_upload_process(
     orig_filename: String,
 ) -> Result<(), MioInnerError> {
     // process metadata
-    let mdata = tokio::task::spawn_blocking({
+    let (mdata, encoded) = tokio::task::spawn_blocking({
         let orig_filename = orig_filename.clone();
         let path = path.clone();
-        move || get_metadata(path, orig_filename)
+        move || {
+            let mdata = get_metadata(path.clone(), orig_filename.clone())?;
+
+            // conv into Quite Ok Audio
+            let (desc, waveform) = create_qoa(path, orig_filename)
+                .map_err(|err| MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))?;
+            let encoded = mio_qoa_impl::encode(waveform, &desc).map_err(|err| {
+                MioInnerError::TrackProcessingError(err.into(), StatusCode::BAD_REQUEST)
+            })?;
+            Ok((mdata, encoded))
+        }
     })
     .await
     .map_err(|err| {
@@ -63,9 +75,19 @@ pub async fn track_upload_process(
         )
     })?
     .map_err(|err| MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))?;
-    drop(dbg!(create_qoa(path)));
 
-    // Quite Ok Audio encoding insert into the database
+    // write out new encoded file
+    trace!("{orig_filename}: writing out encoding");
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path)
+        .await?;
+    file.write_all(&encoded.raw_file).await?;
+    file.sync_all().await?;
+    drop(file);
+
+    // insert into the database
     insert_into_db(state.db, id, userid, dir, mdata, orig_filename).await
 }
 
@@ -261,149 +283,16 @@ fn proc_tag(data: SendValue) -> Option<String> {
     }
 }
 
-fn create_qoa(file: PathBuf) -> Result<Uuid, anyhow::Error> {
+fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QOADesc, Vec<i16>)> {
     use symphonia::core::errors::Error;
 
-    // why can't this be const
-    let poss_channels = [
-        // MONO
-        (1usize, Channels::FRONT_LEFT),
-        // 2
-        (2, Channels::FRONT_LEFT | Channels::FRONT_RIGHT),
-        // 3
-        (
-            3,
-            Channels::FRONT_LEFT | Channels::FRONT_RIGHT | Channels::FRONT_CENTRE,
-        ),
-        // 4
-        (
-            4,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::REAR_LEFT
-                | Channels::REAR_RIGHT,
-        ),
-        (
-            4,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::REAR_LEFT
-                | Channels::SIDE_RIGHT,
-        ),
-        (
-            4,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::SIDE_LEFT
-                | Channels::REAR_RIGHT,
-        ),
-        (
-            4,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::SIDE_LEFT
-                | Channels::SIDE_RIGHT,
-        ),
-        // 5
-        (
-            5,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::FRONT_CENTRE
-                | Channels::REAR_LEFT
-                | Channels::REAR_RIGHT,
-        ),
-        (
-            5,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::FRONT_CENTRE
-                | Channels::REAR_LEFT
-                | Channels::SIDE_RIGHT,
-        ),
-        (
-            5,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::FRONT_CENTRE
-                | Channels::SIDE_LEFT
-                | Channels::REAR_RIGHT,
-        ),
-        (
-            5,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::FRONT_CENTRE
-                | Channels::SIDE_LEFT
-                | Channels::SIDE_RIGHT,
-        ),
-        // 6
-        (
-            6,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::FRONT_CENTRE
-                | Channels::LFE1
-                | Channels::REAR_LEFT
-                | Channels::REAR_RIGHT,
-        ),
-        (
-            6,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::FRONT_CENTRE
-                | Channels::LFE1
-                | Channels::REAR_LEFT
-                | Channels::SIDE_RIGHT,
-        ),
-        (
-            6,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::FRONT_CENTRE
-                | Channels::LFE1
-                | Channels::SIDE_LEFT
-                | Channels::REAR_RIGHT,
-        ),
-        (
-            6,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::FRONT_CENTRE
-                | Channels::LFE1
-                | Channels::SIDE_LEFT
-                | Channels::SIDE_RIGHT,
-        ),
-        // 7
-        (
-            7,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::FRONT_CENTRE
-                | Channels::LFE1
-                | Channels::REAR_CENTRE
-                | Channels::SIDE_LEFT
-                | Channels::SIDE_RIGHT,
-        ),
-        // 8
-        (
-            8,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::FRONT_CENTRE
-                | Channels::LFE1
-                | Channels::REAR_LEFT
-                | Channels::REAR_RIGHT
-                | Channels::SIDE_LEFT
-                | Channels::SIDE_RIGHT,
-        ),
-    ];
-
+    info!("{fn_dis}: creating qoa encoding");
     let file = Box::new(std::fs::File::open(file)?);
     let mss = MediaSourceStream::new(file, Default::default());
     let fops: FormatOptions = Default::default();
     let mops: MetadataOptions = Default::default();
     let dops: DecoderOptions = Default::default();
+    trace!("{fn_dis}: probing file");
     let probe = symphonia::default::get_probe().format(&Hint::new(), mss, &fops, &mops)?;
     let mut fmt = probe.format;
     let track = fmt
@@ -414,42 +303,70 @@ fn create_qoa(file: PathBuf) -> Result<Uuid, anyhow::Error> {
         .codec_params
         .channels
         .ok_or_else(|| anyhow!("channels are expected in a audio file"))?;
-    let channel_num = poss_channels.iter().fold(None, |accum, x| {
-        if accum.is_none() && x.1 == channel_check {
-            Some(x.0)
-        } else {
-            None
-        }
-    });
+    let channel_num = POSS_CHANNELS
+        .iter()
+        .find(|x| x.1 == channel_check)
+        .map(|x| x.0);
+    trace!("{fn_dis}: channels are {channel_num:?}");
     if channel_num.is_none() {
         anyhow::bail!("unsupported channel configuration: {channel_check}");
     }
     let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &dops)?;
-    let mut sample_buf = None;
+    let mut rate = None;
+    let mut ret = vec![];
     loop {
-        let packet = fmt.next_packet()?;
+        let packet = match fmt.next_packet() {
+            Ok(x) => x,
+            Err(Error::IoError(err)) => {
+                if err.kind() == std::io::ErrorKind::UnexpectedEof {
+                    trace!("{fn_dis}: finishing up");
+                    break Ok((
+                        mio_qoa_impl::QOADesc {
+                            channels: channel_num.unwrap(),
+                            sample_rate: rate.unwrap(),
+                            compute_error: false,
+                        },
+                        ret,
+                    ));
+                } else {
+                    return Err(Error::IoError(err).into());
+                }
+            }
+            Err(err) => return Err(err.into()),
+        };
         if packet.track_id() != track_id {
             continue;
         }
         match decoder.decode(&packet) {
             Ok(buf) => {
-                if sample_buf.is_none() {
-                    let spec = *buf.spec();
-                    let duration = buf.capacity() as u64;
-                    sample_buf = Some(SampleBuffer::<i16>::new(duration, spec));
+                let spec = *buf.spec();
+                let duration = symphonia::core::units::Duration::from(buf.capacity() as u64);
+                let mut sample_buf = SampleBuffer::<i16>::new(duration, spec);
+                if rate.is_none() {
+                    trace!("{fn_dis}: rate is {}", spec.rate);
+                    rate = Some(spec.rate);
                 }
-                if let Some(ref mut sample_buf) = sample_buf {
-                    sample_buf.copy_interleaved_ref(buf);
+                if rate.is_some_and(|x| x != spec.rate) {
+                    anyhow::bail!(
+                        "sampling rate changed: was {rate:?}, now is {}",
+                        buf.spec().rate
+                    );
                 }
+                trace!("{fn_dis}: copying to sample_buf");
+                sample_buf.copy_interleaved_ref(buf);
+                trace!("{fn_dis}: copying back to ret");
+                ret.extend(sample_buf.samples());
+                debug!(
+                    "{fn_dis}: added {} samples, sample totals is {}",
+                    sample_buf.samples().len(),
+                    ret.len()
+                );
             }
-            Err(Error::DecodeError(err)) => {
-                return Err(anyhow::Error::from(Error::DecodeError(err)))
+            Err(err) => {
+                return Err(anyhow::Error::from(err));
             }
-            Err(_) => break,
         }
     }
-
-    Ok(Uuid::nil())
 }
 
 async fn insert_into_db(
@@ -603,3 +520,142 @@ async fn insert_into_db(
     })
     .await
 }
+
+// supported channel configurations
+//
+// TODO: why can't this be const
+static POSS_CHANNELS: Lazy<[(u32, Channels); 17]> = Lazy::new(|| {
+    [
+        // MONO
+        (1u32, Channels::FRONT_LEFT),
+        // 2
+        (2, Channels::FRONT_LEFT | Channels::FRONT_RIGHT),
+        // 3
+        (
+            3,
+            Channels::FRONT_LEFT | Channels::FRONT_RIGHT | Channels::FRONT_CENTRE,
+        ),
+        // 4
+        (
+            4,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::REAR_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            4,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::REAR_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        (
+            4,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::SIDE_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            4,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::SIDE_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        // 5
+        (
+            5,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::REAR_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            5,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::REAR_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        (
+            5,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::SIDE_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            5,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::SIDE_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        // 6
+        (
+            6,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::REAR_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            6,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::REAR_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        (
+            6,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::SIDE_LEFT
+                | Channels::REAR_RIGHT,
+        ),
+        (
+            6,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::SIDE_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        // 7
+        (
+            7,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::REAR_CENTRE
+                | Channels::SIDE_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+        // 8
+        (
+            8,
+            Channels::FRONT_LEFT
+                | Channels::FRONT_RIGHT
+                | Channels::FRONT_CENTRE
+                | Channels::LFE1
+                | Channels::REAR_LEFT
+                | Channels::REAR_RIGHT
+                | Channels::SIDE_LEFT
+                | Channels::SIDE_RIGHT,
+        ),
+    ]
+});

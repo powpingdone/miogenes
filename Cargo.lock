@@ -1678,6 +1678,7 @@ dependencies = [
  "konst",
  "log",
  "mio-common",
+ "mio-qoa-impl",
  "num_cpus",
  "once_cell",
  "path-absolutize",

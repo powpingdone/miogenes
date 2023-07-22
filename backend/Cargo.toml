@@ -17,6 +17,7 @@ gstreamer-pbutils = { version = "0.20", features = ["v1_20"] }
 image = { version = "0.24", features = ["webp-encoder"] }
 konst = "0.3"
 log = "0.4"
+mio-qoa-impl = {path = "../qoa-enc"}
 mio-common = { path = "../common" }
 num_cpus = "1.15"
 once_cell = { version = "1.17", features = ["parking_lot"] }

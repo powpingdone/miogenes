@@ -162,11 +162,9 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
     let mut lms_channel = vec![LMSFilter::default(); u_channels];
     for slice in (0..slice_incs).map(|x| {
         let sample_index = x * QOA_FRAME_LEN;
-        &waveform[dbg!(
-            (sample_index * u_channels)
-                ..((sample_index + QOA_FRAME_LEN) * u_channels + u_channels - 1)
-                    .clamp(0, waveform.len())
-        )]
+        &waveform[(sample_index * u_channels)
+            ..((sample_index + QOA_FRAME_LEN) * u_channels + u_channels - 1)
+                .clamp(0, waveform.len())]
     }) {
         let frame_len = slice.len() / u_channels;
         let frame_size = (8
