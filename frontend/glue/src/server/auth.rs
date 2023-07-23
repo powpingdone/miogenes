@@ -31,7 +31,7 @@ impl MioClientState {
     }
 
     // this function merely refreshes the api token to call the server
-    pub fn refresh_token(&mut self) -> Result<(), ErrorSplit> {
+    pub fn refresh_token(&mut self) -> GlueResult<()> {
         let new_jwt = self
             .wrap_auth(self.agent.patch(&format!("{}/user/refresh", self.url)))
             .call()?
@@ -45,7 +45,7 @@ impl MioClientState {
     }
 
     // try login
-    pub fn attempt_login(&mut self, username: &str, password: &str) -> Result<(), ErrorSplit> {
+    pub fn attempt_login(&mut self, username: &str, password: &str) -> GlueResult<()> {
         let jwt = self
             .agent
             .get(&format!("{}/user/login", self.url))
@@ -67,7 +67,7 @@ impl MioClientState {
     }
 
     // try signup
-    pub fn attempt_signup(&self, username: &str, password: &str) -> Result<(), ErrorSplit> {
+    pub fn attempt_signup(&self, username: &str, password: &str) -> GlueResult<()> {
         self.agent
             .post(&format!("{}/user/signup", self.url))
             .set(

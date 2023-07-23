@@ -1,4 +1,4 @@
-use crate::{error::ErrorSplit, MioClientState};
+use crate::{error::{ErrorSplit, GlueResult}, MioClientState};
 use anyhow::anyhow;
 use mio_common::*;
 use std::{
@@ -8,7 +8,7 @@ use std::{
 
 impl MioClientState {
     // recursive function for searching for audio files
-    pub fn search_folder(&self, path: impl AsRef<Path>) -> Result<Vec<String>, ErrorSplit> {
+    pub fn search_folder(&self, path: impl AsRef<Path>) -> GlueResult<Vec<String>> {
         search_folder_inner(path)
     }
 
@@ -30,7 +30,7 @@ impl MioClientState {
     }
 }
 
-fn search_folder_inner(path: impl AsRef<Path>) -> Result<Vec<String>, ErrorSplit> {
+fn search_folder_inner(path: impl AsRef<Path>) -> GlueResult<Vec<String>> {
     let path = path.as_ref();
     const COMMON_EXTS: &[&str] = &["wav", "flac", "alac", "mp3", "ogg", "aac", "opus", "m4a"];
     let mut ret = vec![];

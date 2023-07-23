@@ -1,4 +1,4 @@
-use crate::{error::ErrorSplit, MioClientState};
+use crate::{error::GlueResult, MioClientState};
 use anyhow::anyhow;
 use flutter_rust_bridge::StreamSink;
 use mio_common::*;
@@ -7,14 +7,14 @@ use uuid::Uuid;
 
 impl MioClientState {
     // TODO: playlists
-    pub fn fetch_all_albums(&self) -> Result<retstructs::Albums, ErrorSplit> {
+    pub fn fetch_all_albums(&self) -> GlueResult<retstructs::Albums> {
         Ok(self
             .wrap_auth(self.agent.get(&format!("{}/api/load/albums", self.url)))
             .call()?
             .into_json()?)
     }
 
-    pub fn get_track_data(&self, id: Uuid) -> Result<retstructs::Track, ErrorSplit> {
+    pub fn get_track_data(&self, id: Uuid) -> GlueResult<retstructs::Track> {
         Ok(self
             .wrap_auth(self.agent.get(&format!(
                 "{}/api/query/track?{}",
@@ -25,7 +25,7 @@ impl MioClientState {
             .into_json()?)
     }
 
-    pub fn get_album_data(&self, id: Uuid) -> Result<retstructs::Album, ErrorSplit> {
+    pub fn get_album_data(&self, id: Uuid) -> GlueResult<retstructs::Album> {
         Ok(self
             .wrap_auth(self.agent.get(&format!(
                 "{}/api/query/album?{}",
@@ -36,7 +36,7 @@ impl MioClientState {
             .into_json()?)
     }
 
-    pub fn get_cover_art_data(&self, id: Uuid) -> Result<retstructs::CoverArt, ErrorSplit> {
+    pub fn get_cover_art_data(&self, id: Uuid) -> GlueResult<retstructs::CoverArt> {
         Ok(self
             .wrap_auth(self.agent.get(&format!(
                 "{}/api/query/coverart?{}",
@@ -47,7 +47,7 @@ impl MioClientState {
             .into_json()?)
     }
 
-    pub fn get_artist_data(&self, id: Uuid) -> Result<retstructs::Artist, ErrorSplit> {
+    pub fn get_artist_data(&self, id: Uuid) -> GlueResult<retstructs::Artist> {
         Ok(self
             .wrap_auth(self.agent.get(&format!(
                 "{}/api/query/artist?{}",
@@ -58,7 +58,7 @@ impl MioClientState {
             .into_json()?)
     }
 
-    pub fn stream(&self, id: Uuid, sink_back: StreamSink<Vec<u8>>) -> Result<(), ErrorSplit> {
+    pub fn stream(&self, id: Uuid, sink_back: StreamSink<Vec<u8>>) -> GlueResult<()> {
         let mut reader = self
             .wrap_auth(self.agent.get(&format!(
                 "{}/api/track?{}",

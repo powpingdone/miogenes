@@ -1,5 +1,7 @@
 use std::{error::Error, fmt::Display};
 
+pub(crate) type GlueResult<T> = Result<T, ErrorSplit>; 
+
 #[derive(Debug)]
 pub enum ErrorSplit {
     Ureq(Box<ureq::Error>),

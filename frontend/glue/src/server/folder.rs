@@ -1,4 +1,4 @@
-use crate::{error::ErrorSplit, MioClientState};
+use crate::{error::GlueResult, MioClientState};
 use mio_common::*;
 use std::collections::HashMap;
 
@@ -8,7 +8,7 @@ pub struct FakeMapItem {
 }
 
 impl MioClientState {
-    pub fn make_dir(&self, name: String, path: String) -> Result<(), ErrorSplit> {
+    pub fn make_dir(&self, name: String, path: String) -> GlueResult<()> {
         self.wrap_auth(self.agent.put(&format!(
             "{}/api/folder?{}",
             self.url,
@@ -18,7 +18,7 @@ impl MioClientState {
         Ok(())
     }
 
-    pub fn get_folders(&self) -> Result<Vec<FakeMapItem>, ErrorSplit> {
+    pub fn get_folders(&self) -> GlueResult<Vec<FakeMapItem>> {
         // fetch from server
         let raw_tree = self
             .wrap_auth(self.agent.get(&format!("{}/api/folder", self.url)))
