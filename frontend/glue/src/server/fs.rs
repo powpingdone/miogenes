@@ -1,4 +1,7 @@
-use crate::{error::{ErrorSplit, GlueResult}, MioClientState};
+use crate::{
+    error::{ErrorSplit, GlueResult},
+    MioClientState,
+};
 use anyhow::anyhow;
 use mio_common::*;
 use std::{

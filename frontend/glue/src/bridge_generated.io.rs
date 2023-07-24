@@ -1,9 +1,19 @@
 use super::*;
-// Section: wire functions
 
+// Section: wire functions
 #[no_mangle]
 pub extern "C" fn wire_new_mio_client() -> support::WireSyncReturn {
     wire_new_mio_client_impl()
+}
+
+#[no_mangle]
+pub extern "C" fn wire_new_player(client: *mut wire_MioClient) -> support::WireSyncReturn {
+    wire_new_player_impl(client)
+}
+
+#[no_mangle]
+pub extern "C" fn wire_info_stream__method__MioPlayer(port_: i64, that: *mut wire_MioPlayer) {
+    wire_info_stream__method__MioPlayer_impl(port_, that)
 }
 
 #[no_mangle]
@@ -130,15 +140,24 @@ pub extern "C" fn wire_make_dir__method__MioClient(
 }
 
 // Section: allocate functions
-
 #[no_mangle]
 pub extern "C" fn new_ArcRwLockMioClientState() -> wire_ArcRwLockMioClientState {
     wire_ArcRwLockMioClientState::new_with_null_ptr()
 }
 
 #[no_mangle]
+pub extern "C" fn new_Player() -> wire_Player {
+    wire_Player::new_with_null_ptr()
+}
+
+#[no_mangle]
 pub extern "C" fn new_box_autoadd_mio_client_0() -> *mut wire_MioClient {
     support::new_leak_box_ptr(wire_MioClient::new_with_null_ptr())
+}
+
+#[no_mangle]
+pub extern "C" fn new_box_autoadd_mio_player_0() -> *mut wire_MioPlayer {
+    support::new_leak_box_ptr(wire_MioPlayer::new_with_null_ptr())
 }
 
 #[no_mangle]
@@ -151,7 +170,6 @@ pub extern "C" fn new_uint_8_list_0(len: i32) -> *mut wire_uint_8_list {
 }
 
 // Section: related functions
-
 #[no_mangle]
 pub extern "C" fn drop_opaque_ArcRwLockMioClientState(ptr: *const c_void) {
     unsafe {
@@ -167,34 +185,71 @@ pub extern "C" fn share_opaque_ArcRwLockMioClientState(ptr: *const c_void) -> *c
     }
 }
 
-// Section: impl Wire2Api
+#[no_mangle]
+pub extern "C" fn drop_opaque_Player(ptr: *const c_void) {
+    unsafe {
+        Arc::<Player>::decrement_strong_count(ptr as _);
+    }
+}
 
+#[no_mangle]
+pub extern "C" fn share_opaque_Player(ptr: *const c_void) -> *const c_void {
+    unsafe {
+        Arc::<Player>::increment_strong_count(ptr as _);
+        ptr
+    }
+}
+
+// Section: impl Wire2Api
 impl Wire2Api<RustOpaque<Arc<RwLock<MioClientState>>>> for wire_ArcRwLockMioClientState {
     fn wire2api(self) -> RustOpaque<Arc<RwLock<MioClientState>>> {
         unsafe { support::opaque_from_dart(self.ptr as _) }
     }
 }
+
+impl Wire2Api<RustOpaque<Player>> for wire_Player {
+    fn wire2api(self) -> RustOpaque<Player> {
+        unsafe { support::opaque_from_dart(self.ptr as _) }
+    }
+}
+
 impl Wire2Api<String> for *mut wire_uint_8_list {
     fn wire2api(self) -> String {
         let vec: Vec<u8> = self.wire2api();
         String::from_utf8_lossy(&vec).into_owned()
     }
 }
+
 impl Wire2Api<uuid::Uuid> for *mut wire_uint_8_list {
     fn wire2api(self) -> uuid::Uuid {
         let single: Vec<u8> = self.wire2api();
         wire2api_uuid_ref(single.as_slice())
     }
 }
+
 impl Wire2Api<MioClient> for *mut wire_MioClient {
     fn wire2api(self) -> MioClient {
         let wrap = unsafe { support::box_from_leak_ptr(self) };
         Wire2Api::<MioClient>::wire2api(*wrap).into()
     }
 }
+
+impl Wire2Api<MioPlayer> for *mut wire_MioPlayer {
+    fn wire2api(self) -> MioPlayer {
+        let wrap = unsafe { support::box_from_leak_ptr(self) };
+        Wire2Api::<MioPlayer>::wire2api(*wrap).into()
+    }
+}
+
 impl Wire2Api<MioClient> for wire_MioClient {
     fn wire2api(self) -> MioClient {
         MioClient(self.field0.wire2api())
+    }
+}
+
+impl Wire2Api<MioPlayer> for wire_MioPlayer {
+    fn wire2api(self) -> MioPlayer {
+        MioPlayer(self.field0.wire2api())
     }
 }
 
@@ -206,11 +261,17 @@ impl Wire2Api<Vec<u8>> for *mut wire_uint_8_list {
         }
     }
 }
-// Section: wire structs
 
+// Section: wire structs
 #[repr(C)]
 #[derive(Clone)]
 pub struct wire_ArcRwLockMioClientState {
+    ptr: *const core::ffi::c_void,
+}
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct wire_Player {
     ptr: *const core::ffi::c_void,
 }
 
@@ -222,13 +283,18 @@ pub struct wire_MioClient {
 
 #[repr(C)]
 #[derive(Clone)]
+pub struct wire_MioPlayer {
+    field0: wire_Player,
+}
+
+#[repr(C)]
+#[derive(Clone)]
 pub struct wire_uint_8_list {
     ptr: *mut u8,
     len: i32,
 }
 
 // Section: impl NewWithNullPtr
-
 pub trait NewWithNullPtr {
     fn new_with_null_ptr() -> Self;
 }
@@ -240,6 +306,14 @@ impl<T> NewWithNullPtr for *mut T {
 }
 
 impl NewWithNullPtr for wire_ArcRwLockMioClientState {
+    fn new_with_null_ptr() -> Self {
+        Self {
+            ptr: core::ptr::null(),
+        }
+    }
+}
+
+impl NewWithNullPtr for wire_Player {
     fn new_with_null_ptr() -> Self {
         Self {
             ptr: core::ptr::null(),
@@ -261,8 +335,21 @@ impl Default for wire_MioClient {
     }
 }
 
-// Section: sync execution mode utility
+impl NewWithNullPtr for wire_MioPlayer {
+    fn new_with_null_ptr() -> Self {
+        Self {
+            field0: wire_Player::new_with_null_ptr(),
+        }
+    }
+}
 
+impl Default for wire_MioPlayer {
+    fn default() -> Self {
+        Self::new_with_null_ptr()
+    }
+}
+
+// Section: sync execution mode utility
 #[no_mangle]
 pub extern "C" fn free_WireSyncReturn(ptr: support::WireSyncReturn) {
     unsafe {

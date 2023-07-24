@@ -1,6 +1,8 @@
 // NOTE: these _have_ to be re-exported as pub in order for rust<->dart to work
 // properly
 use crate::error::ErrorSplit;
+pub use crate::player::Player;
+use crate::player::PlayerMsg;
 pub use crate::MioClientState;
 use anyhow::bail;
 pub use flutter_rust_bridge::RustOpaque;
@@ -19,6 +21,22 @@ pub fn new_mio_client() -> SyncReturn<MioClient> {
     SyncReturn(MioClient(RustOpaque::new(Arc::new(RwLock::new(
         MioClientState::new(),
     )))))
+}
+
+pub struct PStatus {}
+
+pub struct MioPlayer(pub RustOpaque<Player>);
+
+pub fn new_player(client: MioClient) -> SyncReturn<MioPlayer> {
+    SyncReturn(MioPlayer(RustOpaque::new(Player::new(Arc::clone(
+        &client.0,
+    )))))
+}
+
+impl MioPlayer {
+    pub fn info_stream(&self, x: StreamSink<PStatus>) {
+        self.0.send.send(PlayerMsg::SetSink(x)).unwrap();
+    }
 }
 
 impl MioClient {

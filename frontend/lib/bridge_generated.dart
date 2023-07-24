@@ -15,6 +15,15 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kNewMioClientConstMeta;
 
+  MioPlayer newPlayer({required MioClient client, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kNewPlayerConstMeta;
+
+  Stream<PStatus> infoStreamMethodMioPlayer(
+      {required MioPlayer that, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kInfoStreamMethodMioPlayerConstMeta;
+
   String getUrlMethodMioClient({required MioClient that, dynamic hint});
 
   FlutterRustBridgeTaskConstMeta get kGetUrlMethodMioClientConstMeta;
@@ -101,6 +110,10 @@ abstract class MioGlue {
   DropFnType get dropOpaqueArcRwLockMioClientState;
   ShareFnType get shareOpaqueArcRwLockMioClientState;
   OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer;
+
+  DropFnType get dropOpaquePlayer;
+  ShareFnType get shareOpaquePlayer;
+  OpaqueTypeFinalizer get PlayerFinalizer;
 }
 
 @sealed
@@ -117,6 +130,20 @@ class ArcRwLockMioClientState extends FrbOpaque {
   @override
   OpaqueTypeFinalizer get staticFinalizer =>
       bridge.ArcRwLockMioClientStateFinalizer;
+}
+
+@sealed
+class Player extends FrbOpaque {
+  final MioGlue bridge;
+  Player.fromRaw(int ptr, int size, this.bridge) : super.unsafe(ptr, size);
+  @override
+  DropFnType get dropFn => bridge.dropOpaquePlayer;
+
+  @override
+  ShareFnType get shareFn => bridge.shareOpaquePlayer;
+
+  @override
+  OpaqueTypeFinalizer get staticFinalizer => bridge.PlayerFinalizer;
 }
 
 class Album {
@@ -272,6 +299,25 @@ class MioClient {
       );
 }
 
+class MioPlayer {
+  final MioGlue bridge;
+  final Player field0;
+
+  const MioPlayer({
+    required this.bridge,
+    required this.field0,
+  });
+
+  Stream<PStatus> infoStream({dynamic hint}) =>
+      bridge.infoStreamMethodMioPlayer(
+        that: this,
+      );
+}
+
+class PStatus {
+  const PStatus();
+}
+
 class Track {
   final UuidValue id;
   final UuidValue? album;
@@ -323,6 +369,42 @@ class MioGlueImpl implements MioGlue {
       const FlutterRustBridgeTaskConstMeta(
         debugName: "new_mio_client",
         argNames: [],
+      );
+
+  MioPlayer newPlayer({required MioClient client, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(client);
+    return _platform.executeSync(FlutterRustBridgeSyncTask(
+      callFfi: () => _platform.inner.wire_new_player(arg0),
+      parseSuccessData: _wire2api_mio_player,
+      constMeta: kNewPlayerConstMeta,
+      argValues: [client],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kNewPlayerConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "new_player",
+        argNames: ["client"],
+      );
+
+  Stream<PStatus> infoStreamMethodMioPlayer(
+      {required MioPlayer that, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_player(that);
+    return _platform.executeStream(FlutterRustBridgeTask(
+      callFfi: (port_) =>
+          _platform.inner.wire_info_stream__method__MioPlayer(port_, arg0),
+      parseSuccessData: _wire2api_p_status,
+      constMeta: kInfoStreamMethodMioPlayerConstMeta,
+      argValues: [that],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kInfoStreamMethodMioPlayerConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "info_stream__method__MioPlayer",
+        argNames: ["that"],
       );
 
   String getUrlMethodMioClient({required MioClient that, dynamic hint}) {
@@ -627,6 +709,10 @@ class MioGlueImpl implements MioGlue {
   OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer =>
       _platform.ArcRwLockMioClientStateFinalizer;
 
+  DropFnType get dropOpaquePlayer => _platform.inner.drop_opaque_Player;
+  ShareFnType get shareOpaquePlayer => _platform.inner.share_opaque_Player;
+  OpaqueTypeFinalizer get PlayerFinalizer => _platform.PlayerFinalizer;
+
   void dispose() {
     _platform.dispose();
   }
@@ -634,6 +720,10 @@ class MioGlueImpl implements MioGlue {
 
   ArcRwLockMioClientState _wire2api_ArcRwLockMioClientState(dynamic raw) {
     return ArcRwLockMioClientState.fromRaw(raw[0], raw[1], this);
+  }
+
+  Player _wire2api_Player(dynamic raw) {
+    return Player.fromRaw(raw[0], raw[1], this);
   }
 
   String _wire2api_String(dynamic raw) {
@@ -726,6 +816,16 @@ class MioGlueImpl implements MioGlue {
     );
   }
 
+  MioPlayer _wire2api_mio_player(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return MioPlayer(
+      bridge: this,
+      field0: _wire2api_Player(arr[0]),
+    );
+  }
+
   String? _wire2api_opt_String(dynamic raw) {
     return raw == null ? null : _wire2api_String(raw);
   }
@@ -740,6 +840,13 @@ class MioGlueImpl implements MioGlue {
 
   List<FakeMapItem>? _wire2api_opt_list_fake_map_item(dynamic raw) {
     return raw == null ? null : _wire2api_list_fake_map_item(raw);
+  }
+
+  PStatus _wire2api_p_status(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 0)
+      throw Exception('unexpected arr length: expect 0 but see ${arr.length}');
+    return PStatus();
   }
 
   Track _wire2api_track(dynamic raw) {
@@ -802,6 +909,13 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
   }
 
   @protected
+  wire_Player api2wire_Player(Player raw) {
+    final ptr = inner.new_Player();
+    _api_fill_to_wire_Player(raw, ptr);
+    return ptr;
+  }
+
+  @protected
   ffi.Pointer<wire_uint_8_list> api2wire_String(String raw) {
     return api2wire_uint_8_list(utf8.encoder.convert(raw));
   }
@@ -819,6 +933,13 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
   }
 
   @protected
+  ffi.Pointer<wire_MioPlayer> api2wire_box_autoadd_mio_player(MioPlayer raw) {
+    final ptr = inner.new_box_autoadd_mio_player_0();
+    _api_fill_to_wire_mio_player(raw, ptr.ref);
+    return ptr;
+  }
+
+  @protected
   ffi.Pointer<wire_uint_8_list> api2wire_uint_8_list(Uint8List raw) {
     final ans = inner.new_uint_8_list_0(raw.length);
     ans.ref.ptr.asTypedList(raw.length).setAll(0, raw);
@@ -830,10 +951,17 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
       OpaqueTypeFinalizer(inner._drop_opaque_ArcRwLockMioClientStatePtr);
   OpaqueTypeFinalizer get ArcRwLockMioClientStateFinalizer =>
       _ArcRwLockMioClientStateFinalizer;
+  late final OpaqueTypeFinalizer _PlayerFinalizer =
+      OpaqueTypeFinalizer(inner._drop_opaque_PlayerPtr);
+  OpaqueTypeFinalizer get PlayerFinalizer => _PlayerFinalizer;
 // Section: api_fill_to_wire
 
   void _api_fill_to_wire_ArcRwLockMioClientState(
       ArcRwLockMioClientState apiObj, wire_ArcRwLockMioClientState wireObj) {
+    wireObj.ptr = apiObj.shareOrMove();
+  }
+
+  void _api_fill_to_wire_Player(Player apiObj, wire_Player wireObj) {
     wireObj.ptr = apiObj.shareOrMove();
   }
 
@@ -842,8 +970,17 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
     _api_fill_to_wire_mio_client(apiObj, wireObj.ref);
   }
 
+  void _api_fill_to_wire_box_autoadd_mio_player(
+      MioPlayer apiObj, ffi.Pointer<wire_MioPlayer> wireObj) {
+    _api_fill_to_wire_mio_player(apiObj, wireObj.ref);
+  }
+
   void _api_fill_to_wire_mio_client(MioClient apiObj, wire_MioClient wireObj) {
     wireObj.field0 = api2wire_ArcRwLockMioClientState(apiObj.field0);
+  }
+
+  void _api_fill_to_wire_mio_player(MioPlayer apiObj, wire_MioPlayer wireObj) {
+    wireObj.field0 = api2wire_Player(apiObj.field0);
   }
 }
 
@@ -952,6 +1089,39 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
           'wire_new_mio_client');
   late final _wire_new_mio_client =
       _wire_new_mio_clientPtr.asFunction<WireSyncReturn Function()>();
+
+  WireSyncReturn wire_new_player(
+    ffi.Pointer<wire_MioClient> client,
+  ) {
+    return _wire_new_player(
+      client,
+    );
+  }
+
+  late final _wire_new_playerPtr = _lookup<
+      ffi.NativeFunction<
+          WireSyncReturn Function(
+              ffi.Pointer<wire_MioClient>)>>('wire_new_player');
+  late final _wire_new_player = _wire_new_playerPtr
+      .asFunction<WireSyncReturn Function(ffi.Pointer<wire_MioClient>)>();
+
+  void wire_info_stream__method__MioPlayer(
+    int port_,
+    ffi.Pointer<wire_MioPlayer> that,
+  ) {
+    return _wire_info_stream__method__MioPlayer(
+      port_,
+      that,
+    );
+  }
+
+  late final _wire_info_stream__method__MioPlayerPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioPlayer>)>>(
+      'wire_info_stream__method__MioPlayer');
+  late final _wire_info_stream__method__MioPlayer =
+      _wire_info_stream__method__MioPlayerPtr
+          .asFunction<void Function(int, ffi.Pointer<wire_MioPlayer>)>();
 
   WireSyncReturn wire_get_url__method__MioClient(
     ffi.Pointer<wire_MioClient> that,
@@ -1284,6 +1454,14 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
   late final _new_ArcRwLockMioClientState = _new_ArcRwLockMioClientStatePtr
       .asFunction<wire_ArcRwLockMioClientState Function()>();
 
+  wire_Player new_Player() {
+    return _new_Player();
+  }
+
+  late final _new_PlayerPtr =
+      _lookup<ffi.NativeFunction<wire_Player Function()>>('new_Player');
+  late final _new_Player = _new_PlayerPtr.asFunction<wire_Player Function()>();
+
   ffi.Pointer<wire_MioClient> new_box_autoadd_mio_client_0() {
     return _new_box_autoadd_mio_client_0();
   }
@@ -1293,6 +1471,16 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
           'new_box_autoadd_mio_client_0');
   late final _new_box_autoadd_mio_client_0 = _new_box_autoadd_mio_client_0Ptr
       .asFunction<ffi.Pointer<wire_MioClient> Function()>();
+
+  ffi.Pointer<wire_MioPlayer> new_box_autoadd_mio_player_0() {
+    return _new_box_autoadd_mio_player_0();
+  }
+
+  late final _new_box_autoadd_mio_player_0Ptr =
+      _lookup<ffi.NativeFunction<ffi.Pointer<wire_MioPlayer> Function()>>(
+          'new_box_autoadd_mio_player_0');
+  late final _new_box_autoadd_mio_player_0 = _new_box_autoadd_mio_player_0Ptr
+      .asFunction<ffi.Pointer<wire_MioPlayer> Function()>();
 
   ffi.Pointer<wire_uint_8_list> new_uint_8_list_0(
     int len,
@@ -1340,6 +1528,35 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
       _share_opaque_ArcRwLockMioClientStatePtr
           .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Void>)>();
 
+  void drop_opaque_Player(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _drop_opaque_Player(
+      ptr,
+    );
+  }
+
+  late final _drop_opaque_PlayerPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+          'drop_opaque_Player');
+  late final _drop_opaque_Player =
+      _drop_opaque_PlayerPtr.asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  ffi.Pointer<ffi.Void> share_opaque_Player(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _share_opaque_Player(
+      ptr,
+    );
+  }
+
+  late final _share_opaque_PlayerPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Void> Function(
+              ffi.Pointer<ffi.Void>)>>('share_opaque_Player');
+  late final _share_opaque_Player = _share_opaque_PlayerPtr
+      .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Void>)>();
+
   void free_WireSyncReturn(
     WireSyncReturn ptr,
   ) {
@@ -1363,6 +1580,14 @@ final class wire_ArcRwLockMioClientState extends ffi.Struct {
 
 final class wire_MioClient extends ffi.Struct {
   external wire_ArcRwLockMioClientState field0;
+}
+
+final class wire_Player extends ffi.Struct {
+  external ffi.Pointer<ffi.Void> ptr;
+}
+
+final class wire_MioPlayer extends ffi.Struct {
+  external wire_Player field0;
 }
 
 final class wire_uint_8_list extends ffi.Struct {

@@ -21,3 +21,4 @@ base64 = "0.21"
 serde_json = "1.0"
 serde_urlencoded = "0.7"
 uuid = "1"
+crossbeam = { version = "0.8", features = ["crossbeam-channel"] }

@@ -6,6 +6,7 @@ use ureq::Agent;
 mod api;
 mod error;
 mod mirror;
+mod player;
 mod server;
 
 // The second half of the connections. This actually sends out the raw connections
