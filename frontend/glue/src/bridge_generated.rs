@@ -74,6 +74,142 @@ fn wire_info_stream__method__MioPlayer_impl(
     )
 }
 
+fn wire_play__method__MioPlayer_impl(
+    that: impl Wire2Api<MioPlayer> + UnwindSafe,
+    id: impl Wire2Api<Option<uuid::Uuid>> + UnwindSafe,
+) -> support::WireSyncReturn {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+        WrapInfo {
+            debug_name: "play__method__MioPlayer",
+            port: None,
+            mode: FfiCallMode::Sync,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_id = id.wire2api();
+            Ok(MioPlayer::play(&api_that, api_id))
+        },
+    )
+}
+
+fn wire_pause__method__MioPlayer_impl(
+    that: impl Wire2Api<MioPlayer> + UnwindSafe,
+) -> support::WireSyncReturn {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+        WrapInfo {
+            debug_name: "pause__method__MioPlayer",
+            port: None,
+            mode: FfiCallMode::Sync,
+        },
+        move || {
+            let api_that = that.wire2api();
+            Ok(MioPlayer::pause(&api_that))
+        },
+    )
+}
+
+fn wire_toggle__method__MioPlayer_impl(
+    that: impl Wire2Api<MioPlayer> + UnwindSafe,
+) -> support::WireSyncReturn {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+        WrapInfo {
+            debug_name: "toggle__method__MioPlayer",
+            port: None,
+            mode: FfiCallMode::Sync,
+        },
+        move || {
+            let api_that = that.wire2api();
+            Ok(MioPlayer::toggle(&api_that))
+        },
+    )
+}
+
+fn wire_queue__method__MioPlayer_impl(
+    that: impl Wire2Api<MioPlayer> + UnwindSafe,
+    id: impl Wire2Api<uuid::Uuid> + UnwindSafe,
+) -> support::WireSyncReturn {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+        WrapInfo {
+            debug_name: "queue__method__MioPlayer",
+            port: None,
+            mode: FfiCallMode::Sync,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_id = id.wire2api();
+            Ok(MioPlayer::queue(&api_that, api_id))
+        },
+    )
+}
+
+fn wire_unqueue__method__MioPlayer_impl(
+    that: impl Wire2Api<MioPlayer> + UnwindSafe,
+    id: impl Wire2Api<uuid::Uuid> + UnwindSafe,
+) -> support::WireSyncReturn {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+        WrapInfo {
+            debug_name: "unqueue__method__MioPlayer",
+            port: None,
+            mode: FfiCallMode::Sync,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_id = id.wire2api();
+            Ok(MioPlayer::unqueue(&api_that, api_id))
+        },
+    )
+}
+
+fn wire_stop__method__MioPlayer_impl(
+    that: impl Wire2Api<MioPlayer> + UnwindSafe,
+) -> support::WireSyncReturn {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+        WrapInfo {
+            debug_name: "stop__method__MioPlayer",
+            port: None,
+            mode: FfiCallMode::Sync,
+        },
+        move || {
+            let api_that = that.wire2api();
+            Ok(MioPlayer::stop(&api_that))
+        },
+    )
+}
+
+fn wire_forward__method__MioPlayer_impl(
+    that: impl Wire2Api<MioPlayer> + UnwindSafe,
+) -> support::WireSyncReturn {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+        WrapInfo {
+            debug_name: "forward__method__MioPlayer",
+            port: None,
+            mode: FfiCallMode::Sync,
+        },
+        move || {
+            let api_that = that.wire2api();
+            Ok(MioPlayer::forward(&api_that))
+        },
+    )
+}
+
+fn wire_volume__method__MioPlayer_impl(
+    that: impl Wire2Api<MioPlayer> + UnwindSafe,
+    volume: impl Wire2Api<f32> + UnwindSafe,
+) -> support::WireSyncReturn {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+        WrapInfo {
+            debug_name: "volume__method__MioPlayer",
+            port: None,
+            mode: FfiCallMode::Sync,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_volume = volume.wire2api();
+            Ok(MioPlayer::volume(&api_that, api_volume))
+        },
+    )
+}
+
 fn wire_get_url__method__MioClient_impl(
     that: impl Wire2Api<MioClient> + UnwindSafe,
 ) -> support::WireSyncReturn {
@@ -403,6 +539,12 @@ where
     }
 }
 
+impl Wire2Api<f32> for f32 {
+    fn wire2api(self) -> f32 {
+        self
+    }
+}
+
 impl Wire2Api<u8> for u8 {
     fn wire2api(self) -> u8 {
         self
@@ -528,7 +670,13 @@ impl rust2dart::IntoIntoDart<MioPlayer> for MioPlayer {
 
 impl support::IntoDart for PStatus {
     fn into_dart(self) -> support::DartAbi {
-        vec![self.err_msg.into_dart()].into_dart()
+        vec![
+            self.err_msg.into_dart(),
+            self.queue.into_into_dart().into_dart(),
+            self.volume.into_into_dart().into_dart(),
+            self.paused.into_into_dart().into_dart(),
+        ]
+        .into_dart()
     }
 }
 

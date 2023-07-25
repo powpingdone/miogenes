@@ -25,6 +25,9 @@ pub fn new_mio_client() -> SyncReturn<MioClient> {
 
 pub struct PStatus {
     pub err_msg: Option<String>,
+    pub queue: Vec<Uuid>,
+    pub volume: f32,
+    pub paused: bool,
 }
 
 pub struct MioPlayer(pub RustOpaque<Player>);
@@ -38,7 +41,47 @@ pub fn new_player(client: MioClient) -> SyncReturn<MioPlayer> {
 
 impl MioPlayer {
     pub fn info_stream(&self, x: StreamSink<PStatus>) {
-        self.0.send.send(PlayerMsg::SetSink(x)).unwrap();
+        self.0.tx.send(PlayerMsg::SetSink(x)).unwrap();
+    }
+
+    pub fn play(&self, id: Option<Uuid>) -> SyncReturn<()> {
+        self.0.tx.send(PlayerMsg::Play(id)).unwrap();
+        SyncReturn(())
+    }
+
+    pub fn pause(&self) -> SyncReturn<()> {
+        self.0.tx.send(PlayerMsg::Pause).unwrap();
+        SyncReturn(())
+    }
+
+    pub fn toggle(&self) -> SyncReturn<()> {
+        self.0.tx.send(PlayerMsg::Toggle).unwrap();
+        SyncReturn(())
+    }
+
+    pub fn queue(&self, id: Uuid) -> SyncReturn<()> {
+        self.0.tx.send(PlayerMsg::Queue(id)).unwrap();
+        SyncReturn(())
+    }
+
+    pub fn unqueue(&self, id: Uuid) -> SyncReturn<()> {
+        self.0.tx.send(PlayerMsg::Unqueue(id)).unwrap();
+        SyncReturn(())
+    }
+
+    pub fn stop(&self) -> SyncReturn<()> {
+        self.0.tx.send(PlayerMsg::Stop).unwrap();
+        SyncReturn(())
+    }
+
+    pub fn forward(&self) -> SyncReturn<()> {
+        self.0.tx.send(PlayerMsg::Forward).unwrap();
+        SyncReturn(())
+    }
+
+    pub fn volume(&self, volume: f32) -> SyncReturn<()> {
+        self.0.tx.send(PlayerMsg::Volume(volume)).unwrap();
+        SyncReturn(())
     }
 }
 

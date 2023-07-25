@@ -1,12 +1,13 @@
 use crate::*;
 use crossbeam::channel::{Receiver, RecvTimeoutError};
 use flutter_rust_bridge::StreamSink;
+use parking_lot::Mutex;
 use qoaudio::QoaRodioSource;
 use rodio::Source;
 use std::{
     collections::VecDeque,
     io::Read,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
 use uuid::Uuid;
@@ -18,13 +19,14 @@ pub(crate) enum PlayerMsg {
     Toggle,
     Queue(Uuid),
     Unqueue(Uuid),
+    Volume(f32),
     Stop,
     Forward,
 }
 
 #[derive(Debug)]
 pub struct Player {
-    pub(crate) send: crossbeam::channel::Sender<crate::player::PlayerMsg>,
+    pub(crate) tx: crossbeam::channel::Sender<crate::player::PlayerMsg>,
 }
 
 impl Player {
@@ -34,46 +36,75 @@ impl Player {
         // I don't like doing this, but i'm not joining this thread. Ignore the dropped
         // handle.
         std::thread::spawn(move || player_track_mgr(client, rx_player));
-        Self { send: tx_player }
+        Self { tx: tx_player }
     }
 }
 
 fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>) {
-    let mut state = PlayerState::new(client).unwrap();
+    let mut state = match PlayerState::new(client) {
+        Ok(x) => x,
+        Err(err) => loop {
+            let recv = rx.recv();
+            match recv {
+                Ok(x) => {
+                    if let PlayerMsg::SetSink(sink) = x {
+                        sink.add(api::PStatus {
+                            err_msg: Some(err.to_string()),
+                            queue: Vec::new(),
+                            volume: 0.0,
+                            paused: true,
+                        });
+                        return;
+                    }
+                }
+                Err(_) => return,
+            }
+        },
+    };
     loop {
+        let mut err_msg = None;
         let recv = rx.recv_deadline(Instant::now() + Duration::from_millis(50));
         match recv {
             Ok(msg) => match msg {
                 PlayerMsg::SetSink(new_sink) => state.set_ui_sink(new_sink),
                 PlayerMsg::Play(id) => {
-                    let mut lock = state.decoder.lock().unwrap();
+                    let mut lock = state.decoder.lock();
                     if let Some(id) = id {
                         lock.clear_self();
                         lock.set_new(id);
-                        state
-                            .s_handle
-                            .play_raw(SharedSource {
-                                i: state.decoder.clone(),
-                            })
-                            .unwrap();
+                        if let Err(err) = state.s_handle.play_raw(SharedSource {
+                            i: state.decoder.clone(),
+                        }) {
+                            err_msg = Some(err.to_string());
+                        }
                     }
                     lock.pause = false;
                 }
-                PlayerMsg::Pause => state.decoder.lock().unwrap().pause = true,
+                PlayerMsg::Pause => state.decoder.lock().pause = true,
                 PlayerMsg::Toggle => {
-                    let mut lock = state.decoder.lock().unwrap();
+                    let mut lock = state.decoder.lock();
                     lock.pause = !lock.pause;
                 }
-                PlayerMsg::Queue(id) => state.decoder.lock().unwrap().queue(id),
-                PlayerMsg::Unqueue(id) => state.decoder.lock().unwrap().dequeue(id),
-                PlayerMsg::Stop => state.decoder.lock().unwrap().clear_self(),
-                PlayerMsg::Forward => state.decoder.lock().unwrap().forward(),
+                PlayerMsg::Queue(id) => state.decoder.lock().queue(id),
+                PlayerMsg::Unqueue(id) => state.decoder.lock().dequeue(id),
+                PlayerMsg::Stop => state.decoder.lock().clear_self(),
+                PlayerMsg::Forward => state.decoder.lock().forward(),
+                PlayerMsg::Volume(vol) => state.decoder.lock().vol = vol,
             },
             Err(err) if err == RecvTimeoutError::Disconnected => return,
             Err(err) if err == RecvTimeoutError::Timeout => (),
             _ => unreachable!(),
         }
-        state.send_ui(api::PStatus { err_msg: None });
+
+        // yes double locking is very much shitty and suboptimal, but PlayerMsg::SetSink
+        // forced my hand. why do we not have partial borrows yet
+        let lock = state.decoder.lock();
+        state.send_ui(api::PStatus {
+            err_msg,
+            queue: lock.copy_queue(),
+            volume: lock.vol,
+            paused: lock.pause,
+        });
     }
 }
 
@@ -87,19 +118,19 @@ where
     <T as Iterator>::Item: rodio::Sample,
 {
     fn current_frame_len(&self) -> Option<usize> {
-        self.i.lock().unwrap().current_frame_len()
+        self.i.lock().current_frame_len()
     }
 
     fn channels(&self) -> u16 {
-        self.i.lock().unwrap().channels()
+        self.i.lock().channels()
     }
 
     fn sample_rate(&self) -> u32 {
-        self.i.lock().unwrap().sample_rate()
+        self.i.lock().sample_rate()
     }
 
     fn total_duration(&self) -> Option<Duration> {
-        self.i.lock().unwrap().total_duration()
+        self.i.lock().total_duration()
     }
 }
 
@@ -110,7 +141,7 @@ where
     type Item = T::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.i.lock().unwrap().next()
+        self.i.lock().next()
     }
 }
 
@@ -196,6 +227,10 @@ impl ControllingDecoder {
         self.next_ids.clear();
         self.true_dec = None;
     }
+
+    pub fn copy_queue(&self) -> Vec<Uuid> {
+        self.next_ids.iter().copied().collect::<Vec<_>>()
+    }
 }
 
 impl Iterator for ControllingDecoder {
@@ -203,25 +238,29 @@ impl Iterator for ControllingDecoder {
 
     fn next(&mut self) -> Option<Self::Item> {
         let scale = |x: i16| -> f32 { (x as f32 / i16::MAX as f32).clamp(-1.0, 1.0) * self.vol };
-        if !self.pause {
+        if self.pause {
             Some(0.0)
         } else if let Some(ref mut dec) = self.true_dec {
-            let x = dec.next().map(scale);
-            if x.is_none() {
+            let sample = dec.next().map(scale);
+
+            // if finished
+            if sample.is_none() {
                 loop {
+                    // there is no need to notify player_track_mgr because it will poll and then pick
+                    // this up, once it acquires the lock
                     if let Some(id) = self.next_ids.pop_front() {
                         self.set_new(id);
                         if self.true_dec.is_none() {
                             continue;
                         }
-                        return self.next();
                     } else {
                         self.true_dec = None;
-                        return Some(0.0);
+                        self.pause = true;
                     }
+                    return self.next();
                 }
             }
-            x
+            sample
         } else {
             Some(0.0)
         }

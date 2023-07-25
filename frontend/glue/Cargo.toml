@@ -22,5 +22,6 @@ serde_json = "1.0"
 serde_urlencoded = "0.7"
 uuid = "1"
 crossbeam = { version = "0.8", features = ["crossbeam-channel"] }
-qoaudio = { version = "0.6.0", features = ["rodio"] }
-rodio = { version = "0.17.1", default-features = false }
+qoaudio = { version = "0.6", features = ["rodio"] }
+rodio = { version = "0.17", default-features = false }
+parking_lot = "0.12"
