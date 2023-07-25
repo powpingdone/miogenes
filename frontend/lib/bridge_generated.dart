@@ -24,6 +24,42 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kInfoStreamMethodMioPlayerConstMeta;
 
+  void playMethodMioPlayer(
+      {required MioPlayer that, UuidValue? id, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kPlayMethodMioPlayerConstMeta;
+
+  void pauseMethodMioPlayer({required MioPlayer that, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kPauseMethodMioPlayerConstMeta;
+
+  void toggleMethodMioPlayer({required MioPlayer that, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kToggleMethodMioPlayerConstMeta;
+
+  void queueMethodMioPlayer(
+      {required MioPlayer that, required UuidValue id, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kQueueMethodMioPlayerConstMeta;
+
+  void unqueueMethodMioPlayer(
+      {required MioPlayer that, required UuidValue id, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kUnqueueMethodMioPlayerConstMeta;
+
+  void stopMethodMioPlayer({required MioPlayer that, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kStopMethodMioPlayerConstMeta;
+
+  void forwardMethodMioPlayer({required MioPlayer that, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kForwardMethodMioPlayerConstMeta;
+
+  void volumeMethodMioPlayer(
+      {required MioPlayer that, required double volume, dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kVolumeMethodMioPlayerConstMeta;
+
   String getUrlMethodMioClient({required MioClient that, dynamic hint});
 
   FlutterRustBridgeTaskConstMeta get kGetUrlMethodMioClientConstMeta;
@@ -301,13 +337,58 @@ class MioPlayer {
       bridge.infoStreamMethodMioPlayer(
         that: this,
       );
+
+  void play({UuidValue? id, dynamic hint}) => bridge.playMethodMioPlayer(
+        that: this,
+        id: id,
+      );
+
+  void pause({dynamic hint}) => bridge.pauseMethodMioPlayer(
+        that: this,
+      );
+
+  void toggle({dynamic hint}) => bridge.toggleMethodMioPlayer(
+        that: this,
+      );
+
+  void queue({required UuidValue id, dynamic hint}) =>
+      bridge.queueMethodMioPlayer(
+        that: this,
+        id: id,
+      );
+
+  void unqueue({required UuidValue id, dynamic hint}) =>
+      bridge.unqueueMethodMioPlayer(
+        that: this,
+        id: id,
+      );
+
+  void stop({dynamic hint}) => bridge.stopMethodMioPlayer(
+        that: this,
+      );
+
+  void forward({dynamic hint}) => bridge.forwardMethodMioPlayer(
+        that: this,
+      );
+
+  void volume({required double volume, dynamic hint}) =>
+      bridge.volumeMethodMioPlayer(
+        that: this,
+        volume: volume,
+      );
 }
 
 class PStatus {
   final String? errMsg;
+  final List<UuidValue> queue;
+  final double volume;
+  final bool paused;
 
   const PStatus({
     this.errMsg,
+    required this.queue,
+    required this.volume,
+    required this.paused,
   });
 }
 
@@ -398,6 +479,151 @@ class MioGlueImpl implements MioGlue {
       const FlutterRustBridgeTaskConstMeta(
         debugName: "info_stream__method__MioPlayer",
         argNames: ["that"],
+      );
+
+  void playMethodMioPlayer(
+      {required MioPlayer that, UuidValue? id, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_player(that);
+    var arg1 = _platform.api2wire_opt_Uuid(id);
+    return _platform.executeSync(FlutterRustBridgeSyncTask(
+      callFfi: () => _platform.inner.wire_play__method__MioPlayer(arg0, arg1),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kPlayMethodMioPlayerConstMeta,
+      argValues: [that, id],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kPlayMethodMioPlayerConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "play__method__MioPlayer",
+        argNames: ["that", "id"],
+      );
+
+  void pauseMethodMioPlayer({required MioPlayer that, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_player(that);
+    return _platform.executeSync(FlutterRustBridgeSyncTask(
+      callFfi: () => _platform.inner.wire_pause__method__MioPlayer(arg0),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kPauseMethodMioPlayerConstMeta,
+      argValues: [that],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kPauseMethodMioPlayerConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "pause__method__MioPlayer",
+        argNames: ["that"],
+      );
+
+  void toggleMethodMioPlayer({required MioPlayer that, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_player(that);
+    return _platform.executeSync(FlutterRustBridgeSyncTask(
+      callFfi: () => _platform.inner.wire_toggle__method__MioPlayer(arg0),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kToggleMethodMioPlayerConstMeta,
+      argValues: [that],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kToggleMethodMioPlayerConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "toggle__method__MioPlayer",
+        argNames: ["that"],
+      );
+
+  void queueMethodMioPlayer(
+      {required MioPlayer that, required UuidValue id, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_player(that);
+    var arg1 = _platform.api2wire_Uuid(id);
+    return _platform.executeSync(FlutterRustBridgeSyncTask(
+      callFfi: () => _platform.inner.wire_queue__method__MioPlayer(arg0, arg1),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kQueueMethodMioPlayerConstMeta,
+      argValues: [that, id],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kQueueMethodMioPlayerConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "queue__method__MioPlayer",
+        argNames: ["that", "id"],
+      );
+
+  void unqueueMethodMioPlayer(
+      {required MioPlayer that, required UuidValue id, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_player(that);
+    var arg1 = _platform.api2wire_Uuid(id);
+    return _platform.executeSync(FlutterRustBridgeSyncTask(
+      callFfi: () =>
+          _platform.inner.wire_unqueue__method__MioPlayer(arg0, arg1),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kUnqueueMethodMioPlayerConstMeta,
+      argValues: [that, id],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kUnqueueMethodMioPlayerConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "unqueue__method__MioPlayer",
+        argNames: ["that", "id"],
+      );
+
+  void stopMethodMioPlayer({required MioPlayer that, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_player(that);
+    return _platform.executeSync(FlutterRustBridgeSyncTask(
+      callFfi: () => _platform.inner.wire_stop__method__MioPlayer(arg0),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kStopMethodMioPlayerConstMeta,
+      argValues: [that],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kStopMethodMioPlayerConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "stop__method__MioPlayer",
+        argNames: ["that"],
+      );
+
+  void forwardMethodMioPlayer({required MioPlayer that, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_player(that);
+    return _platform.executeSync(FlutterRustBridgeSyncTask(
+      callFfi: () => _platform.inner.wire_forward__method__MioPlayer(arg0),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kForwardMethodMioPlayerConstMeta,
+      argValues: [that],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kForwardMethodMioPlayerConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "forward__method__MioPlayer",
+        argNames: ["that"],
+      );
+
+  void volumeMethodMioPlayer(
+      {required MioPlayer that, required double volume, dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_player(that);
+    var arg1 = api2wire_f32(volume);
+    return _platform.executeSync(FlutterRustBridgeSyncTask(
+      callFfi: () => _platform.inner.wire_volume__method__MioPlayer(arg0, arg1),
+      parseSuccessData: _wire2api_unit,
+      constMeta: kVolumeMethodMioPlayerConstMeta,
+      argValues: [that, volume],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kVolumeMethodMioPlayerConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "volume__method__MioPlayer",
+        argNames: ["that", "volume"],
       );
 
   String getUrlMethodMioClient({required MioClient that, dynamic hint}) {
@@ -747,6 +973,10 @@ class MioGlueImpl implements MioGlue {
     );
   }
 
+  bool _wire2api_bool(dynamic raw) {
+    return raw as bool;
+  }
+
   int _wire2api_box_autoadd_i64(dynamic raw) {
     return _wire2api_i64(raw);
   }
@@ -759,6 +989,10 @@ class MioGlueImpl implements MioGlue {
       id: _wire2api_Uuid(arr[0]),
       webmBlob: _wire2api_uint_8_list(arr[1]),
     );
+  }
+
+  double _wire2api_f32(dynamic raw) {
+    return raw as double;
   }
 
   FakeMapItem _wire2api_fake_map_item(dynamic raw) {
@@ -817,10 +1051,13 @@ class MioGlueImpl implements MioGlue {
 
   PStatus _wire2api_p_status(dynamic raw) {
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return PStatus(
       errMsg: _wire2api_opt_String(arr[0]),
+      queue: _wire2api_Uuids(arr[1]),
+      volume: _wire2api_f32(arr[2]),
+      paused: _wire2api_bool(arr[3]),
     );
   }
 
@@ -862,6 +1099,11 @@ class MioGlueImpl implements MioGlue {
 }
 
 // Section: api2wire
+
+@protected
+double api2wire_f32(double raw) {
+  return raw;
+}
 
 @protected
 int api2wire_u8(int raw) {
@@ -912,6 +1154,11 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
     final ptr = inner.new_box_autoadd_mio_player_0();
     _api_fill_to_wire_mio_player(raw, ptr.ref);
     return ptr;
+  }
+
+  @protected
+  ffi.Pointer<wire_uint_8_list> api2wire_opt_Uuid(UuidValue? raw) {
+    return raw == null ? ffi.nullptr : api2wire_Uuid(raw);
   }
 
   @protected
@@ -1097,6 +1344,144 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
   late final _wire_info_stream__method__MioPlayer =
       _wire_info_stream__method__MioPlayerPtr
           .asFunction<void Function(int, ffi.Pointer<wire_MioPlayer>)>();
+
+  WireSyncReturn wire_play__method__MioPlayer(
+    ffi.Pointer<wire_MioPlayer> that,
+    ffi.Pointer<wire_uint_8_list> id,
+  ) {
+    return _wire_play__method__MioPlayer(
+      that,
+      id,
+    );
+  }
+
+  late final _wire_play__method__MioPlayerPtr = _lookup<
+      ffi.NativeFunction<
+          WireSyncReturn Function(ffi.Pointer<wire_MioPlayer>,
+              ffi.Pointer<wire_uint_8_list>)>>('wire_play__method__MioPlayer');
+  late final _wire_play__method__MioPlayer =
+      _wire_play__method__MioPlayerPtr.asFunction<
+          WireSyncReturn Function(
+              ffi.Pointer<wire_MioPlayer>, ffi.Pointer<wire_uint_8_list>)>();
+
+  WireSyncReturn wire_pause__method__MioPlayer(
+    ffi.Pointer<wire_MioPlayer> that,
+  ) {
+    return _wire_pause__method__MioPlayer(
+      that,
+    );
+  }
+
+  late final _wire_pause__method__MioPlayerPtr = _lookup<
+      ffi.NativeFunction<
+          WireSyncReturn Function(
+              ffi.Pointer<wire_MioPlayer>)>>('wire_pause__method__MioPlayer');
+  late final _wire_pause__method__MioPlayer = _wire_pause__method__MioPlayerPtr
+      .asFunction<WireSyncReturn Function(ffi.Pointer<wire_MioPlayer>)>();
+
+  WireSyncReturn wire_toggle__method__MioPlayer(
+    ffi.Pointer<wire_MioPlayer> that,
+  ) {
+    return _wire_toggle__method__MioPlayer(
+      that,
+    );
+  }
+
+  late final _wire_toggle__method__MioPlayerPtr = _lookup<
+      ffi.NativeFunction<
+          WireSyncReturn Function(
+              ffi.Pointer<wire_MioPlayer>)>>('wire_toggle__method__MioPlayer');
+  late final _wire_toggle__method__MioPlayer =
+      _wire_toggle__method__MioPlayerPtr
+          .asFunction<WireSyncReturn Function(ffi.Pointer<wire_MioPlayer>)>();
+
+  WireSyncReturn wire_queue__method__MioPlayer(
+    ffi.Pointer<wire_MioPlayer> that,
+    ffi.Pointer<wire_uint_8_list> id,
+  ) {
+    return _wire_queue__method__MioPlayer(
+      that,
+      id,
+    );
+  }
+
+  late final _wire_queue__method__MioPlayerPtr = _lookup<
+      ffi.NativeFunction<
+          WireSyncReturn Function(ffi.Pointer<wire_MioPlayer>,
+              ffi.Pointer<wire_uint_8_list>)>>('wire_queue__method__MioPlayer');
+  late final _wire_queue__method__MioPlayer =
+      _wire_queue__method__MioPlayerPtr.asFunction<
+          WireSyncReturn Function(
+              ffi.Pointer<wire_MioPlayer>, ffi.Pointer<wire_uint_8_list>)>();
+
+  WireSyncReturn wire_unqueue__method__MioPlayer(
+    ffi.Pointer<wire_MioPlayer> that,
+    ffi.Pointer<wire_uint_8_list> id,
+  ) {
+    return _wire_unqueue__method__MioPlayer(
+      that,
+      id,
+    );
+  }
+
+  late final _wire_unqueue__method__MioPlayerPtr = _lookup<
+          ffi.NativeFunction<
+              WireSyncReturn Function(
+                  ffi.Pointer<wire_MioPlayer>, ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_unqueue__method__MioPlayer');
+  late final _wire_unqueue__method__MioPlayer =
+      _wire_unqueue__method__MioPlayerPtr.asFunction<
+          WireSyncReturn Function(
+              ffi.Pointer<wire_MioPlayer>, ffi.Pointer<wire_uint_8_list>)>();
+
+  WireSyncReturn wire_stop__method__MioPlayer(
+    ffi.Pointer<wire_MioPlayer> that,
+  ) {
+    return _wire_stop__method__MioPlayer(
+      that,
+    );
+  }
+
+  late final _wire_stop__method__MioPlayerPtr = _lookup<
+      ffi.NativeFunction<
+          WireSyncReturn Function(
+              ffi.Pointer<wire_MioPlayer>)>>('wire_stop__method__MioPlayer');
+  late final _wire_stop__method__MioPlayer = _wire_stop__method__MioPlayerPtr
+      .asFunction<WireSyncReturn Function(ffi.Pointer<wire_MioPlayer>)>();
+
+  WireSyncReturn wire_forward__method__MioPlayer(
+    ffi.Pointer<wire_MioPlayer> that,
+  ) {
+    return _wire_forward__method__MioPlayer(
+      that,
+    );
+  }
+
+  late final _wire_forward__method__MioPlayerPtr = _lookup<
+      ffi.NativeFunction<
+          WireSyncReturn Function(
+              ffi.Pointer<wire_MioPlayer>)>>('wire_forward__method__MioPlayer');
+  late final _wire_forward__method__MioPlayer =
+      _wire_forward__method__MioPlayerPtr
+          .asFunction<WireSyncReturn Function(ffi.Pointer<wire_MioPlayer>)>();
+
+  WireSyncReturn wire_volume__method__MioPlayer(
+    ffi.Pointer<wire_MioPlayer> that,
+    double volume,
+  ) {
+    return _wire_volume__method__MioPlayer(
+      that,
+      volume,
+    );
+  }
+
+  late final _wire_volume__method__MioPlayerPtr = _lookup<
+      ffi.NativeFunction<
+          WireSyncReturn Function(ffi.Pointer<wire_MioPlayer>,
+              ffi.Float)>>('wire_volume__method__MioPlayer');
+  late final _wire_volume__method__MioPlayer =
+      _wire_volume__method__MioPlayerPtr.asFunction<
+          WireSyncReturn Function(ffi.Pointer<wire_MioPlayer>, double)>();
 
   WireSyncReturn wire_get_url__method__MioClient(
     ffi.Pointer<wire_MioClient> that,
