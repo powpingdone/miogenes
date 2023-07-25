@@ -121,15 +121,6 @@ pub extern "C" fn wire_get_folders__method__MioClient(port_: i64, that: *mut wir
 }
 
 #[no_mangle]
-pub extern "C" fn wire_stream__method__MioClient(
-    port_: i64,
-    that: *mut wire_MioClient,
-    id: *mut wire_uint_8_list,
-) {
-    wire_stream__method__MioClient_impl(port_, that, id)
-}
-
-#[no_mangle]
 pub extern "C" fn wire_make_dir__method__MioClient(
     port_: i64,
     that: *mut wire_MioClient,

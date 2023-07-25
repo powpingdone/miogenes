@@ -310,27 +310,6 @@ fn wire_get_folders__method__MioClient_impl(
     )
 }
 
-fn wire_stream__method__MioClient_impl(
-    port_: MessagePort,
-    that: impl Wire2Api<MioClient> + UnwindSafe,
-    id: impl Wire2Api<uuid::Uuid> + UnwindSafe,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
-        WrapInfo {
-            debug_name: "stream__method__MioClient",
-            port: Some(port_),
-            mode: FfiCallMode::Stream,
-        },
-        move || {
-            let api_that = that.wire2api();
-            let api_id = id.wire2api();
-            move |task_callback| {
-                MioClient::stream(&api_that, api_id, task_callback.stream_sink::<_, Vec<u8>>())
-            }
-        },
-    )
-}
-
 fn wire_make_dir__method__MioClient_impl(
     port_: MessagePort,
     that: impl Wire2Api<MioClient> + UnwindSafe,
@@ -549,7 +528,7 @@ impl rust2dart::IntoIntoDart<MioPlayer> for MioPlayer {
 
 impl support::IntoDart for PStatus {
     fn into_dart(self) -> support::DartAbi {
-        Vec::<u8>::new().into_dart()
+        vec![self.err_msg.into_dart()].into_dart()
     }
 }
 

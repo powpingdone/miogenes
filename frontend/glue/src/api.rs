@@ -23,14 +23,17 @@ pub fn new_mio_client() -> SyncReturn<MioClient> {
     )))))
 }
 
-pub struct PStatus {}
+pub struct PStatus {
+    pub err_msg: Option<String>,
+}
 
 pub struct MioPlayer(pub RustOpaque<Player>);
 
 pub fn new_player(client: MioClient) -> SyncReturn<MioPlayer> {
-    SyncReturn(MioPlayer(RustOpaque::new(Player::new(Arc::clone(
-        &client.0,
-    )))))
+    SyncReturn(MioPlayer(RustOpaque::new(Player::new(Arc::clone({
+        let x: &Arc<_> = &client.0;
+        x
+    })))))
 }
 
 impl MioPlayer {
@@ -165,16 +168,6 @@ impl MioClient {
         self.wrap_refresh(|lock| match lock.get_folders() {
             Ok(ok) => Ok(ok),
             Err(err) => rewrap_error(err, |status, resp| Ok((status, resp))),
-        })
-    }
-
-    pub fn stream(&self, id: Uuid, sink: StreamSink<Vec<u8>>) -> anyhow::Result<()> {
-        self.wrap_refresh(move |lock| match lock.stream(id, sink.to_owned()) {
-            Ok(ok) => Ok(ok),
-            Err(err) => rewrap_error(err, |status, resp| match status {
-                404 => bail!("{resp}"),
-                _ => Ok((status, resp)),
-            }),
         })
     }
 
