@@ -14,10 +14,21 @@ class MainNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-        create: (_) => MainNavTopLevel(),
-        builder: (_, __) => const MainNavWidgetPage());
+    return MultiProvider(providers: [
+      Provider(create: (_) => MainNavTopLevel()),
+      Provider(create: (context) {
+        final mtl = Provider.of<MioTopLevel>(context);
+        var mioState = mtl.mioClient;
+        return MioPlayerState(api.newPlayer(client: mioState));
+      })
+    ], builder: (_, __) => const MainNavWidgetPage());
   }
+}
+
+class MioPlayerState extends ChangeNotifier {
+  MioPlayerState(this._mioInternal);
+  final MioPlayer _mioInternal;
+  MioPlayer get mioPlayer => _mioInternal;
 }
 
 class MainNavTopLevel extends ChangeNotifier {
@@ -41,7 +52,7 @@ class MainNavTopLevel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addToTasks(Iterable<UploadTaskStateHolder> newTasks) {
+  void addToUploadTasks(Iterable<UploadTaskStateHolder> newTasks) {
     _tasks.addAll(newTasks);
     notifyListeners();
   }
@@ -115,7 +126,7 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
                                 builder: (context) =>
                                     const FolderViewSelectPage()));
                         if (serverPath != null) {
-                          mainState.addToTasks(files.paths
+                          mainState.addToUploadTasks(files.paths
                               // filter out all nulls
                               .where((x) => x != null)
                               .map((x) => UploadTaskStateHolder(
@@ -144,7 +155,7 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
                                     const FolderViewSelectPage()));
                         if (serverPath != null) {
                           var paths = await fut;
-                          mainState.addToTasks(
+                          mainState.addToUploadTasks(
                               paths.map((path) => UploadTaskStateHolder(
                                     serverPath: serverPath,
                                     path: path,

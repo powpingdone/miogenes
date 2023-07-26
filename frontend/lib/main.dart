@@ -4,17 +4,17 @@ import 'ffi.dart';
 import 'login.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const MiogenesApp());
 }
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+class MiogenesApp extends StatefulWidget {
+  const MiogenesApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  State<MiogenesApp> createState() => _MiogenesAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MiogenesAppState extends State<MiogenesApp> {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
