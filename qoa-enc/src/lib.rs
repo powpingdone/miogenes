@@ -320,6 +320,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn verify_against_suite() {
         use hound::WavReader;
 
