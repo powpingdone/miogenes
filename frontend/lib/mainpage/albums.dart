@@ -76,7 +76,7 @@ class _AlbumPreviewState extends State<AlbumPreview> {
                 future: sampleTrack,
                 builder: (context, trackSnapshot) {
                   return Column(children: [
-                    CoverArtImg(trackSnapshot.data),
+                    CoverArtImg(trackSnapshot.data?.coverArt),
                     Text((albumSnapshot.data as Album).title),
                     ArtistText(trackSnapshot.data)
                   ]);
@@ -92,11 +92,11 @@ class _AlbumPreviewState extends State<AlbumPreview> {
 
 class CoverArtImg extends StatefulWidget {
   const CoverArtImg(
-    this.data, {
+    this.coverArtId, {
     super.key,
   });
 
-  final Track? data;
+  final UuidValue? coverArtId;
 
   @override
   State<CoverArtImg> createState() => _CoverArtImgState();
@@ -109,8 +109,8 @@ class _CoverArtImgState extends State<CoverArtImg> {
   Widget build(BuildContext context) {
     final mtl = Provider.of<MioTopLevel>(context);
     var mioState = mtl.mioClient;
-    if (widget.data?.coverArt != null) {
-      coverArt ??= mioState.getCoverArt(id: widget.data!.coverArt!);
+    if (widget.coverArtId != null) {
+      coverArt ??= mioState.getCoverArt(id: widget.coverArtId!);
     }
     return FutureBuilder(
         future: coverArt,
