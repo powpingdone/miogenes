@@ -6,6 +6,7 @@ import 'package:frontend/main.dart';
 import 'package:frontend/mainpage/folderview.dart';
 import 'package:frontend/mainpage/player.dart' as ui_player;
 import 'package:provider/provider.dart';
+import 'package:sliding_up_panel2/sliding_up_panel2.dart';
 
 import 'albums.dart';
 import 'upload.dart';
@@ -72,18 +73,19 @@ class MainNavWidgetPage extends StatefulWidget {
 
 class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
   var _pageIndex = 0;
-  final List<String> _commonExts = [
-    // lossless
-    "wav", "flac", "alac",
-    // typical lossy
-    "mp3", "ogg", "aac", "opus", "m4a"
-  ];
+  bool _playerMini = true;
 
   @override
   Widget build(BuildContext context) {
     final mtl = Provider.of<MioTopLevel>(context);
     var mioState = mtl.mioClient;
     final mainState = Provider.of<MainNavTopLevel>(context);
+    final List<String> commonExts = [
+      // lossless
+      "wav", "flac", "alac",
+      // typical lossy
+      "mp3", "ogg", "aac", "opus", "m4a"
+    ];
     mainState.albums ??= mioState.getAlbums();
 
     // page selection
@@ -123,7 +125,7 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
                     var files = await FilePicker.platform.pickFiles(
                         allowMultiple: true,
                         type: FileType.custom,
-                        allowedExtensions: _commonExts);
+                        allowedExtensions: commonExts);
                     if (files != null) {
                       // get server path to upload to
                       String? serverPath = await navFut.push(MaterialPageRoute(
@@ -171,26 +173,29 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
               icon: Icons.upload,
             ),
       // nav rail, and child
-      body: SafeArea(
-          child: Row(
-        children: [
-          NavigationRail(
-            extended: false,
-            destinations: const [
-              NavigationRailDestination(
-                  icon: Icon(Icons.album), label: Text("Album")),
-              NavigationRailDestination(
-                  icon: Icon(Icons.upload_file), label: Text("Upload files"))
-            ],
-            selectedIndex: _pageIndex,
-            onDestinationSelected: (value) =>
-                setState(() => _pageIndex = value),
-          ),
-          Expanded(child: page),
-        ],
-      )),
-      bottomNavigationBar:
-          BottomAppBar(child: ui_player.Player(minified: true)),
+      body: SlidingUpPanel(
+        panelBuilder: () => ui_player.Player(minified: _playerMini),
+        onPanelClosed: () => setState(() => _playerMini = true),
+        onPanelOpened: () => setState(() => _playerMini = false),
+        body: SafeArea(
+            child: Row(
+          children: [
+            NavigationRail(
+              extended: false,
+              destinations: const [
+                NavigationRailDestination(
+                    icon: Icon(Icons.album), label: Text("Album")),
+                NavigationRailDestination(
+                    icon: Icon(Icons.upload_file), label: Text("Upload files"))
+              ],
+              selectedIndex: _pageIndex,
+              onDestinationSelected: (value) =>
+                  setState(() => _pageIndex = value),
+            ),
+            Expanded(child: page),
+          ],
+        )),
+      ),
     );
   }
 }

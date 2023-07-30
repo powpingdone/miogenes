@@ -44,6 +44,7 @@ dependencies:
   path: ^1.8.3
   flutter_spinkit: ^5.2.0
   just_audio: ^0.9.34
+  sliding_up_panel2: ^3.3.0+1
 
 dev_dependencies:
   flutter_test:
