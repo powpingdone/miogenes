@@ -84,8 +84,8 @@ dependencies {
         }
     }
     tasks.register("cargoBuild$taskPostfix", Exec) {
-        workingDir "../../native"
-        environment ANDROID_NDK_HOME: "$ANDROID_NDK"
+        workingDir "../../glue"
+        environment ANDROID_NDK_HOME: "$ANDROID_NDK", CPATH: ""
         commandLine 'cargo', 'ndk',
                 // the 2 ABIs below are used by real Android devices
                 '-t', 'armeabi-v7a',
@@ -94,7 +94,8 @@ dependencies {
                 // add or remove these ABIs as needed.
                 '-t', 'x86',
                 '-t', 'x86_64',
-                '-o', '../android/app/src/main/jniLibs', 'build'
+                '-o', '../android/app/src/main/jniLibs',
+                'build', '--release'
         if (profileMode != null) {
             args profileMode
         }

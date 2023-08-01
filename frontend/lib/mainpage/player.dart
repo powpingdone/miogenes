@@ -20,6 +20,7 @@ class _PlayerState extends State<Player> {
   Stream<PStatus>? stream;
   UuidValue currFetched = UuidValue("00000000-0000-0000-0000-000000000000");
   Future<Track>? fetchTrack;
+  String? errMsg;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +31,22 @@ class _PlayerState extends State<Player> {
     return StreamBuilder(
         stream: stream,
         builder: (context, playerStatus) {
-          if (playerStatus.hasError) {
+          // if data has error
+          if (playerStatus.data?.errMsg != null) {
+            errMsg = playerStatus.data?.errMsg;
+          }
+          if (errMsg != null) {
+            return Column(
+              children: [
+                const Text("An error has occurred."),
+                Text(errMsg!),
+                const Text("This may be a bug in the software itself. "
+                    "You may wish to report it at https://github.com/powpingdone/miogenes"),
+              ],
+            );
+          }
+
+          if (playerStatus.hasError && errMsg == null) {
             throw UnimplementedError(extractMsg(playerStatus.error));
           } else if (!playerStatus.hasData) {
             return SpinKitWanderingCubes(
@@ -39,18 +55,6 @@ class _PlayerState extends State<Player> {
           }
           // this is allowed to be late data, too.
           PStatus data = playerStatus.data!;
-
-          // if data has error
-          if (data.errMsg != null) {
-            return Column(
-              children: [
-                const Text("An error has occurred."),
-                Text("${data.errMsg}"),
-                const Text("This may be a bug in the software itself. "
-                    "You may wish to report it at https://github.com/powpingdone/miogenes"),
-              ],
-            );
-          }
 
           // is there a "currently playing" track?
           if (data.queue.isEmpty) {

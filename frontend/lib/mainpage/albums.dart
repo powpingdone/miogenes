@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:frontend/ffi.dart';
@@ -56,8 +58,8 @@ class _AlbumPreviewState extends State<AlbumPreview> {
 
   @override
   Widget build(BuildContext context) {
-    final mtl = Provider.of<MioTopLevel>(context);
-    var mioState = mtl.mioClient;
+    final player = Provider.of<MioPlayerState>(context).mioPlayer;
+    final mioState = Provider.of<MioTopLevel>(context).mioClient;
     album ??= mioState.getAlbum(id: widget.albumId);
 
     return FutureBuilder(
@@ -75,11 +77,18 @@ class _AlbumPreviewState extends State<AlbumPreview> {
             return FutureBuilder(
                 future: sampleTrack,
                 builder: (context, trackSnapshot) {
-                  return Column(children: [
-                    CoverArtImg(trackSnapshot.data?.coverArt),
-                    Text((albumSnapshot.data as Album).title),
-                    ArtistText(trackSnapshot.data)
-                  ]);
+                  return ElevatedButton(
+                      onPressed: () {
+                        player.queue(
+                            id: (albumSnapshot.data)!.tracks[Random()
+                                .nextInt((albumSnapshot.data!.tracks.length))]);
+                        player.play();
+                      },
+                      child: Column(children: [
+                        CoverArtImg(trackSnapshot.data?.coverArt),
+                        Text((albumSnapshot.data as Album).title),
+                        ArtistText(trackSnapshot.data)
+                      ]));
                 });
           } else {
             return SpinKitWanderingCubes(

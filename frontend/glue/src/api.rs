@@ -23,6 +23,7 @@ pub fn new_mio_client() -> SyncReturn<MioClient> {
     )))))
 }
 
+#[derive(Clone)]
 pub struct PStatus {
     pub err_msg: Option<String>,
     pub queue: Vec<Uuid>,

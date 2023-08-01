@@ -6,12 +6,14 @@ use qoaudio::QoaRodioSource;
 use rodio::Source;
 use std::{
     collections::VecDeque,
+    fmt::Debug,
     io::Read,
     sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub(crate) enum PlayerMsg {
     SetSink(StreamSink<api::PStatus>),
     Play(Option<Uuid>),
@@ -22,6 +24,22 @@ pub(crate) enum PlayerMsg {
     Volume(f32),
     Stop,
     Forward,
+}
+
+impl std::fmt::Debug for PlayerMsg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SetSink(_) => f.debug_tuple("SetSink").finish(),
+            Self::Play(arg0) => f.debug_tuple("Play").field(arg0).finish(),
+            Self::Pause => write!(f, "Pause"),
+            Self::Toggle => write!(f, "Toggle"),
+            Self::Queue(arg0) => f.debug_tuple("Queue").field(arg0).finish(),
+            Self::Unqueue(arg0) => f.debug_tuple("Unqueue").field(arg0).finish(),
+            Self::Volume(arg0) => f.debug_tuple("Volume").field(arg0).finish(),
+            Self::Stop => write!(f, "Stop"),
+            Self::Forward => write!(f, "Forward"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -35,7 +53,10 @@ impl Player {
 
         // I don't like doing this, but i'm not joining this thread. Ignore the dropped
         // handle.
-        std::thread::spawn(move || player_track_mgr(client, rx_player));
+        std::thread::Builder::new()
+            .name("MioPlayerT".to_owned())
+            .spawn(move || player_track_mgr(client, rx_player))
+            .unwrap();
         Self { tx: tx_player }
     }
 }
@@ -62,7 +83,7 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
         },
     };
     loop {
-        let mut err_msg = None;
+        let mut _err_msg = None;
         let recv = rx.recv_deadline(Instant::now() + Duration::from_millis(50));
         match recv {
             Ok(msg) => match msg {
@@ -72,13 +93,9 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
                     if let Some(id) = id {
                         lock.clear_self();
                         lock.set_new(id);
-                        if let Err(err) = state.s_handle.play_raw(SharedSource {
-                            i: state.decoder.clone(),
-                        }) {
-                            err_msg = Some(err.to_string());
-                        }
                     }
                     lock.pause = false;
+                    lock.dec_kickover();
                 }
                 PlayerMsg::Pause => state.decoder.lock().pause = true,
                 PlayerMsg::Toggle => {
@@ -100,7 +117,7 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
         // forced my hand. why do we not have partial borrows yet
         let lock = state.decoder.lock();
         state.send_ui(api::PStatus {
-            err_msg,
+            err_msg: _err_msg,
             queue: lock.copy_queue(),
             volume: lock.vol,
             paused: lock.pause,
@@ -148,18 +165,27 @@ where
 struct PlayerState {
     ui_sink: Option<StreamSink<api::PStatus>>,
     _dev: rodio::OutputStream,
-    s_handle: rodio::OutputStreamHandle,
+    _s_handle: rodio::OutputStreamHandle,
+    _s_thread: std::thread::JoinHandle<()>,
     pub decoder: Arc<Mutex<ControllingDecoder>>,
 }
 
 impl PlayerState {
     pub fn new(client: Arc<RwLock<MioClientState>>) -> anyhow::Result<Self> {
-        let (_dev, s_handle) = rodio::OutputStream::try_default()?;
+        let (_dev, s_handle) = find_dev()?;
+        let decoder = Arc::new(Mutex::new(ControllingDecoder::new(client)));
         Ok(Self {
             ui_sink: None,
             _dev,
-            s_handle,
-            decoder: Arc::new(Mutex::new(ControllingDecoder::new(client))),
+            _s_thread: std::thread::spawn({
+                let decoder = decoder.clone();
+                let s_handle = s_handle.clone();
+                move || {
+                    s_handle.play_raw(SharedSource { i: decoder }).unwrap();
+                }
+            }),
+            _s_handle: s_handle,
+            decoder,
         })
     }
 
@@ -169,6 +195,42 @@ impl PlayerState {
 
     pub fn send_ui(&self, send: api::PStatus) {
         self.ui_sink.as_ref().map(|x| x.add(send));
+    }
+}
+
+fn find_dev() -> anyhow::Result<(rodio::OutputStream, rodio::OutputStreamHandle)> {
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd"
+    )))]
+    {
+        Ok(rodio::OutputStream::try_default()?)
+    }
+
+    // select jack by default on everything that *can* use alsa. alsa sucks.
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd"
+    ))]
+    {
+        use cpal::traits::HostTrait;
+        rodio::OutputStream::try_from_device(
+            &cpal::host_from_id(
+                cpal::available_hosts()
+                    .into_iter()
+                    .find(|x| *x == cpal::HostId::Jack)
+                    .ok_or(anyhow::anyhow!("No jack host found"))?,
+            )?
+            .default_output_device()
+            .ok_or(anyhow::anyhow!(
+                "jack host found but no default output device found"
+            ))?,
+        )
+        .map_err(|err| err.into())
     }
 }
 
@@ -191,6 +253,15 @@ impl ControllingDecoder {
         }
     }
 
+    pub fn dec_kickover(&mut self) -> bool {
+        if dbg!(self.true_dec.is_none()) && dbg!(!self.next_ids.is_empty()) {
+            self.set_new(self.next_ids[0]);
+            true // needed to be kicked
+        } else {
+            false // is ready
+        }
+    }
+
     pub fn set_new(&mut self, id: Uuid) {
         self.true_dec = self.set_new_inner(id).ok();
     }
@@ -199,9 +270,11 @@ impl ControllingDecoder {
         &self,
         id: Uuid,
     ) -> anyhow::Result<QoaRodioSource<Box<dyn Read + Send + Sync + 'static>>> {
-        Ok(qoaudio::QoaRodioSource::new(qoaudio::QoaDecoder::new(
-            self.client.read().unwrap().stream(id)?,
-        )?))
+        let dec = qoaudio::QoaDecoder::new(self.client.read().unwrap().stream(id)?);
+        if let Err(ref err) = dec {
+            dbg!(err);
+        }
+        Ok(qoaudio::QoaRodioSource::new(dec?))
     }
 
     pub fn queue(&mut self, id: Uuid) {
@@ -239,10 +312,11 @@ impl Iterator for ControllingDecoder {
     fn next(&mut self) -> Option<Self::Item> {
         let scale = |x: i16| -> f32 { (x as f32 / i16::MAX as f32).clamp(-1.0, 1.0) * self.vol };
         if self.pause {
+            println!("paused");
             Some(0.0)
         } else if let Some(ref mut dec) = self.true_dec {
             let sample = dec.next().map(scale);
-
+            dbg!(sample);
             // if finished
             if sample.is_none() {
                 loop {
@@ -262,6 +336,7 @@ impl Iterator for ControllingDecoder {
             }
             sample
         } else {
+            println!("No decoder");
             Some(0.0)
         }
     }
@@ -273,17 +348,11 @@ impl Source for ControllingDecoder {
     }
 
     fn channels(&self) -> u16 {
-        self.true_dec
-            .as_ref()
-            .map(|x| x.channels())
-            .unwrap_or_default()
+        self.true_dec.as_ref().map(|x| x.channels()).unwrap_or(1)
     }
 
     fn sample_rate(&self) -> u32 {
-        self.true_dec
-            .as_ref()
-            .map(|x| x.sample_rate())
-            .unwrap_or_default()
+        self.true_dec.as_ref().map(|x| x.sample_rate()).unwrap_or(1)
     }
 
     fn total_duration(&self) -> Option<Duration> {

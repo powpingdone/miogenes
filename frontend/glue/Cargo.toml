@@ -25,3 +25,4 @@ crossbeam = { version = "0.8", features = ["crossbeam-channel"] }
 qoaudio = { version = "0.6", features = ["rodio"] }
 rodio = { version = "0.17", default-features = false }
 parking_lot = "0.12"
+cpal = { version = "0.15.2", features = ["jack"] }
