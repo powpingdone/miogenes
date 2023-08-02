@@ -209,7 +209,7 @@ fn find_dev() -> anyhow::Result<(rodio::OutputStream, rodio::OutputStreamHandle)
         Ok(rodio::OutputStream::try_default()?)
     }
 
-    // select jack by default on everything that *can* use alsa. alsa sucks.
+    // select jack by default on everything that _can_ use alsa. alsa sucks.
     #[cfg(any(
         target_os = "linux",
         target_os = "dragonfly",
@@ -218,6 +218,7 @@ fn find_dev() -> anyhow::Result<(rodio::OutputStream, rodio::OutputStreamHandle)
     ))]
     {
         use cpal::traits::HostTrait;
+
         rodio::OutputStream::try_from_device(
             &cpal::host_from_id(
                 cpal::available_hosts()
@@ -238,6 +239,7 @@ struct ControllingDecoder {
     true_dec: Option<qoaudio::QoaRodioSource<Box<dyn Read + Send + Sync + 'static>>>,
     pub pause: bool,
     pub vol: f32,
+    playing_id: Option<Uuid>,
     client: Arc<RwLock<MioClientState>>,
     next_ids: VecDeque<Uuid>,
 }
@@ -248,33 +250,37 @@ impl ControllingDecoder {
             true_dec: None,
             pause: false,
             vol: 1.0,
+            playing_id: None,
             client,
             next_ids: VecDeque::new(),
         }
     }
 
     pub fn dec_kickover(&mut self) -> bool {
-        if dbg!(self.true_dec.is_none()) && dbg!(!self.next_ids.is_empty()) {
-            self.set_new(self.next_ids[0]);
-            true // needed to be kicked
+        if self.true_dec.is_none() && self.playing_id.is_none() && !self.next_ids.is_empty() {
+            // needed to be kicked
+            self.forward();
+            true
         } else {
-            false // is ready
+            // is ready
+            false
         }
     }
 
     pub fn set_new(&mut self, id: Uuid) {
         self.true_dec = self.set_new_inner(id).ok();
+        if self.true_dec.is_some() {
+            self.playing_id = Some(id);
+        }
     }
 
     fn set_new_inner(
         &self,
         id: Uuid,
     ) -> anyhow::Result<QoaRodioSource<Box<dyn Read + Send + Sync + 'static>>> {
-        let dec = qoaudio::QoaDecoder::new(self.client.read().unwrap().stream(id)?);
-        if let Err(ref err) = dec {
-            dbg!(err);
-        }
-        Ok(qoaudio::QoaRodioSource::new(dec?))
+        Ok(qoaudio::QoaRodioSource::new(qoaudio::QoaDecoder::new(
+            self.client.read().unwrap().stream(id)?,
+        )?))
     }
 
     pub fn queue(&mut self, id: Uuid) {
@@ -299,10 +305,18 @@ impl ControllingDecoder {
     pub fn clear_self(&mut self) {
         self.next_ids.clear();
         self.true_dec = None;
+        self.playing_id = None;
+        self.pause = true;
     }
 
     pub fn copy_queue(&self) -> Vec<Uuid> {
-        self.next_ids.iter().copied().collect::<Vec<_>>()
+        let mut ret = if self.playing_id.is_some() {
+            vec![self.playing_id.unwrap()]
+        } else {
+            vec![]
+        };
+        ret.extend(self.next_ids.iter().copied());
+        ret
     }
 }
 
@@ -312,31 +326,23 @@ impl Iterator for ControllingDecoder {
     fn next(&mut self) -> Option<Self::Item> {
         let scale = |x: i16| -> f32 { (x as f32 / i16::MAX as f32).clamp(-1.0, 1.0) * self.vol };
         if self.pause {
-            println!("paused");
             Some(0.0)
         } else if let Some(ref mut dec) = self.true_dec {
             let sample = dec.next().map(scale);
-            dbg!(sample);
+
             // if finished
             if sample.is_none() {
-                loop {
-                    // there is no need to notify player_track_mgr because it will poll and then pick
-                    // this up, once it acquires the lock
-                    if let Some(id) = self.next_ids.pop_front() {
-                        self.set_new(id);
-                        if self.true_dec.is_none() {
-                            continue;
-                        }
-                    } else {
-                        self.true_dec = None;
-                        self.pause = true;
-                    }
-                    return self.next();
+                // there is no need to notify player_track_mgr because it will poll and then pick
+                // this up, once it acquires the lock
+                if self.next_ids.is_empty() {
+                    self.clear_self();
+                } else {
+                    self.forward();
                 }
+                return self.next();
             }
             sample
         } else {
-            println!("No decoder");
             Some(0.0)
         }
     }
@@ -344,7 +350,7 @@ impl Iterator for ControllingDecoder {
 
 impl Source for ControllingDecoder {
     fn current_frame_len(&self) -> Option<usize> {
-        self.true_dec.as_ref().and_then(|x| x.current_frame_len())
+        Some(1024)
     }
 
     fn channels(&self) -> u16 {
@@ -352,7 +358,10 @@ impl Source for ControllingDecoder {
     }
 
     fn sample_rate(&self) -> u32 {
-        self.true_dec.as_ref().map(|x| x.sample_rate()).unwrap_or(1)
+        self.true_dec
+            .as_ref()
+            .map(|x| x.sample_rate())
+            .unwrap_or(96000)
     }
 
     fn total_duration(&self) -> Option<Duration> {

@@ -35,8 +35,7 @@ String extractMsg(dynamic error) {
     if (err.code == "RESULT_ERROR") {
       // return nice, pretty message. thanks `anyhow`.
       return err.message;
-    }
-    else if (err.code == "PANIC_ERROR") {
+    } else if (err.code == "PANIC_ERROR") {
       return "${err.message}, ${error.details}";
     }
   }

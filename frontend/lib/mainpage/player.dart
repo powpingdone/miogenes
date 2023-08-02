@@ -24,9 +24,8 @@ class _PlayerState extends State<Player> {
 
   @override
   Widget build(BuildContext context) {
-    var mioState = Provider.of<MioTopLevel>(context).mioClient;
-    final plr = Provider.of<MioPlayerState>(context);
-    var player = plr.mioPlayer;
+    final mioState = Provider.of<MioTopLevel>(context).mioClient;
+    final player = Provider.of<MioPlayerState>(context).mioPlayer;
     stream ??= player.infoStream();
     return StreamBuilder(
         stream: stream,
@@ -148,7 +147,7 @@ class _TitleArtistAlbumTextState extends State<TitleArtistAlbumText> {
               future: artistFetch,
               builder: (context, snapshot) {
                 if (snapshot.hasData) {
-                  return Text("${snapshot.data}");
+                  return Text(snapshot.data!.name);
                 } else if (snapshot.hasError) {
                   return const Text("?");
                 } else {
@@ -160,7 +159,7 @@ class _TitleArtistAlbumTextState extends State<TitleArtistAlbumText> {
               future: albumFetch,
               builder: (context, snapshot) {
                 if (snapshot.hasData) {
-                  return Text("${snapshot.data}");
+                  return Text(snapshot.data!.title);
                 } else if (snapshot.hasError) {
                   return const Text("?");
                 } else {
