@@ -77,29 +77,47 @@ class _PlayerState extends State<Player> {
                     fetchShot.hasData) {
                   Track track = fetchShot.data!;
                   if (widget.minified) {
-                    return Row(children: [
-                      CoverArtImg(track.coverArt),
-                      TitleArtistAlbumText(
-                          artist: track.artist,
-                          album: track.album,
-                          title: track.title),
-                    ]);
-                  } else {
-                    return Column(
-                      children: [
-                        CoverArtImg(track.coverArt), // Cover Art
+                    return Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Container(
+                            alignment: Alignment.topLeft,
+                            child: CoverArtImg(track.coverArt, size: 84)),
+                        const Padding(padding: EdgeInsets.all(8.0)),
                         TitleArtistAlbumText(
-                          title: track.title,
-                          album: track.album,
-                          artist: track.artist,
-                        ),
-                        MediaControls(
-                          paused: playerStatus.data!.paused,
-                        ), // Play/Pause, Next
-                        VolumeSlider(
-                          vol: playerStatus.data!.volume,
-                        ), // Volume Control
-                      ],
+                            artist: track.artist,
+                            album: track.album,
+                            title: track.title,
+                            minified: widget.minified),
+                      ]),
+                    );
+                  } else {
+                    return Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          CoverArtImg(track.coverArt, size: 300), // Cover Art
+                          Padding(
+                            padding:
+                                const EdgeInsets.only(top: 24.0, bottom: 8.0),
+                            child: TitleArtistAlbumText(
+                              title: track.title,
+                              album: track.album,
+                              artist: track.artist,
+                              minified: widget.minified,
+                            ),
+                          ),
+                          MediaControls(
+                            paused: playerStatus.data!.paused,
+                          ), // Play/Pause, Next
+                          VolumeSlider(
+                            vol: playerStatus.data!.volume,
+                          ), // Volume Control
+                        ],
+                      ),
                     );
                   }
                 } else {
@@ -117,10 +135,12 @@ class TitleArtistAlbumText extends StatefulWidget {
     required this.artist,
     required this.album,
     required this.title,
+    required this.minified,
   });
 
   final String title;
   final UuidValue? artist, album;
+  final bool minified;
 
   @override
   State<TitleArtistAlbumText> createState() => _TitleArtistAlbumTextState();
@@ -138,37 +158,76 @@ class _TitleArtistAlbumTextState extends State<TitleArtistAlbumText> {
     artistFetch ??=
         widget.artist != null ? mioState.getArtist(id: widget.artist!) : null;
 
-    return Column(
-      children: [
-        // TODO: make title bigger
-        Text(widget.title),
-        Row(children: [
-          FutureBuilder(
-              future: artistFetch,
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  return Text(snapshot.data!.name);
-                } else if (snapshot.hasError) {
-                  return const Text("?");
-                } else {
-                  return const Text("...");
-                }
-              }),
-          const Text("―" /* U+2015 */),
-          FutureBuilder(
-              future: albumFetch,
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  return Text(snapshot.data!.title);
-                } else if (snapshot.hasError) {
-                  return const Text("?");
-                } else {
-                  return const Text("...");
-                }
-              })
-        ])
-      ],
+    final title = Text(
+      widget.title,
+      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      overflow: TextOverflow.ellipsis,
     );
+    final artist = FutureBuilder(
+        future: artistFetch,
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            return Text(
+              snapshot.data!.name,
+              overflow: TextOverflow.ellipsis,
+            );
+          } else if (snapshot.hasError) {
+            return const Text("?");
+          } else {
+            return const Text("...");
+          }
+        });
+    final album = FutureBuilder(
+        future: albumFetch,
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            return Text(
+              snapshot.data!.title,
+              overflow: TextOverflow.ellipsis,
+            );
+          } else if (snapshot.hasError) {
+            return const Text("?");
+          } else {
+            return const Text("...");
+          }
+        });
+
+    // TODO: make title bigger
+    if (widget.minified) {
+      return LimitedBox(
+        maxHeight: 84,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            title,
+            const Padding(padding: EdgeInsets.symmetric(vertical: 4.0)),
+            artist,
+            album,
+            Expanded(child: Container()),
+          ],
+        ),
+      );
+    } else {
+      return Column(
+        children: [
+          title,
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4.0),
+          ),
+          Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                artist,
+                const Padding(padding: EdgeInsets.all(4.0)),
+                const Text("―" /* U+2015 */),
+                const Padding(padding: EdgeInsets.all(4.0)),
+                album
+              ])
+        ],
+      );
+    }
   }
 }
 
@@ -184,15 +243,16 @@ class MediaControls extends StatelessWidget {
   Widget build(BuildContext context) {
     var player = Provider.of<MioPlayerState>(context).mioPlayer;
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         IconButton(
             onPressed: () => player.toggle(),
-            icon: Icon(paused
-                ? Icons.pause_circle_outline
-                : Icons.play_circle_outline)),
+            icon: Icon(
+                paused ? Icons.play_circle_outline : Icons.pause_circle_outline,
+                size: 72)),
         IconButton(
             onPressed: () => player.forward(),
-            icon: const Icon(Icons.skip_next)),
+            icon: const Icon(Icons.skip_next, size: 48)),
       ],
     );
   }
@@ -210,6 +270,7 @@ class VolumeSlider extends StatelessWidget {
   Widget build(BuildContext context) {
     var player = Provider.of<MioPlayerState>(context).mioPlayer;
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Icon(Icons.volume_up),
         Slider(

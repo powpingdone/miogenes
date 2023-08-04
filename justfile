@@ -12,6 +12,11 @@ drun:
 rrun:
     RUST_LOG="trace" cargo run -p mio-backend --release
 
+clean:
+    cargo clean
+    cd frontend && flutter clean && flutter pub get
+    rm -r frontend/android/app/src/main/jniLibs/*
+
 fmt:
     genemichaels -p
     cargo fmt

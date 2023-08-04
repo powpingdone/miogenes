@@ -177,6 +177,9 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
         panelBuilder: () => ui_player.Player(minified: _playerMini),
         onPanelClosed: () => setState(() => _playerMini = true),
         onPanelOpened: () => setState(() => _playerMini = false),
+        // TODO: set height depending on platform
+        minHeight: 100.0,
+        maxHeight: 600.0,
         body: SafeArea(
             child: Row(
           children: [

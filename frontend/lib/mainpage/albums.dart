@@ -103,9 +103,11 @@ class CoverArtImg extends StatefulWidget {
   const CoverArtImg(
     this.coverArtId, {
     super.key,
+    this.size,
   });
 
   final UuidValue? coverArtId;
+  final double? size;
 
   @override
   State<CoverArtImg> createState() => _CoverArtImgState();
@@ -125,7 +127,13 @@ class _CoverArtImgState extends State<CoverArtImg> {
         future: coverArt,
         builder: ((context, snapshot) {
           if (snapshot.hasData) {
-            return Image.memory(snapshot.data!.webmBlob);
+            return Image.memory(
+              snapshot.data!.webmBlob,
+              fit: BoxFit.cover,
+              isAntiAlias: true,
+              width: widget.size,
+              height: widget.size,
+            );
           }
           // TODO: show error and loading image
           return Container();
