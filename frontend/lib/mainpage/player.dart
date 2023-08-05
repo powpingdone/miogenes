@@ -58,7 +58,10 @@ class _PlayerState extends State<Player> {
           // is there a "currently playing" track?
           if (data.queue.isEmpty) {
             // TODO: return equiv layout to a "currently playing" layout
-            return const Text("Not currently playing...");
+            return Container(
+                alignment: Alignment.topLeft,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                child: const Text("Not currently playing..."));
           }
 
           // begin fetch
@@ -121,8 +124,11 @@ class _PlayerState extends State<Player> {
                     );
                   }
                 } else {
-                  // TODO: return equiv layout to a "currently playing" layout
-                  return const Text("Loading...");
+                  return Container(
+                      alignment: Alignment.topLeft,
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 8),
+                      child: const Text("Loading..."));
                 }
               });
         });
@@ -192,7 +198,6 @@ class _TitleArtistAlbumTextState extends State<TitleArtistAlbumText> {
           }
         });
 
-    // TODO: make title bigger
     if (widget.minified) {
       return LimitedBox(
         maxHeight: 84,

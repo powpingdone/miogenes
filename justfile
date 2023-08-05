@@ -15,7 +15,7 @@ rrun:
 clean:
     cargo clean
     cd frontend && flutter clean && flutter pub get
-    rm -r frontend/android/app/src/main/jniLibs/*
+    rm -r frontend/android/app/src/main/jniLibs/*.so 
 
 fmt:
     genemichaels -p

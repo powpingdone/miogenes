@@ -63,13 +63,30 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
     }
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text("Login"),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+      ),
       body: Column(
         children: [
-          TextField(
-            controller: _baseUrlController,
-            onSubmitted: (_) => setTask(mioState),
-            decoration: const InputDecoration(
-                border: OutlineInputBorder(), labelText: "Base Url"),
+          Expanded(child: Container()),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: SizedBox(
+              width: 300,
+              child: TextField(
+                controller: _baseUrlController,
+                onSubmitted: (_) => setTask(mioState),
+                decoration: const InputDecoration(
+                    border: OutlineInputBorder(), labelText: "Base Url"),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: ElevatedButton(
+                onPressed: () => setTask(mioState),
+                child: const Text("Check Url")),
           ),
           // Check if server exists
           FutureBuilder(
@@ -90,11 +107,7 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
               }
             },
           ),
-          Row(children: [
-            ElevatedButton(
-                onPressed: () => setTask(mioState),
-                child: const Text("Check Url")),
-          ])
+          Expanded(child: Container()),
         ],
       ),
     );
@@ -149,25 +162,43 @@ class _LoginCredsState extends State<LoginCreds> {
     var mioState = mtl.mioClient;
 
     return Column(children: [
-      TextField(
-        controller: _usernameController,
-        decoration: const InputDecoration(
-            border: OutlineInputBorder(), labelText: "Username"),
+      Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: SizedBox(
+          width: 300,
+          child: TextField(
+            controller: _usernameController,
+            decoration: const InputDecoration(
+                border: OutlineInputBorder(), labelText: "Username"),
+          ),
+        ),
       ),
-      TextField(
-        controller: _passwordController,
-        obscureText: true,
-        decoration: const InputDecoration(
-            border: OutlineInputBorder(), labelText: "Password"),
+      Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: SizedBox(
+          width: 300,
+          child: TextField(
+            controller: _passwordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+                border: OutlineInputBorder(), labelText: "Password"),
+          ),
+        ),
       ),
-      Row(children: [
-        ElevatedButton(
-            onPressed: () => Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (context) => const SignupPage())),
-            child: const Text("Sign Up")),
-        ElevatedButton(
-          onPressed: () => setTask(mioState),
-          child: const Text("Sign In"),
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: ElevatedButton(
+              onPressed: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (context) => const SignupPage())),
+              child: const Text("Sign Up")),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: ElevatedButton(
+            onPressed: () => setTask(mioState),
+            child: const Text("Sign In"),
+          ),
         ),
       ]),
       FutureBuilder(

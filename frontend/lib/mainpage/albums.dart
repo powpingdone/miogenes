@@ -26,9 +26,11 @@ class AlbumPage extends StatelessWidget {
               snapshot.hasData) {
             List<UuidValue> albums = (snapshot.data)?.albums ?? [];
 
-            return GridView.count(
-              crossAxisCount: 3,
-              children: [for (UuidValue album in albums) AlbumPreview(album)],
+            return SafeArea(
+              child: GridView.extent(
+                maxCrossAxisExtent: 300,
+                children: [for (UuidValue album in albums) AlbumPreview(album)],
+              ),
             );
           } else {
             // show checking
@@ -77,18 +79,44 @@ class _AlbumPreviewState extends State<AlbumPreview> {
             return FutureBuilder(
                 future: sampleTrack,
                 builder: (context, trackSnapshot) {
-                  return ElevatedButton(
-                      onPressed: () {
-                        player.queue(
-                            id: (albumSnapshot.data)!.tracks[Random()
-                                .nextInt((albumSnapshot.data!.tracks.length))]);
-                        player.play();
-                      },
-                      child: Column(children: [
-                        CoverArtImg(trackSnapshot.data?.coverArt),
-                        Text((albumSnapshot.data as Album).title),
-                        ArtistText(trackSnapshot.data)
-                      ]));
+                  return Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: TextButton(
+                        onPressed: () {
+                          player.queue(
+                              id: (albumSnapshot.data)!.tracks[Random()
+                                  .nextInt((albumSnapshot.data!.tracks.length))]);
+                          player.play();
+                        },
+                        style: ButtonStyle(
+                            shape:
+                                MaterialStateProperty.all(RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16.0),
+                        ))),
+                        child: Container(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                            Flexible(flex:0,child: Container()),
+                            Flexible(child: CoverArtImg(trackSnapshot.data?.coverArt, size: 200)),
+                            Container(
+                              width: 200,
+                              alignment: Alignment.topCenter,
+                              child: Text((albumSnapshot.data as Album).title,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                            Container(
+                                width: 200,
+                                alignment: Alignment.topCenter,
+                                child: ArtistText(trackSnapshot.data)),
+                            Flexible(flex:0,child: Container()),
+                          ]),
+                        )),
+                  );
                 });
           } else {
             return SpinKitWanderingCubes(
@@ -127,12 +155,15 @@ class _CoverArtImgState extends State<CoverArtImg> {
         future: coverArt,
         builder: ((context, snapshot) {
           if (snapshot.hasData) {
-            return Image.memory(
-              snapshot.data!.webmBlob,
-              fit: BoxFit.cover,
-              isAntiAlias: true,
-              width: widget.size,
-              height: widget.size,
+            return FittedBox(
+              clipBehavior: Clip.hardEdge,
+              child: Image.memory(
+                snapshot.data!.webmBlob,
+                fit: BoxFit.cover,
+                isAntiAlias: true,
+                width: widget.size,
+                height: widget.size,
+              ),
             );
           }
           // TODO: show error and loading image
@@ -167,7 +198,11 @@ class _ArtistTextState extends State<ArtistText> {
         future: artist,
         builder: (context, snapshot) {
           if (snapshot.hasData) {
-            return Text(snapshot.data!.name);
+            return Text(
+              snapshot.data!.name,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            );
           }
           return const Text("...");
         });
