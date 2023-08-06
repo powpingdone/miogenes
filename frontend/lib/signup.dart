@@ -60,37 +60,66 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     var mioState = mtl.mioClient;
 
     return Scaffold(
-      body: Column(children: [
-        TextField(
-          controller: _usernameController,
-          decoration: const InputDecoration(
-              border: OutlineInputBorder(), labelText: "Username"),
-          onSubmitted: (_) => setTask(mioState),
+      appBar: AppBar(
+        title: const Text("Sign Up"),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+      ),
+      body: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: SizedBox(
+            width: 300,
+            child: TextField(
+              controller: _usernameController,
+              decoration: const InputDecoration(
+                  border: OutlineInputBorder(), labelText: "Username"),
+              onSubmitted: (_) => setTask(mioState),
+            ),
+          ),
         ),
-        TextField(
-          controller: _passwordController,
-          obscureText: true,
-          decoration: const InputDecoration(
-              border: OutlineInputBorder(), labelText: "Password"),
-          onSubmitted: (_) => setTask(mioState),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: SizedBox(
+            width: 300,
+            child: TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                  border: OutlineInputBorder(), labelText: "Password"),
+              onSubmitted: (_) => setTask(mioState),
+            ),
+          ),
         ),
-        TextField(
-          controller: _password2Controller,
-          obscureText: true,
-          decoration: const InputDecoration(
-              border: OutlineInputBorder(), labelText: "Repeat Password"),
-          onSubmitted: (_) => setTask(mioState),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: SizedBox(
+            width: 300,
+            child: TextField(
+              controller: _password2Controller,
+              obscureText: true,
+              decoration: const InputDecoration(
+                  border: OutlineInputBorder(), labelText: "Repeat Password"),
+              onSubmitted: (_) => setTask(mioState),
+            ),
+          ),
         ),
         Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ElevatedButton(
-                onPressed: () => Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                        builder: (context) => const LoginBaseUrl())),
-                child: const Text("Back To Login")),
-            ElevatedButton(
-                onPressed: () => setTask(mioState),
-                child: const Text("Sign Up"))
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                          builder: (context) => const LoginBaseUrl())),
+                  child: const Text("Back To Login")),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: ElevatedButton(
+                  onPressed: () => setTask(mioState),
+                  child: const Text("Sign Up")),
+            )
           ],
         ),
         FutureBuilder(

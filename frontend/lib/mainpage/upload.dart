@@ -4,6 +4,7 @@ import 'package:frontend/mainpage/toplevel.dart';
 import "package:path/path.dart" as path_util;
 import "package:flutter_spinkit/flutter_spinkit.dart";
 import "package:provider/provider.dart";
+import "package:text_scroll/text_scroll.dart";
 
 class UploadPage extends StatelessWidget {
   const UploadPage({
@@ -13,9 +14,17 @@ class UploadPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var mainState = Provider.of<MainNavTopLevel>(context);
-    return ListView(
-      children: [for (var state in mainState.tasks) UploadTask(self: state)],
-    );
+    if (mainState.tasks.isEmpty) {
+      return Container(
+        alignment: Alignment.center,
+        child: const Text(
+            "No files are uploading currently. Select files to upload using the bottom right button."),
+      );
+    } else {
+      return ListView(
+        children: [for (var state in mainState.tasks) UploadTask(self: state)],
+      );
+    }
   }
 }
 
@@ -24,8 +33,9 @@ class UploadTaskStateHolder {
       {this.highestLevel,
       required this.serverPath,
       required this.path,
-      required MioClient mioClient}) {
-    uploadFuture = _internalFuture(mioClient);
+      required MioClient mioClient,
+      required MainNavTopLevel mainNav}) {
+    uploadFuture = _internalFuture(mioClient, mainNav);
   }
 
   // path to the file to upload
@@ -39,7 +49,8 @@ class UploadTaskStateHolder {
   // the actual future
   late Future<UploadReturn> uploadFuture;
 
-  Future<UploadReturn> _internalFuture(MioClient mioClient) async {
+  Future<UploadReturn> _internalFuture(
+      MioClient mioClient, MainNavTopLevel mainNav) async {
     // path_util not needed here because this is an internal path
     var serverNodes = serverPath.isEmpty ? [] : serverPath.split("/").toList();
     // pickup the rest of the paths extending the path
@@ -64,6 +75,7 @@ class UploadTaskStateHolder {
     var ret =
         await mioClient.uploadFile(fullpath: path, dir: serverNodes.join("/"));
     finished = true;
+    mainNav.albums = mioClient.getAlbums();
     return ret;
   }
 }
@@ -82,19 +94,39 @@ class UploadTask extends StatelessWidget {
           if (snapshot.hasData) {
             msg = const Text("Uploaded.");
           } else if (snapshot.hasError) {
-            msg = Text("Error encountered: ${extractMsg(snapshot.error)}");
+            msg = Center(
+                child:
+                    Text("Error encountered: ${extractMsg(snapshot.error)}"));
           } else {
             msg = Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SpinKitWanderingCubes(
-                  color: Theme.of(context).colorScheme.primary,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: SpinKitWanderingCubes(
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 16.0,
+                  ),
                 ),
-                const Text("Uploading...")
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Text("Uploading..."),
+                )
               ],
             );
           }
-          return Column(
-            children: [Text(self.path), msg],
+          return Container(
+            padding: const EdgeInsets.fromLTRB(0.0, 16.0, 0.0, 0.0),
+            child: Column(
+              children: [
+                TextScroll(
+                  self.path,
+                  mode: TextScrollMode.bouncing,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                msg
+              ],
+            ),
           );
         });
   }

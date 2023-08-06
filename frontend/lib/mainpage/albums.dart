@@ -84,37 +84,41 @@ class _AlbumPreviewState extends State<AlbumPreview> {
                     child: TextButton(
                         onPressed: () {
                           player.queue(
-                              id: (albumSnapshot.data)!.tracks[Random()
-                                  .nextInt((albumSnapshot.data!.tracks.length))]);
+                              id: (albumSnapshot.data)!.tracks[Random().nextInt(
+                                  (albumSnapshot.data!.tracks.length))]);
                           player.play();
                         },
                         style: ButtonStyle(
-                            shape:
-                                MaterialStateProperty.all(RoundedRectangleBorder(
+                            shape: MaterialStateProperty.all(
+                                RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16.0),
                         ))),
                         child: Container(
                           padding: const EdgeInsets.all(8.0),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                            Flexible(flex:0,child: Container()),
-                            Flexible(child: CoverArtImg(trackSnapshot.data?.coverArt, size: 200)),
-                            Container(
-                              width: 200,
-                              alignment: Alignment.topCenter,
-                              child: Text((albumSnapshot.data as Album).title,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                            Container(
-                                width: 200,
-                                alignment: Alignment.topCenter,
-                                child: ArtistText(trackSnapshot.data)),
-                            Flexible(flex:0,child: Container()),
-                          ]),
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Flexible(flex: 0, child: Container()),
+                                Flexible(
+                                    child: CoverArtImg(
+                                        trackSnapshot.data?.coverArt,
+                                        size: 200)),
+                                Container(
+                                  width: 200,
+                                  alignment: Alignment.topCenter,
+                                  child: Text(
+                                      (albumSnapshot.data as Album).title,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                Container(
+                                    width: 200,
+                                    alignment: Alignment.topCenter,
+                                    child: ArtistText(trackSnapshot.data)),
+                                Flexible(flex: 0, child: Container()),
+                              ]),
                         )),
                   );
                 });
@@ -150,25 +154,37 @@ class _CoverArtImgState extends State<CoverArtImg> {
     var mioState = mtl.mioClient;
     if (widget.coverArtId != null) {
       coverArt ??= mioState.getCoverArt(id: widget.coverArtId!);
+      return FutureBuilder(
+          future: coverArt,
+          builder: ((context, snapshot) {
+            if (snapshot.hasData) {
+              return FittedBox(
+                clipBehavior: Clip.hardEdge,
+                child: Image.memory(
+                  snapshot.data!.webmBlob,
+                  fit: BoxFit.cover,
+                  isAntiAlias: true,
+                  width: widget.size,
+                  height: widget.size,
+                ),
+              );
+            }
+            // TODO: show error and loading image
+            return Container();
+          }));
+    } else {
+      return FittedBox(
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+            width: widget.size,
+            height: widget.size,
+            color: Theme.of(context).disabledColor,
+            child: const Icon(
+              Icons.image_not_supported,
+              size: 96.0,
+            )),
+      );
     }
-    return FutureBuilder(
-        future: coverArt,
-        builder: ((context, snapshot) {
-          if (snapshot.hasData) {
-            return FittedBox(
-              clipBehavior: Clip.hardEdge,
-              child: Image.memory(
-                snapshot.data!.webmBlob,
-                fit: BoxFit.cover,
-                isAntiAlias: true,
-                width: widget.size,
-                height: widget.size,
-              ),
-            );
-          }
-          // TODO: show error and loading image
-          return Container();
-        }));
   }
 }
 

@@ -104,10 +104,26 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: switch (_pageIndex) {
-          0 => const Text("Albums"),
-          1 => const Text("Upload Files"),
-          _ => throw UnimplementedError(),
+        title: Text(
+          switch (_pageIndex) {
+            0 => "Albums",
+            1 => "Upload Files",
+            _ => throw UnimplementedError(),
+          },
+          style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+        ),
+        actions: switch (_pageIndex) {
+          1 => [
+              SafeArea(
+                child: IconButton(
+                    onPressed: () => mainState.cleanup(),
+                    icon: Icon(
+                      Icons.clear_all,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    )),
+              )
+            ],
+          _ => const []
         },
         backgroundColor: Theme.of(context).colorScheme.primary,
       ),
@@ -138,6 +154,7 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
                                   serverPath: serverPath,
                                   path: x!,
                                   mioClient: mioState,
+                                  mainNav: mainState,
                                 )));
                       }
                     }
@@ -164,6 +181,7 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
                                   path: path,
                                   mioClient: mioState,
                                   highestLevel: folder,
+                                  mainNav: mainState,
                                 )));
                       }
                     }
@@ -177,7 +195,7 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
         panelBuilder: () => ui_player.Player(minified: _playerMini),
         onPanelClosed: () => setState(() => _playerMini = true),
         onPanelOpened: () => setState(() => _playerMini = false),
-        // TODO: set height depending on platform
+        // TODO: set height depending on platform and on if currently playing
         minHeight: 100.0,
         maxHeight: 600.0,
         body: SafeArea(
