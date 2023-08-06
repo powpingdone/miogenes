@@ -43,9 +43,8 @@ sqlx = { version = "0.6", features = [
   "uuid",
   "migrate",
 ] }
-symphonia = { version = "0.5.3", features = ["all-codecs", "all-formats", "all", "mpa"] }
+symphonia = { version = "0.5", features = ["all-codecs", "all-formats", "all", "mpa"] }
 
 [dev-dependencies]
 axum-test = "9.1"
-jsonwebtoken = "8.3"
 serde_urlencoded = "0.7"

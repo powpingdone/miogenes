@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytemuck = { version = "1.13.1", features = ["extern_crate_std"] }
-thiserror = "1.0.40"
+bytemuck = { version = "1.13", features = ["extern_crate_std"] }
+thiserror = "1.0"
 
 [dev-dependencies]
-hound = "3.5.0"
+hound = "3.5"

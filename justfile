@@ -1,5 +1,9 @@
 default: gen
 
+update:
+    cargo update
+    flutter pub upgrade
+
 gen:
     flutter_rust_bridge_codegen --rust-input frontend/glue/src/api.rs --dart-output frontend/lib/bridge_generated.dart
 

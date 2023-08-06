@@ -304,7 +304,7 @@ mod test {
             .json::<retstructs::FolderQuery>()
             .ret;
         let ret = ret.into_iter().collect::<HashSet<_>>();
-        ret == HashSet::from_iter(dirs.iter().map(|x| x.to_string()))
+        dbg!(ret) == dbg!(HashSet::from_iter(dirs.iter().map(|x| x.to_string())))
     }
 
     #[tokio::test]
@@ -361,7 +361,7 @@ mod test {
             tree_check(
                 &cli,
                 &jwt,
-                &["", "a horse", "a horse/neigh", "a horse/neigh/bleh"]
+                &["a horse", "a horse/neigh", "a horse/neigh/bleh"]
             )
             .await
         );
@@ -385,7 +385,7 @@ mod test {
             tree_check(
                 &cli,
                 &jwt,
-                &["", "merasmus", "merasmus/neigh", "merasmus/neigh/bleh"]
+                &["merasmus", "merasmus/neigh", "merasmus/neigh/bleh"]
             )
             .await
         );
@@ -409,7 +409,7 @@ mod test {
             tree_check(
                 &cli,
                 &jwt,
-                &["", "merasmus", "merasmus/neigh", "merasmus/bleh"]
+                &["merasmus", "merasmus/neigh", "merasmus/bleh"]
             )
             .await
         );
@@ -422,7 +422,7 @@ mod test {
             &jwt,
         )
         .await;
-        assert!(tree_check(&cli, &jwt, &["", "merasmus", "merasmus/neigh"]).await);
+        assert!(tree_check(&cli, &jwt, &["merasmus", "merasmus/neigh"]).await);
     }
 
     #[tokio::test]
@@ -529,7 +529,7 @@ mod test {
             jwt_header(&cli, Method::PUT, "/api/folder?name=a&path=", &jwt).await;
             jwt_header(&cli, Method::PUT, "/api/folder?name=b&path=a", &jwt).await;
             jwt_header(&cli, Method::PUT, "/api/folder?name=1&path=", &jwt).await;
-            assert!(tree_check(&cli, &jwt, &["", "a", "a/b", "1"]).await)
+            assert!(tree_check(&cli, &jwt, &["a", "a/b", "1"]).await)
         }
         jwt_header(&cli, Method::PUT, "/api/folder?name=b&path=a", &jwt)
             .expect_failure()
