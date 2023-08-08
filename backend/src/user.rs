@@ -66,7 +66,7 @@ where
             potent_id,
             now
         )
-        .fetch_all(&mut conn)
+        .fetch_all(&mut *conn)
         .await?;
 
         // check all keys

@@ -82,7 +82,7 @@ async fn album_info(
                                 id,
                                 userid
                             )
-                            .fetch_optional(&mut *txn)
+                            .fetch_optional(txn.as_mut())
                             .await?
                             .map(|x| x.title)
                             .ok_or_else(|| {
@@ -95,7 +95,7 @@ async fn album_info(
                                 id,
                                 userid
                             )
-                            .fetch_all(&mut *txn)
+                            .fetch_all(txn.as_mut())
                             .await?
                             .into_iter()
                             .map(|x| uuid_serialize(&x.id))
@@ -131,7 +131,7 @@ async fn playlist_info(
                                 id,
                                 userid
                             )
-                            .fetch_all(&mut *txn)
+                            .fetch_all(txn.as_mut())
                             .await?
                             .into_iter()
                             .map(|x| uuid_serialize(&x.track))
@@ -141,7 +141,7 @@ async fn playlist_info(
                                 id,
                                 userid
                             )
-                            .fetch_optional(&mut *txn)
+                            .fetch_optional(txn.as_mut())
                             .await?
                             .map(|x| x.name)
                             .ok_or_else(|| {

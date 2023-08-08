@@ -3,6 +3,7 @@ use governor::*;
 use indicatif::*;
 use nonzero_ext::*;
 use rand::seq::SliceRandom;
+use reqwest::StatusCode;
 use rspotify::clients::BaseClient;
 use rspotify::http::*;
 use rspotify::model::*;
@@ -17,7 +18,7 @@ use tokio::sync::mpsc::*;
 
 macro_rules! login {
     () => {{
-        let mut x = ClientCredsSpotify::with_config(
+        let x = ClientCredsSpotify::with_config(
             Credentials::from_env().unwrap(),
             Config {
                 token_refreshing: true,
@@ -79,7 +80,7 @@ async fn playlists_scrape(w: Arc<Gov>, bar: ProgressBar, tx: Sender<Page<Simplif
                     let req = client
                         .search(
                             format!("{term0}{term1}{term2}").as_str(),
-                            &SearchType::Playlist,
+                            SearchType::Playlist,
                             None,
                             None,
                             Some(STEP),
@@ -89,7 +90,9 @@ async fn playlists_scrape(w: Arc<Gov>, bar: ProgressBar, tx: Sender<Page<Simplif
                     match req {
                         Ok(res) => {
                             if let SearchResult::Playlists(res) = res {
-                                tx.send(res).await.unwrap();
+                                if tx.send(res).await.is_err() {
+                                    return;
+                                }
                             }
                         }
                         Err(ret) => {
@@ -126,8 +129,7 @@ fn playlist_filter(
     while BufRead::read_line(&mut contents, &mut buf).unwrap() != 0 {
         match PlaylistId::from_id_or_uri(buf.trim()) {
             Ok(id) => {
-                plists.insert(id);
-                ()
+                plists.insert(id.into_static());
             }
             Err(err) => bar.set_message(format!("Err: {buf} {err}")),
         }
@@ -147,8 +149,9 @@ fn playlist_filter(
                     continue;
                 }
             }
-            if plists.insert(plist.id.clone()) {
-                tx.blocking_send(plist.id.clone()).unwrap();
+            if plists.insert(plist.id.clone()) && tx.blocking_send(plist.id.clone()).is_err() {
+                // if tx fails, return
+                return;
             }
             procd += 1;
             bar.set_message(format!("filtered: {procd}"));
@@ -159,8 +162,8 @@ fn playlist_filter(
 async fn playlist_track_scrape(
     w: Arc<Gov>,
     bar: ProgressBar,
-    mut rx: Receiver<PlaylistId>,
-    tx_meta: UnboundedSender<(PlaylistId, Vec<TrackId>)>,
+    mut rx: Receiver<PlaylistId<'_>>,
+    tx_meta: UnboundedSender<(PlaylistId<'_>, Vec<TrackId<'_>>)>,
 ) {
     let client = login!();
     bar.set_prefix(TRSCRAPE);
@@ -173,7 +176,7 @@ async fn playlist_track_scrape(
         let mut tracks = vec![];
         wait!(w);
         let plist_page = client
-            .playlist_items_manual(&plist, None, None, Some(1), Some(0))
+            .playlist_items_manual(plist.clone(), None, None, Some(1), Some(0))
             .await;
         if let Err(err) = plist_page {
             if let ClientError::Http(resp) = err {
@@ -183,6 +186,9 @@ async fn playlist_track_scrape(
                         resp.status(),
                         resp.url()
                     ));
+                    if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+                        return;
+                    }
                 }
             } else {
                 bar.set_message(format!("ERR: {err:?}, waiting..."));
@@ -198,13 +204,13 @@ async fn playlist_track_scrape(
             .map(|amount| {
                 let client = client.clone();
                 let w = w.clone();
-                let plist = plist.clone();
+                let plist = plist.clone_static();
                 tokio::spawn(async move {
                     wait!(w);
                     (
                         amount,
                         client
-                            .playlist_items_manual(&plist, None, None, Some(STEP), Some(amount))
+                            .playlist_items_manual(plist, None, None, Some(STEP), Some(amount))
                             .await,
                     )
                 })
@@ -239,7 +245,7 @@ async fn playlist_track_scrape(
             }
             for track in plist_page.unwrap().items {
                 if let Some(PlayableItem::Track(track)) = track.track {
-                    if track.id == None || track.preview_url == None {
+                    if track.id.is_none() || track.preview_url.is_none() {
                         continue;
                     }
                     let trackid = track.id.unwrap();
@@ -250,13 +256,15 @@ async fn playlist_track_scrape(
 
         // send tracks
         bar.set_message("waiting...");
-        tx_meta.send((plist.clone(), tracks)).unwrap();
+        if tx_meta.send((plist.clone_static(), tracks)).is_err() {
+            return;
+        }
     }
 }
 
 async fn write_out_playlist(
     bar: ProgressBar,
-    mut rx_pt: UnboundedReceiver<(PlaylistId, Vec<TrackId>)>,
+    mut rx_pt: UnboundedReceiver<(PlaylistId<'_>, Vec<TrackId<'_>>)>,
 ) {
     let mut csv = OpenOptions::new()
         .append(true)
