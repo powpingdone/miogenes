@@ -3,8 +3,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const SAMPLE_LEN: usize = 630;
+const SAMPLE_LEN: usize = 1050;
 const ENC_VECTOR: usize = 16;
+
 mod load;
 mod model;
 
@@ -12,11 +13,15 @@ fn make_blobs() {
     for file in read_dir("./audio/").unwrap() {
         let file = file.unwrap();
         if file.file_type().unwrap().is_file() {
-            println!("processing {}", file.file_name().to_string_lossy());
+            let fname_hold = file.file_name();
+            let fname = fname_hold.to_string_lossy();
+            println!("processing {fname}");
             match blob_get(&file.path()) {
                 Ok((mut vec, rate, channels)) => {
+
                     // make mono
                     if channels != 1 {
+                        println!("converting {fname} to mono");
                         let mut new_vec = Vec::with_capacity(vec.len() / channels);
                         for pos in 0..vec.len() / channels {
                             new_vec.push(
@@ -32,6 +37,8 @@ fn make_blobs() {
                     // change sample rate
                     if rate != 44100 {
                         use rubato::Resampler;
+                        
+                        println!("resampling {fname} from {rate} to 44100");
                         let mut new_vec = Vec::<f32>::new();
                         let mut resamp =
                             rubato::FftFixedIn::<f32>::new(rate as usize, 44100, 1024, 2, 1)
@@ -55,11 +62,14 @@ fn make_blobs() {
                         vec = new_vec;
                     }
 
-                    // write out
                     if vec.is_empty() {
+                        // TODO: figure out what's causing this
                         println!("somehow, file is empty, skipping");
                         continue;
                     }
+                    
+                    // write out
+                    //
                     // tmp solution to not spam files
                     let third_len = vec.len() / 3;
                     let range = third_len..(third_len + (30 * 44100)).clamp(0, vec.len() - 1);
