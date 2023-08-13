@@ -1,0 +1,6 @@
+[submodule "deej-ai-model"]
+	path = deej-ai-model
+	url = https://github.com/teticio/Deej-AI
+[submodule "lambda-scraper"]
+	path = lambda-scraper
+	url = https://github.com/teticio/lambda-scraper
