@@ -2,6 +2,11 @@ use super::*;
 
 // Section: wire functions
 #[no_mangle]
+pub extern "C" fn wire_init_self() -> support::WireSyncReturn {
+    wire_init_self_impl()
+}
+
+#[no_mangle]
 pub extern "C" fn wire_new_mio_client() -> support::WireSyncReturn {
     wire_new_mio_client_impl()
 }

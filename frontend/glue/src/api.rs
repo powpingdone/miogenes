@@ -8,16 +8,38 @@ use anyhow::bail;
 pub use flutter_rust_bridge::RustOpaque;
 use flutter_rust_bridge::StreamSink;
 pub use flutter_rust_bridge::SyncReturn;
+use log::*;
 pub use mio_common::*;
 use std::path::Path;
 pub use std::sync::Arc;
+use std::sync::Once;
 pub use std::sync::RwLock;
 use uuid::Uuid;
+
+pub fn init_self() -> SyncReturn<()> {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        #[cfg(target_os = "android")]
+        {
+            use android_logger::Config;
+
+            // init logger
+            android_logger::init_once(Config::default().with_max_level(LevelFilter::Trace));
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            // init logger
+            drop(env_logger::try_init());
+        }
+    });
+    SyncReturn(())
+}
 
 #[derive(Debug, Clone)]
 pub struct MioClient(pub RustOpaque<Arc<RwLock<MioClientState>>>);
 
 pub fn new_mio_client() -> SyncReturn<MioClient> {
+    trace!("creating mio client");
     SyncReturn(MioClient(RustOpaque::new(Arc::new(RwLock::new(
         MioClientState::new(),
     )))))
@@ -34,6 +56,7 @@ pub struct PStatus {
 pub struct MioPlayer(pub RustOpaque<Player>);
 
 pub fn new_player(client: MioClient) -> SyncReturn<MioPlayer> {
+    trace!("creating mio player");
     SyncReturn(MioPlayer(RustOpaque::new(Player::new(Arc::clone({
         let x: &Arc<_> = &client.0;
         x
@@ -42,45 +65,54 @@ pub fn new_player(client: MioClient) -> SyncReturn<MioPlayer> {
 
 impl MioPlayer {
     pub fn info_stream(&self, x: StreamSink<PStatus>) {
-        self.0.tx.send(PlayerMsg::SetSink(x)).unwrap();
+        trace!("sending sink");
+        drop(self.0.tx.send(PlayerMsg::SetSink(x)));
     }
 
     pub fn play(&self, id: Option<Uuid>) -> SyncReturn<()> {
+        debug!("requesting play {id:?}");
         self.0.tx.send(PlayerMsg::Play(id)).unwrap();
         SyncReturn(())
     }
 
     pub fn pause(&self) -> SyncReturn<()> {
+        debug!("requesting pause");
         self.0.tx.send(PlayerMsg::Pause).unwrap();
         SyncReturn(())
     }
 
     pub fn toggle(&self) -> SyncReturn<()> {
+        debug!("requesting toggle");
         self.0.tx.send(PlayerMsg::Toggle).unwrap();
         SyncReturn(())
     }
 
     pub fn queue(&self, id: Uuid) -> SyncReturn<()> {
+        debug!("requesting queue {id:}");
         self.0.tx.send(PlayerMsg::Queue(id)).unwrap();
         SyncReturn(())
     }
 
     pub fn unqueue(&self, id: Uuid) -> SyncReturn<()> {
+        debug!("requesting unqueue {id:}");
         self.0.tx.send(PlayerMsg::Unqueue(id)).unwrap();
         SyncReturn(())
     }
 
     pub fn stop(&self) -> SyncReturn<()> {
+        debug!("requesting stop");
         self.0.tx.send(PlayerMsg::Stop).unwrap();
         SyncReturn(())
     }
 
     pub fn forward(&self) -> SyncReturn<()> {
+        debug!("requesting forward");
         self.0.tx.send(PlayerMsg::Forward).unwrap();
         SyncReturn(())
     }
 
     pub fn volume(&self, volume: f32) -> SyncReturn<()> {
+        debug!("requesting volume {volume}");
         self.0.tx.send(PlayerMsg::Volume(volume)).unwrap();
         SyncReturn(())
     }
@@ -92,6 +124,7 @@ impl MioClient {
     }
 
     pub fn test_set_url(&self, url: String) -> anyhow::Result<()> {
+        trace!("testing url {url}");
         let mut lock = self.0.write().unwrap();
         lock.test_set_url(url)
     }
@@ -244,6 +277,8 @@ impl MioClient {
                             .unwrap()
                             .timestamp()
                     {
+                        debug!("refreshing token");
+
                         // refresh because it will be less than 12 hours to expiration
                         drop(lock);
                         let mut hold = self.0.write().unwrap();

@@ -1,12 +1,5 @@
 [workspace]
-members = [
-    "frontend/glue",
-    "common",
-    "backend",
-    "qoa-enc",
-    "model/scrape",
-    "model/minienc",
-]
+members = ["frontend/glue", "common", "backend", "qoa-enc"]
 resolver = "2"
 
 [profile.release]

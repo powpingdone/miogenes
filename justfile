@@ -19,13 +19,7 @@ rrun:
 clean:
     cargo clean
     cd frontend && flutter clean && flutter pub get
-    rm -r frontend/android/app/src/main/jniLibs/*.so 
-
-scrape:
-    cd model/scrape && cargo build -p mio-scrape --release && python keyate.py
-
-preproc-minienc:
-    cd model/minienc && cargo run -p mio-minienc --release -- preproc
+    rm -r frontend/android/app/src/main/jniLibs/*/*.so 
 
 fmt:
     genemichaels -p

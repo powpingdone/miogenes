@@ -63,54 +63,63 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Login"),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-      ),
-      body: Column(
-        children: [
-          Expanded(child: Container()),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: SizedBox(
-              width: 300,
-              child: TextField(
-                controller: _baseUrlController,
-                onSubmitted: (_) => setTask(mioState),
-                decoration: const InputDecoration(
-                    border: OutlineInputBorder(), labelText: "Base Url"),
-              ),
+        appBar: AppBar(
+          title: const Text("Login"),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Center(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: SizedBox(
+                        width: 300,
+                        child: TextField(
+                          controller: _baseUrlController,
+                          onSubmitted: (_) => setTask(mioState),
+                          decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              labelText: "Base Url"),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: ElevatedButton(
+                          onPressed: () => setTask(mioState),
+                          child: const Text("Check Url")),
+                    ),
+                  ],
+                ),
+                // Check if server exists
+                FutureBuilder(
+                  future: isValidUrl,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Text("Invalid url: ${extractMsg(snapshot.error)}");
+                    } else if (snapshot.connectionState ==
+                        ConnectionState.done) {
+                      // build ui for login
+                      return const LoginCreds();
+                    } else if (isValidUrl == null) {
+                      return Container();
+                    } else {
+                      // show checking
+                      return SpinKitWanderingCubes(
+                        color: Theme.of(context).colorScheme.primary,
+                      );
+                    }
+                  },
+                ),
+              ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton(
-                onPressed: () => setTask(mioState),
-                child: const Text("Check Url")),
-          ),
-          // Check if server exists
-          FutureBuilder(
-            future: isValidUrl,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Text("Invalid url: ${extractMsg(snapshot.error)}");
-              } else if (snapshot.connectionState == ConnectionState.done) {
-                // build ui for login
-                return const LoginCreds();
-              } else if (isValidUrl == null) {
-                return Container();
-              } else {
-                // show checking
-                return SpinKitWanderingCubes(
-                  color: Theme.of(context).colorScheme.primary,
-                );
-              }
-            },
-          ),
-          Expanded(child: Container()),
-        ],
-      ),
-    );
+        ));
   }
 }
 

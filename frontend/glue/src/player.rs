@@ -1,6 +1,7 @@
 use crate::*;
 use crossbeam::channel::{Receiver, RecvTimeoutError};
 use flutter_rust_bridge::StreamSink;
+use log::*;
 use parking_lot::Mutex;
 use qoaudio::QoaRodioSource;
 use rodio::Source;
@@ -62,26 +63,31 @@ impl Player {
 }
 
 fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>) {
+    trace!("opening track manager");
     let mut state = match PlayerState::new(client) {
         Ok(x) => x,
         Err(err) => loop {
+            let mut sink = None;
             let recv = rx.recv();
             match recv {
                 Ok(x) => {
-                    if let PlayerMsg::SetSink(sink) = x {
+                    if let PlayerMsg::SetSink(sink_now) = x {
+                        sink = Some(sink_now);
+                    }
+                    sink.as_ref().map(|sink| {
                         sink.add(api::PStatus {
                             err_msg: Some(err.to_string()),
                             queue: Vec::new(),
                             volume: 0.0,
                             paused: true,
-                        });
-                        return;
-                    }
+                        })
+                    });
                 }
                 Err(_) => return,
             }
         },
     };
+    trace!("entering event loop");
     loop {
         let mut _err_msg = None;
         let recv = rx.recv_deadline(Instant::now() + Duration::from_millis(50));
@@ -172,7 +178,9 @@ struct PlayerState {
 
 impl PlayerState {
     pub fn new(client: Arc<RwLock<MioClientState>>) -> anyhow::Result<Self> {
+        trace!("acqiring dev");
         let (_dev, s_handle) = find_dev()?;
+        trace!("setting up decoder");
         let decoder = Arc::new(Mutex::new(ControllingDecoder::new(client)));
         Ok(Self {
             ui_sink: None,
@@ -181,6 +189,7 @@ impl PlayerState {
                 let decoder = decoder.clone();
                 let s_handle = s_handle.clone();
                 move || {
+                    trace!("spinning s_thread");
                     s_handle.play_raw(SharedSource { i: decoder }).unwrap();
                 }
             }),
@@ -206,7 +215,21 @@ fn find_dev() -> anyhow::Result<(rodio::OutputStream, rodio::OutputStreamHandle)
         target_os = "netbsd"
     )))]
     {
-        Ok(rodio::OutputStream::try_default()?)
+        use std::panic::catch_unwind;
+
+        Ok({
+            let x = catch_unwind(rodio::OutputStream::try_default);
+            if let Err(ref err) = x {
+                return Err(anyhow::anyhow!("panicked: {:?}", {
+                    if let Some(x) = err.downcast_ref::<&str>() {
+                        Some(*x)
+                    } else {
+                        err.downcast_ref::<String>().map(|x| x.as_str())
+                    }
+                }));
+            }
+            x.unwrap()
+        }?)
     }
 
     // select jack by default on everything that _can_ use alsa. alsa sucks.

@@ -41,6 +41,7 @@ android {
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
+        main.jniLibs.srcDirs = ['src/main/jniLibs']
     }
 
     defaultConfig {
@@ -94,10 +95,11 @@ dependencies {
                 // add or remove these ABIs as needed.
                 '-t', 'x86',
                 '-t', 'x86_64',
-                '-o', '../android/app/src/main/jniLibs',
-                'build', '--release'
+                '-o', '../android/app/src/main/jniLibs'
         if (profileMode != null) {
-            args profileMode
+            args 'build', profileMode
+        } else {
+            args '--no-strip', 'build'
         }
     }
 }

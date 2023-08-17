@@ -36,4 +36,7 @@ class _MiogenesAppState extends State<MiogenesApp> {
 class MioTopLevel with ChangeNotifier {
   final MioClient _mioInternal = api.newMioClient();
   MioClient get mioClient => _mioInternal;
+  MioTopLevel() {
+    api.initSelf();
+  }
 }
