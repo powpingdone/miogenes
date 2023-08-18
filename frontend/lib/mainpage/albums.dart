@@ -179,9 +179,9 @@ class _CoverArtImgState extends State<CoverArtImg> {
             width: widget.size,
             height: widget.size,
             color: Theme.of(context).disabledColor,
-            child: const Icon(
+            child: Icon(
               Icons.image_not_supported,
-              size: 96.0,
+              size: widget.size == null ? 96 : widget.size! / 2,
             )),
       );
     }

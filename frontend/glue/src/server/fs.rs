@@ -35,7 +35,9 @@ impl MioClientState {
 
 fn search_folder_inner(path: impl AsRef<Path>) -> GlueResult<Vec<String>> {
     let path = path.as_ref();
-    const COMMON_EXTS: &[&str] = &["wav", "flac", "alac", "mp3", "ogg", "aac", "opus", "m4a"];
+
+    // TODO: add opus support
+    const COMMON_EXTS: &[&str] = &["wav", "flac", "alac", "mp3", "ogg", "aac", "m4a"];
     let mut ret = vec![];
     let dir = read_dir(path)?;
     for item in dir {

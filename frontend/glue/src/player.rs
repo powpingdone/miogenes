@@ -217,6 +217,7 @@ fn find_dev() -> anyhow::Result<(rodio::OutputStream, rodio::OutputStreamHandle)
     {
         use std::panic::catch_unwind;
 
+        debug!("not on linux: attempting to get default device");
         Ok({
             let x = catch_unwind(rodio::OutputStream::try_default);
             if let Err(ref err) = x {
@@ -242,6 +243,7 @@ fn find_dev() -> anyhow::Result<(rodio::OutputStream, rodio::OutputStreamHandle)
     {
         use cpal::traits::HostTrait;
 
+        trace!("on \"linux\": trying to get jack");
         rodio::OutputStream::try_from_device(
             &cpal::host_from_id(
                 cpal::available_hosts()
@@ -282,16 +284,27 @@ impl ControllingDecoder {
     pub fn dec_kickover(&mut self) -> bool {
         if self.true_dec.is_none() && self.playing_id.is_none() && !self.next_ids.is_empty() {
             // needed to be kicked
+            debug!("kicking over");
             self.forward();
             true
         } else {
             // is ready
+            trace!(
+                "no kickover required: {} && {} && {}",
+                self.true_dec.is_none(),
+                self.playing_id.is_none(),
+                !self.next_ids.is_empty()
+            );
             false
         }
     }
 
     pub fn set_new(&mut self, id: Uuid) {
-        self.true_dec = self.set_new_inner(id).ok();
+        let dec = self.set_new_inner(id);
+        if let Err(ref err) = dec {
+            warn!("error setting up new decoder: {err}");
+        }
+        self.true_dec = dec.ok();
         if self.true_dec.is_some() {
             self.playing_id = Some(id);
         }
@@ -307,25 +320,36 @@ impl ControllingDecoder {
     }
 
     pub fn queue(&mut self, id: Uuid) {
+        trace!("queueing {id}");
         self.next_ids.push_back(id)
     }
 
     pub fn dequeue(&mut self, id: Uuid) {
+        trace!("dequeueing {id}");
         self.next_ids.retain(|x| *x != id)
     }
 
     pub fn forward(&mut self) {
-        while let Some(id) = self.next_ids.pop_front() {
-            self.set_new(id);
-            if self.true_dec.is_none() {
-                continue;
+        loop {
+            if let Some(id) = self.next_ids.pop_front() {
+                debug!("next track is {id}, setting");
+                self.set_new(id);
+                if self.true_dec.is_none() {
+                    continue;
+                } else {
+                    return;
+                }
             } else {
+                debug!("no more tracks to set");
+                self.playing_id = None;
+                self.true_dec = None;
                 return;
             }
         }
     }
 
     pub fn clear_self(&mut self) {
+        trace!("cleaning self");
         self.next_ids.clear();
         self.true_dec = None;
         self.playing_id = None;

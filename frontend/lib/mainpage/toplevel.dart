@@ -84,7 +84,7 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
       // lossless
       "wav", "flac", "alac",
       // typical lossy
-      "mp3", "ogg", "aac", "opus", "m4a"
+      "mp3", "ogg", "aac", "m4a"
     ];
     mainState.albums ??= mioState.getAlbums();
 
@@ -198,6 +198,7 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
         // TODO: set height depending on platform and on if currently playing
         minHeight: 100.0,
         maxHeight: 600.0,
+
         body: SafeArea(
             child: Row(
           children: [

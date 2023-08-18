@@ -5,6 +5,7 @@ import "package:frontend/main.dart";
 import "package:frontend/mainpage/albums.dart";
 import "package:frontend/mainpage/toplevel.dart";
 import "package:provider/provider.dart";
+import "package:text_scroll/text_scroll.dart";
 import "package:uuid/uuid.dart";
 
 class Player extends StatefulWidget {
@@ -153,86 +154,79 @@ class TitleArtistAlbumText extends StatefulWidget {
 }
 
 class _TitleArtistAlbumTextState extends State<TitleArtistAlbumText> {
-  Future<Album>? albumFetch;
-  Future<Artist>? artistFetch;
+  Future<List<String?>>? albumArtistFetch;
 
   @override
   Widget build(BuildContext context) {
     var mioState = Provider.of<MioTopLevel>(context).mioClient;
-    albumFetch ??=
-        widget.album != null ? mioState.getAlbum(id: widget.album!) : null;
-    artistFetch ??=
-        widget.artist != null ? mioState.getArtist(id: widget.artist!) : null;
+    albumArtistFetch ??= Future(() async {
+      Future<Album>? albumFetch =
+          widget.album != null ? mioState.getAlbum(id: widget.album!) : null;
+      Future<Artist>? artistFetch =
+          widget.artist != null ? mioState.getArtist(id: widget.artist!) : null;
+      String? album, artist;
+      try {
+        album = (await albumFetch)?.title;
+      } catch (_) {
+        album = "?";
+      }
+      try {
+        artist = (await artistFetch)?.name;
+      } catch (_) {
+        artist = "?";
+      }
+      return [album, artist];
+    });
 
-    final title = Text(
+    final title = TextScroll(
       widget.title,
+      mode: TextScrollMode.bouncing,
       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-      overflow: TextOverflow.ellipsis,
     );
-    final artist = FutureBuilder(
-        future: artistFetch,
+    return FutureBuilder(
+        future: albumArtistFetch,
         builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            return Text(
-              snapshot.data!.name,
-              overflow: TextOverflow.ellipsis,
+          final album = snapshot.data?[0] == null ? "..." : snapshot.data![0]!;
+          final artist = snapshot.data?[1] == null ? "..." : snapshot.data![1]!;
+          if (widget.minified) {
+            return LimitedBox(
+              // 84
+              maxHeight: 84,
+              maxWidth: MediaQuery.of(context).size.width * 0.70,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  title,
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 4.0)),
+                  TextScroll(
+                    artist,
+                    mode: TextScrollMode.bouncing,
+                  ),
+                  TextScroll(
+                    album,
+                    mode: TextScrollMode.bouncing,
+                  ),
+                  Expanded(child: Container()),
+                ],
+              ),
             );
-          } else if (snapshot.hasError) {
-            return const Text("?");
           } else {
-            return const Text("...");
-          }
-        });
-    final album = FutureBuilder(
-        future: albumFetch,
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            return Text(
-              snapshot.data!.title,
-              overflow: TextOverflow.ellipsis,
-            );
-          } else if (snapshot.hasError) {
-            return const Text("?");
-          } else {
-            return const Text("...");
-          }
-        });
-
-    if (widget.minified) {
-      return LimitedBox(
-        maxHeight: 84,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            title,
-            const Padding(padding: EdgeInsets.symmetric(vertical: 4.0)),
-            artist,
-            album,
-            Expanded(child: Container()),
-          ],
-        ),
-      );
-    } else {
-      return Column(
-        children: [
-          title,
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 4.0),
-          ),
-          Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+            return Column(
               children: [
-                artist,
-                const Padding(padding: EdgeInsets.all(4.0)),
-                const Text("―" /* U+2015 */),
-                const Padding(padding: EdgeInsets.all(4.0)),
-                album
-              ])
-        ],
-      );
-    }
+                title,
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4.0),
+                ),
+                TextScroll(
+                  artist,
+                  mode: TextScrollMode.endless,
+                ),
+                TextScroll(album, mode: TextScrollMode.endless),
+              ],
+            );
+          }
+        });
   }
 }
 

@@ -405,14 +405,7 @@ mod test {
             &jwt,
         )
         .await;
-        assert!(
-            tree_check(
-                &cli,
-                &jwt,
-                &["merasmus", "merasmus/neigh", "merasmus/bleh"]
-            )
-            .await
-        );
+        assert!(tree_check(&cli, &jwt, &["merasmus", "merasmus/neigh", "merasmus/bleh"]).await);
 
         // delete
         jwt_header(

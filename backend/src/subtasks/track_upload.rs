@@ -52,19 +52,27 @@ pub async fn track_upload_process(
     orig_filename: String,
 ) -> Result<(), MioInnerError> {
     // process metadata
-    let (mdata, encoded) = tokio::task::spawn_blocking({
+    let (mdata, track_vec, encoded) = tokio::task::spawn_blocking({
         let orig_filename = orig_filename.clone();
         let path = path.clone();
         move || {
             let mdata = get_metadata(path.clone(), orig_filename.clone())?;
 
-            // conv into Quite Ok Audio
+            // get waveform & desc
             let (desc, waveform) = create_qoa(path, orig_filename)
                 .map_err(|err| MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))?;
+
+            // generate vec
+            let track_vec =
+                create_vec(&waveform, desc.channels, desc.sample_rate).map_err(|err| {
+                    MioInnerError::TrackProcessingError(err, StatusCode::INTERNAL_SERVER_ERROR)
+                })?;
+
+            // conv into Quite Ok Audio
             let encoded = mio_qoa_impl::encode(waveform, &desc).map_err(|err| {
                 MioInnerError::TrackProcessingError(err.into(), StatusCode::BAD_REQUEST)
             })?;
-            Ok((mdata, encoded))
+            Ok((mdata, track_vec, encoded))
         }
     })
     .await
@@ -88,7 +96,7 @@ pub async fn track_upload_process(
     drop(file);
 
     // insert into the database
-    insert_into_db(state.db, id, userid, dir, mdata, orig_filename).await
+    insert_into_db(state.db, id, userid, dir, mdata, orig_filename, track_vec).await
 }
 
 fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::Error> {
@@ -369,6 +377,14 @@ fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QO
     }
 }
 
+fn create_vec(
+    waveform: &[i16],
+    channels: u32,
+    sample_rate: u32,
+) -> anyhow::Result<Box<[f32; 200]>> {
+    todo!()
+}
+
 async fn insert_into_db(
     db: SqlitePool,
     id: Uuid,
@@ -376,7 +392,12 @@ async fn insert_into_db(
     dir: String,
     metadata: Metadata,
     orig_filename: String,
+    track_vec: Box<[f32; 200]>,
 ) -> Result<(), MioInnerError> {
+    let track_vec = track_vec
+        .into_iter()
+        .flat_map(|x| x.to_le_bytes())
+        .collect::<Vec<_>>();
     let mut conn = db.acquire().await?;
     write_transaction(&mut conn, |txn| {
         Box::pin(async move {
@@ -485,11 +506,12 @@ async fn insert_into_db(
             };
 
             // insert track, check on audiohash
+            todo!();
             let other_tags = metadata.other_tags;
             sqlx::query!(
                 "INSERT INTO track 
                     (id,
-                    title, 
+                    title,
                     disk, 
                     track, 
                     tags, 
@@ -498,8 +520,9 @@ async fn insert_into_db(
                     artist, 
                     cover_art, 
                     owner,
-                    path) 
-                VALUES (?,?,?,?,?,?,?,?,?,?,?);",
+                    path, 
+                    track_vec) 
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?);",
                 id,
                 metadata.title,
                 metadata.disk_track.0,
@@ -510,7 +533,8 @@ async fn insert_into_db(
                 artist_id,
                 cover_art_id,
                 userid,
-                dir
+                dir,
+                track_vec
             )
             .execute(&mut *txn)
             .await?;

@@ -66,3 +66,9 @@ pub struct FolderQuery {
 pub struct ErrorMsg {
     pub error: String,
 }
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct ClosestId {
+    pub id: Uuid,
+    pub similarity: f32,
+}

@@ -35,17 +35,22 @@ CREATE TABLE IF NOT EXISTS track (
     path TEXT NOT NULL,
     owner BLOB NOT NULL,
     orig_fname TEXT NOT NULL,
-    -- not in use due to issues related to somehow getting 
-    -- the *same hash* on different tracks
-    -- audio_hash BLOB UNIQUE NOT NULL CHECK (length(audio_hash) == 32),
     disk INTEGER NULL,
     track INTEGER NULL,
     -- extra tags, as json
     tags TEXT NOT NULL,
-    -- sha256 hash of the wavelength
     album BLOB NULL,
     artist BLOB NULL,
     cover_art BLOB NULL,
+    -- vector for position of the track
+    track_vec BLOB NOT NULL CHECK (
+        length(id) == (
+            /* float */
+            4 *
+            /* vec length */
+            200
+        )
+    ),
     FOREIGN KEY(album) REFERENCES album(id),
     FOREIGN KEY(artist) REFERENCES artist(id),
     FOREIGN KEY(cover_art) REFERENCES cover_art(id),
@@ -57,3 +62,10 @@ CREATE TABLE IF NOT EXISTS JOIN_playlist_track (
     FOREIGN KEY(playlist) REFERENCES playlist(id),
     FOREIGN KEY(track) REFERENCES track(id)
 ) STRICT;
+CREATE TABLE IF NOT EXISTS auth_keys (
+    id BLOB NOT NULL CHECK (length(id) == 16),
+    expiry INTEGER NOT NULL,
+    secret BLOB NOT NULL,
+    FOREIGN KEY(id) REFERENCES user(id)
+) STRICT;
+CREATE INDEX IF NOT EXISTS auth_keys_id ON auth_keys (id);

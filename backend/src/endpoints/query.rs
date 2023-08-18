@@ -8,6 +8,7 @@ use axum::response::IntoResponse;
 use log::*;
 use mio_common::*;
 use sqlx::Connection;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 pub fn routes() -> Router<MioState> {
@@ -17,6 +18,7 @@ pub fn routes() -> Router<MioState> {
         .route("/playlist", get(playlist_info))
         .route("/coverart", get(cover_art))
         .route("/artist", get(artist_info))
+        .route("/closest", get(closest_track))
 }
 
 fn uuid_map_back(x: Option<Vec<u8>>) -> Result<Option<Uuid>, MioInnerError> {
@@ -208,4 +210,85 @@ async fn artist_info(
             }
         }),
     ))
+}
+
+async fn closest_track(
+    State(state): State<MioState>,
+    Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
+    Query(msgstructs::ClosestTrack {
+        id,
+        mut ignore_tracks,
+    }): Query<msgstructs::ClosestTrack>,
+) -> Result<impl IntoResponse, MioInnerError> {
+    use futures::TryStreamExt;
+
+    debug!("/query/closest finding closest for id {id}");
+    state.db.acquire().await?.transaction(|txn| {
+        Box::pin(async move {
+            // fetch initial track_vec
+            let cmp_track_vec =
+                sqlx::query!(
+                    "SELECT track_vec FROM track 
+                    WHERE owner = ? AND id = ?;",
+                    userid,
+                    id
+                )
+                    .fetch_optional(txn.as_mut())
+                    .await?
+                    .ok_or_else(|| MioInnerError::NotFound(anyhow!("No track corresponds to id {id}")))?
+                    .track_vec
+                    .chunks_exact(4)
+                    .map(|x| f32::from_le_bytes(x.try_into().unwrap()))
+                    .collect::<Vec<_>>();
+
+            // setup loop vars
+            ignore_tracks.extend(vec![id]);
+            let ignore_tracks = ignore_tracks.into_iter().collect::<HashSet<_>>();
+            let mut stream =
+                sqlx::query!(
+                    "SELECT track_vec, id FROM track
+                    WHERE owner = ?;",
+                    userid
+                ).fetch(txn.as_mut());
+            let (mut curr_id, mut cosim) = (Uuid::nil(), -1.0f32);
+
+            // finding code
+            loop {
+                let Some(query) = stream.try_next().await ? else {
+                    break
+                };
+                let id = uuid_map_back(Some(query.id))?.unwrap();
+                if ignore_tracks.contains(&id) {
+                    continue;
+                }
+                let track_vec =
+                    query
+                        .track_vec
+                        .chunks_exact(4)
+                        .map(|x| f32::from_le_bytes(x.try_into().unwrap()))
+                        .collect::<Vec<_>>();
+
+                // compute cosine sim
+                let cosim_comp =
+                    (cmp_track_vec.iter().zip(&track_vec).map(|(a, b)| a * b).sum::<f32>()) /
+                        (cmp_track_vec.iter().map(|x| x.powi(2)).sum::<f32>() *
+                            track_vec.iter().map(|x| x.powi(2)).sum::<f32>()).sqrt();
+                if cosim_comp > cosim {
+                    trace!(
+                        "/query/closest new cosim closest: {id} with {cosim_comp}, beating {curr_id} with {cosim}"
+                    );
+                    cosim = cosim_comp;
+                    curr_id = id;
+                }
+            }
+            if curr_id.is_nil() {
+                return Err(MioInnerError::NotFound(anyhow!("no track was found that was similar.")));
+            }
+            debug!("/query/closest closest id found was {curr_id} with cosim {cosim}");
+            Ok(Json(retstructs::ClosestId {
+                id: curr_id,
+                similarity: cosim,
+            }))
+        })
+    }).await
 }

@@ -44,3 +44,9 @@ pub struct TrackMove {
     pub id: Uuid,
     pub new_path: String,
 }
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct ClosestTrack {
+    pub id: Uuid,
+    pub ignore_tracks: Vec<Uuid>,
+}
