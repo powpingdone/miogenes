@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS track (
             /* float */
             4 *
             /* vec length */
-            200
+            100
         )
     ),
     FOREIGN KEY(album) REFERENCES album(id),

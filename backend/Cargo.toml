@@ -44,6 +44,9 @@ sqlx = { version = "0.7", features = [
   "migrate",
 ] }
 symphonia = { version = "0.5", features = ["all-codecs", "all-formats", "all", "mpa"] }
+rubato = { version = "0.14", features = ["log"] }
+ort = "1.15"
+mel_spec = "0.2"
 
 [dev-dependencies]
 axum-test = "9.1"

@@ -377,11 +377,54 @@ fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QO
     }
 }
 
-fn create_vec(
-    waveform: &[i16],
-    channels: u32,
-    sample_rate: u32,
-) -> anyhow::Result<Box<[f32; 200]>> {
+fn create_vec(floated: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<Vec<f32>> {
+    // conv to float
+    let mut floated = floated
+        .iter()
+        .map(|x| *x as f32 / i16::MIN as f32)
+        .collect::<Vec<_>>();
+
+    // to mono
+    if channels != 1 {
+        trace!("CREATE_VEC: making mono");
+        floated = floated
+            .chunks(channels as usize)
+            .map(|x| x.iter().sum::<f32>() / channels as f32)
+            .collect();
+    }
+
+    // resample
+    if sample_rate != 22050 {
+        use rubato::Resampler;
+
+        trace!("CREATE_VEC: resampling from {sample_rate} to 22050");
+        let mut new_vec = Vec::<f32>::new();
+        let mut resamp =
+            rubato::FftFixedIn::<f32>::new(sample_rate as usize, 22050, 4096, 2, 1).unwrap();
+        let mut out_buf = vec![vec![0.0f32; resamp.output_frames_max()]; 1];
+        let mut old_vec = vec![&floated[..]];
+        while old_vec[0].len() >= resamp.input_frames_next() {
+            let (lin, lout) = resamp
+                .process_into_buffer(&old_vec, &mut out_buf, None)
+                .unwrap();
+            old_vec[0] = &old_vec[0][lin..];
+            new_vec.extend_from_slice(&out_buf[0][..lout]);
+        }
+
+        if !old_vec[0].is_empty() {
+            let (_, lout) = resamp
+                .process_partial_into_buffer(Some(&old_vec), &mut out_buf, None)
+                .unwrap();
+            new_vec.extend_from_slice(&out_buf[0][..lout]);
+        }
+        floated = new_vec;
+    }
+
+    // make spectrogram
+    let spec = {
+        use mel_spec::prelude::*;
+        todo!()
+    };
     todo!()
 }
 
@@ -392,7 +435,7 @@ async fn insert_into_db(
     dir: String,
     metadata: Metadata,
     orig_filename: String,
-    track_vec: Box<[f32; 200]>,
+    track_vec: Vec<f32>,
 ) -> Result<(), MioInnerError> {
     let track_vec = track_vec
         .into_iter()
@@ -506,7 +549,6 @@ async fn insert_into_db(
             };
 
             // insert track, check on audiohash
-            todo!();
             let other_tags = metadata.other_tags;
             sqlx::query!(
                 "INSERT INTO track 
