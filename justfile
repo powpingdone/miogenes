@@ -1,4 +1,4 @@
-default: gen
+default: gen fmt
 
 update:
     cargo update

@@ -420,7 +420,6 @@ fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<V
             old_vec[0] = &old_vec[0][lin..];
             new_vec.extend_from_slice(&out_buf[0][..lout]);
         }
-
         if !old_vec[0].is_empty() {
             let (_, lout) = resamp
                 .process_partial_into_buffer(Some(&old_vec), &mut out_buf, None)
@@ -434,8 +433,13 @@ fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<V
     #[allow(clippy::let_unit_value)]
     let spec = {
         use mel_spec::prelude::*;
+        use mel_spec_pipeline::*;
 
         debug!("CREATE_VEC: making spectrogram for inference");
+        let pipeline = Pipeline::new(PipelineConfig::new(
+            MelConfig::new(2048, 512, 96, 22050.0),
+            None,
+        ));
         todo!()
     };
     todo!()
