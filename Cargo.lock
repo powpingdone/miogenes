@@ -1978,6 +1978,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "mel_spec_audio"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98f69d9998587cf43ad3e622d5805b42e16efe31328adb0634f14b45334bf2ef"
+
+[[package]]
+name = "mel_spec_pipeline"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0a0058a12dee368b58f7f19087772bb35edfe72498da491a3185b02ca672454"
+dependencies = [
+ "crossbeam-channel",
+ "image",
+ "mel_spec",
+ "mel_spec_audio",
+ "ndarray",
+]
+
+[[package]]
 name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2057,6 +2076,7 @@ dependencies = [
  "konst",
  "log",
  "mel_spec",
+ "mel_spec_pipeline",
  "mio-common",
  "mio-qoa-impl",
  "num_cpus",

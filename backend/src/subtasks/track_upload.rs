@@ -377,11 +377,21 @@ fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QO
     }
 }
 
-fn create_vec(floated: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<Vec<f32>> {
+fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<Vec<f32>> {
+    // pad tracks shorter than 5 seconds
+    let padded = {
+        let full_len = sample_rate as usize * 5;
+        let mut new = orig.iter().copied().collect::<Vec<i16>>();
+        if orig.len() < full_len {
+            new.extend(std::iter::repeat(0).take(full_len - orig.len()));
+        }
+        new
+    };
+
     // conv to float
-    let mut floated = floated
-        .iter()
-        .map(|x| *x as f32 / i16::MIN as f32)
+    let mut floated = padded
+        .into_iter()
+        .map(|x| x as f32 / i16::MIN as f32)
         .collect::<Vec<_>>();
 
     // to mono
@@ -421,8 +431,11 @@ fn create_vec(floated: &[i16], channels: u32, sample_rate: u32) -> anyhow::Resul
     }
 
     // make spectrogram
+    #[allow(clippy::let_unit_value)]
     let spec = {
         use mel_spec::prelude::*;
+
+        debug!("CREATE_VEC: making spectrogram for inference");
         todo!()
     };
     todo!()
