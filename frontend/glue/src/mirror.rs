@@ -1,6 +1,6 @@
 use flutter_rust_bridge::frb;
 pub use mio_common::retstructs::{
-    Album, Albums, Artist, CoverArt, ErrorMsg, FolderQuery, Playlist, Playlists, Track,
+    Album, Albums, Artist, ClosestId, CoverArt, ErrorMsg, FolderQuery, Playlist, Playlists, Track,
     UploadReturn,
 };
 use uuid::Uuid;
@@ -69,4 +69,10 @@ pub struct _FolderQuery {
 #[frb(mirror(ErrorMsg))]
 pub struct _ErrorMsg {
     pub error: String,
+}
+
+#[frb(mirror(ClosestId))]
+pub struct _ClosestId {
+    pub id: Uuid,
+    pub similarity: f32,
 }

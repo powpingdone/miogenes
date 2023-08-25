@@ -215,6 +215,20 @@ impl MioClient {
         })
     }
 
+    pub fn get_closest_track(
+        &self,
+        id: Uuid,
+        ignore_tracks: Vec<Uuid>,
+    ) -> anyhow::Result<retstructs::ClosestId> {
+        self.wrap_refresh(|lock| match lock.get_closest(id, ignore_tracks.clone()) {
+            Ok(ok) => Ok(ok),
+            Err(err) => rewrap_error(err, |status, resp| match status {
+                404 => bail!("{resp}"),
+                _ => Ok((status, resp)),
+            }),
+        })
+    }
+
     pub fn get_files_at_dir(&self, path: String) -> anyhow::Result<Vec<String>> {
         let lock = self.0.read().unwrap();
         match lock.search_folder(path) {

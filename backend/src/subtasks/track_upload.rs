@@ -63,14 +63,14 @@ pub async fn track_upload_process(
             let mdata = get_metadata(path.clone(), orig_filename.clone())?;
 
             // get waveform & desc
-            let (desc, waveform) = create_qoa(path, orig_filename)
+            let (desc, waveform) = create_qoa(path, orig_filename.clone())
                 .map_err(|err| MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))?;
 
             // generate vec
-            let track_vec =
-                create_vec(&waveform, desc.channels, desc.sample_rate).map_err(|err| {
-                    MioInnerError::TrackProcessingError(err, StatusCode::INTERNAL_SERVER_ERROR)
-                })?;
+            let track_vec = create_vec(&waveform, desc.channels, desc.sample_rate, orig_filename)
+                .map_err(|err| {
+                MioInnerError::TrackProcessingError(err, StatusCode::INTERNAL_SERVER_ERROR)
+            })?;
 
             // conv into Quite Ok Audio
             let encoded = mio_qoa_impl::encode(waveform, &desc).map_err(|err| {
@@ -107,10 +107,8 @@ pub async fn track_upload_process(
 fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::Error> {
     // TODO: make this timeout configurable
     let discover = gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(10))?;
-    trace!("{orig_path}: creating discoverer");
     let fname = glib::filename_to_uri(Path::new(&fname).absolutize()?, None)?;
     trace!("{orig_path}: new uri created: '{fname}'");
-    debug!("{orig_path}: begin discovery");
     let data = discover.discover_uri(&fname)?;
 
     // TODO: implement errors for the rest (possibly, may not be needed)
@@ -150,7 +148,6 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
         match tags {
             Some(tags) => {
                 for (tag, value) in tags.iter() {
-                    trace!("{orig_path}: tag proc'd \"{tag}\"");
                     ret.push((tag.to_owned(), value));
                 }
             }
@@ -216,7 +213,7 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
                 *mut_info = proc_tag(data).and_then(|inp| match inp.parse() {
                     Ok(ok) => Some(ok),
                     Err(err) => {
-                        debug!("{orig_path}: error parsing int out {err}");
+                        debug!("{orig_path}: error parsing int out, {err}");
                         None
                     }
                 });
@@ -239,10 +236,15 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
                         }
                     }
 
-                    let (data, ret) = ({ truncate(format!("{data:?}")) }, {
-                        truncate(format!("{ret:?}"))
-                    });
-                    trace!("{orig_path}: KV inserted ({tag}, {data}), replaced ({tag}, {ret})");
+                    let data = truncate(format!("{data:?}"));
+                    trace!(
+                        "{orig_path}: KV inserted on {tag}, {data}{}",
+                        if ret.is_some() {
+                            ", replaced prev KV"
+                        } else {
+                            ""
+                        }
+                    );
                 }
             }
         }
@@ -285,13 +287,10 @@ fn hash(data: &[u8]) -> [u8; 32] {
 
 fn proc_tag(data: SendValue) -> Option<String> {
     if let Ok(x) = data.get::<String>() {
-        trace!("got string directly: {x}");
         Some(x)
     } else if let Ok(x) = data.serialize() {
-        trace!("serialized string: {x}");
         Some(x.to_string())
     } else {
-        trace!("no string created");
         None
     }
 }
@@ -332,7 +331,7 @@ fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QO
             Ok(x) => x,
             Err(Error::IoError(err)) => {
                 if err.kind() == std::io::ErrorKind::UnexpectedEof {
-                    trace!("{fn_dis}: finishing up");
+                    trace!("{fn_dis}: finishing up, sample totals is {}", ret.len());
                     break Ok((
                         mio_qoa_impl::QOADesc {
                             channels: channel_num.unwrap(),
@@ -365,15 +364,8 @@ fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QO
                         buf.spec().rate
                     );
                 }
-                trace!("{fn_dis}: copying to sample_buf");
                 sample_buf.copy_interleaved_ref(buf);
-                trace!("{fn_dis}: copying back to ret");
                 ret.extend(sample_buf.samples());
-                debug!(
-                    "{fn_dis}: added {} samples, sample totals is {}",
-                    sample_buf.samples().len(),
-                    ret.len()
-                );
             }
             Err(err) => {
                 return Err(anyhow::Error::from(err));
@@ -382,7 +374,12 @@ fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QO
     }
 }
 
-fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<Vec<f32>> {
+fn create_vec(
+    orig: &[i16],
+    channels: u32,
+    sample_rate: u32,
+    fn_dis: String,
+) -> anyhow::Result<Vec<f32>> {
     use ndarray::*;
 
     // pad tracks shorter than 5 seconds
@@ -403,7 +400,7 @@ fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<V
 
     // to mono
     if channels != 1 {
-        trace!("CREATE_VEC: making mono");
+        trace!("{fn_dis}: making mono");
         floated = floated
             .chunks(channels as usize)
             .map(|x| x.iter().sum::<f32>() / channels as f32)
@@ -414,7 +411,7 @@ fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<V
     if sample_rate != 22050 {
         use rubato::Resampler;
 
-        trace!("CREATE_VEC: resampling from {sample_rate} to 22050");
+        trace!("{fn_dis}: resampling from {sample_rate} to 22050");
         let mut new_vec = Vec::<f32>::new();
         let mut resamp =
             rubato::FftFixedIn::<f32>::new(sample_rate as usize, 22050, 4096, 2, 1).unwrap();
@@ -437,18 +434,18 @@ fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<V
     }
 
     // make spectrogram
-    #[allow(clippy::let_unit_value)]
     let spec = {
         use mel_spec::prelude::*;
         use mel_spec_pipeline::*;
 
-        debug!("CREATE_VEC: making spectrogram for inference");
+        debug!("{fn_dis}: making spectrogram for inference");
         let mut pipeline = Pipeline::new(PipelineConfig::new(
             // hop length is different here because, I dont know, but it makes 216 samples.
             MelConfig::new(2048, 503, 96, 22050.0),
             None,
         ));
         let handles = pipeline.start();
+
         // technically, it's 7.5 seconds that's the minimum, not 8, but this looks cleaner
         let range = if floated.len() > 22050 * 8 {
             floated.len() / 3..floated.len() / 3 + 22050 * 5
@@ -458,7 +455,7 @@ fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<V
         pipeline.send_pcm(&floated[range]).unwrap();
         pipeline.close_ingress();
         let specs = pipeline.rx().into_iter().collect::<Vec<_>>();
-        trace!("CREATE_VEC: joining spectrogram threads");
+        trace!("{fn_dis}: joining spectrogram threads");
         handles.into_iter().for_each(|x| x.join().unwrap());
         let specs = specs.into_iter().map(|x| x.1).collect::<Vec<_>>();
         let spec = ndarray::concatenate(
@@ -471,20 +468,20 @@ fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<V
         )
         .unwrap();
         let shape = spec.shape().to_owned();
-        trace!("CREATE_VEC: shape of array is {shape:?}");
-
+        trace!("{fn_dis}: shape of array is {shape:?}");
         CowArray::from(
             spec.into_shape([1, 1, shape[0], shape[1]])?
                 .map(|x| *x as f32),
         )
         .into_dyn()
     };
-
     Ok({
         use ort::*;
 
         static SESSION: Lazy<InMemorySession> = Lazy::new(|| {
-            trace!("CREATE_VEC: creating session");
+            trace!("creating session");
+
+            // the majority of the binary size actually comes from this
             let model = include_bytes!("deejai.onnx");
             let env = Environment::builder()
                 .with_name("deej_ai")
@@ -501,7 +498,6 @@ fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<V
                 .with_model_from_memory(model)
                 .unwrap()
         });
-
         let inp = vec![Value::from_array(SESSION.allocator(), &spec)?];
         let out = SESSION.run(inp)?;
         out.get(0)
@@ -636,7 +632,6 @@ async fn insert_into_db(
 
             // insert track, check on audiohash
             let other_tags = metadata.other_tags;
-            dbg!(track_vec.len());
             sqlx::query!(
                 "INSERT INTO track 
                     (id,

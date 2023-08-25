@@ -13,10 +13,7 @@ pub mod query;
 pub mod track_manage;
 
 // util function to check if path is in user path
-pub(self) fn check_dir_in_data_dir(
-    path: impl AsRef<Path>,
-    userid: Uuid,
-) -> Result<(), MioInnerError> {
+fn check_dir_in_data_dir(path: impl AsRef<Path>, userid: Uuid) -> Result<(), MioInnerError> {
     debug!("CD_IN_DD checking {:?}", path.as_ref());
     let real_path = Path::new(&format!("{}/{userid}/", DATA_DIR.get().unwrap())).to_path_buf();
     debug!("CD_IN_DD real path is {real_path:?}");

@@ -215,10 +215,10 @@ async fn artist_info(
 async fn closest_track(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
-    Query(msgstructs::ClosestTrack {
+    Json(msgstructs::ClosestTrack {
         id,
         mut ignore_tracks,
-    }): Query<msgstructs::ClosestTrack>,
+    }): Json<msgstructs::ClosestTrack>,
 ) -> Result<impl IntoResponse, MioInnerError> {
     use futures::TryStreamExt;
 
@@ -242,7 +242,7 @@ async fn closest_track(
                     .collect::<Vec<_>>();
 
             // setup loop vars
-            ignore_tracks.extend(vec![id]);
+            ignore_tracks.push(id);
             let ignore_tracks = ignore_tracks.into_iter().collect::<HashSet<_>>();
             let mut stream =
                 sqlx::query!(

@@ -2080,6 +2080,7 @@ dependencies = [
  "mel_spec_pipeline",
  "mio-common",
  "mio-qoa-impl",
+ "ndarray",
  "num_cpus",
  "once_cell",
  "ort",

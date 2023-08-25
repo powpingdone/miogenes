@@ -66,4 +66,15 @@ impl MioClientState {
             .call()?
             .into_reader())
     }
+
+    pub fn get_closest(
+        &self,
+        id: Uuid,
+        ignore_tracks: Vec<Uuid>,
+    ) -> GlueResult<retstructs::ClosestId> {
+        Ok(self
+            .wrap_auth(self.agent.get(&format!("{}/api/query/closest", self.url,)))
+            .send_json(msgstructs::ClosestTrack { id, ignore_tracks })?
+            .into_json()?)
+    }
 }

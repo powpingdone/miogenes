@@ -116,6 +116,14 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kGetCoverArtMethodMioClientConstMeta;
 
+  Future<ClosestId> getClosestTrackMethodMioClient(
+      {required MioClient that,
+      required UuidValue id,
+      required List<UuidValue> ignoreTracks,
+      dynamic hint});
+
+  FlutterRustBridgeTaskConstMeta get kGetClosestTrackMethodMioClientConstMeta;
+
   Future<List<String>> getFilesAtDirMethodMioClient(
       {required MioClient that, required String path, dynamic hint});
 
@@ -213,6 +221,16 @@ class Artist {
   });
 }
 
+class ClosestId {
+  final UuidValue id;
+  final double similarity;
+
+  const ClosestId({
+    required this.id,
+    required this.similarity,
+  });
+}
+
 class CoverArt {
   final UuidValue id;
   final Uint8List webmBlob;
@@ -298,6 +316,16 @@ class MioClient {
       bridge.getCoverArtMethodMioClient(
         that: this,
         id: id,
+      );
+
+  Future<ClosestId> getClosestTrack(
+          {required UuidValue id,
+          required List<UuidValue> ignoreTracks,
+          dynamic hint}) =>
+      bridge.getClosestTrackMethodMioClient(
+        that: this,
+        id: id,
+        ignoreTracks: ignoreTracks,
       );
 
   Future<List<String>> getFilesAtDir({required String path, dynamic hint}) =>
@@ -834,6 +862,30 @@ class MioGlueImpl implements MioGlue {
         argNames: ["that", "id"],
       );
 
+  Future<ClosestId> getClosestTrackMethodMioClient(
+      {required MioClient that,
+      required UuidValue id,
+      required List<UuidValue> ignoreTracks,
+      dynamic hint}) {
+    var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
+    var arg1 = _platform.api2wire_Uuid(id);
+    var arg2 = _platform.api2wire_Uuids(ignoreTracks);
+    return _platform.executeNormal(FlutterRustBridgeTask(
+      callFfi: (port_) => _platform.inner
+          .wire_get_closest_track__method__MioClient(port_, arg0, arg1, arg2),
+      parseSuccessData: _wire2api_closest_id,
+      constMeta: kGetClosestTrackMethodMioClientConstMeta,
+      argValues: [that, id, ignoreTracks],
+      hint: hint,
+    ));
+  }
+
+  FlutterRustBridgeTaskConstMeta get kGetClosestTrackMethodMioClientConstMeta =>
+      const FlutterRustBridgeTaskConstMeta(
+        debugName: "get_closest_track__method__MioClient",
+        argNames: ["that", "id", "ignoreTracks"],
+      );
+
   Future<List<String>> getFilesAtDirMethodMioClient(
       {required MioClient that, required String path, dynamic hint}) {
     var arg0 = _platform.api2wire_box_autoadd_mio_client(that);
@@ -1001,6 +1053,16 @@ class MioGlueImpl implements MioGlue {
     return _wire2api_i64(raw);
   }
 
+  ClosestId _wire2api_closest_id(dynamic raw) {
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return ClosestId(
+      id: _wire2api_Uuid(arr[0]),
+      similarity: _wire2api_f32(arr[1]),
+    );
+  }
+
   CoverArt _wire2api_cover_art(dynamic raw) {
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
@@ -1160,6 +1222,11 @@ class MioGluePlatform extends FlutterRustBridgeBase<MioGlueWire> {
   @protected
   ffi.Pointer<wire_uint_8_list> api2wire_Uuid(UuidValue raw) {
     return api2wire_uint_8_list(raw.toBytes());
+  }
+
+  @protected
+  ffi.Pointer<wire_uint_8_list> api2wire_Uuids(List<UuidValue> raw) {
+    return api2wire_uint_8_list(api2wireConcatenateBytes(raw));
   }
 
   @protected
@@ -1732,6 +1799,33 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
       _wire_get_cover_art__method__MioClientPtr.asFunction<
           void Function(int, ffi.Pointer<wire_MioClient>,
               ffi.Pointer<wire_uint_8_list>)>();
+
+  void wire_get_closest_track__method__MioClient(
+    int port_,
+    ffi.Pointer<wire_MioClient> that,
+    ffi.Pointer<wire_uint_8_list> id,
+    ffi.Pointer<wire_uint_8_list> ignore_tracks,
+  ) {
+    return _wire_get_closest_track__method__MioClient(
+      port_,
+      that,
+      id,
+      ignore_tracks,
+    );
+  }
+
+  late final _wire_get_closest_track__method__MioClientPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Void Function(
+                  ffi.Int64,
+                  ffi.Pointer<wire_MioClient>,
+                  ffi.Pointer<wire_uint_8_list>,
+                  ffi.Pointer<wire_uint_8_list>)>>(
+      'wire_get_closest_track__method__MioClient');
+  late final _wire_get_closest_track__method__MioClient =
+      _wire_get_closest_track__method__MioClientPtr.asFunction<
+          void Function(int, ffi.Pointer<wire_MioClient>,
+              ffi.Pointer<wire_uint_8_list>, ffi.Pointer<wire_uint_8_list>)>();
 
   void wire_get_files_at_dir__method__MioClient(
     int port_,

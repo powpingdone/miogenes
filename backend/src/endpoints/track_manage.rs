@@ -36,7 +36,7 @@ async fn track_upload(
 ) -> impl IntoResponse {
     trace!("/track/upload acquiring directory lock");
     let _lock_hold = state.lock_files.clone();
-    let _hold = _lock_hold.write().await;
+    let _hold = _lock_hold.read().await;
 
     // find a unique id for the track
     debug!("/track/upload generating UUID");

@@ -64,7 +64,7 @@ impl Player {
 
 fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>) {
     trace!("opening track manager");
-    let mut state = match PlayerState::new(client) {
+    let mut state = match PlayerState::new(client.clone()) {
         Ok(x) => x,
         Err(err) => loop {
             let mut sink = None;
@@ -121,10 +121,23 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
 
         // yes double locking is very much shitty and suboptimal, but PlayerMsg::SetSink
         // forced my hand. why do we not have partial borrows yet
-        let lock = state.decoder.lock();
+        let mut lock = state.decoder.lock();
+        let queue = lock.copy_queue();
+
+        // add to radio queue
+        if queue.len() < 50 && !queue.is_empty() {
+            let next = client
+                .read()
+                .unwrap()
+                .get_closest(queue[0], queue.clone())
+                .unwrap()
+                .id;
+            lock.queue(next);
+            // next iteration will pickup the new id in the queue
+        }
         state.send_ui(api::PStatus {
             err_msg: _err_msg,
-            queue: lock.copy_queue(),
+            queue,
             volume: lock.vol,
             paused: lock.pause,
         });
