@@ -51,32 +51,36 @@ class UploadTaskStateHolder {
 
   Future<UploadReturn> _internalFuture(
       MioClient mioClient, MainNavTopLevel mainNav) async {
-    // path_util not needed here because this is an internal path
-    var serverNodes = serverPath.isEmpty ? [] : serverPath.split("/").toList();
-    // pickup the rest of the paths extending the path
-    if (highestLevel != null) {
-      var splitPath = path_util.split(path);
-      serverNodes.addAll(splitPath.sublist(
-          path_util.split(highestLevel!).length, splitPath.length - 1));
-    }
-
-    // create dirs even if they already exist
-    // this sucks. honest. but hey, at least I already implemented the
-    // locking to make sure that this doesn't do funky stuff serverside.
-    for (var x = 0; x < serverNodes.length; x++) {
-      // return new path
-      String pathTo = serverNodes.sublist(0, x).join("/");
-      try {
-        await mioClient.makeDir(name: serverNodes[x], path: pathTo);
-      } catch (_) {
-        // doesn't really matter
+    try {
+      // path_util not needed here because this is an internal path
+      var serverNodes =
+          serverPath.isEmpty ? [] : serverPath.split("/").toList();
+      // pickup the rest of the paths extending the path
+      if (highestLevel != null) {
+        var splitPath = path_util.split(path);
+        serverNodes.addAll(splitPath.sublist(
+            path_util.split(highestLevel!).length, splitPath.length - 1));
       }
+
+      // create dirs even if they already exist
+      // this sucks. honest. but hey, at least I already implemented the
+      // locking to make sure that this doesn't do funky stuff serverside.
+      for (var x = 0; x < serverNodes.length; x++) {
+        // return new path
+        String pathTo = serverNodes.sublist(0, x).join("/");
+        try {
+          await mioClient.makeDir(name: serverNodes[x], path: pathTo);
+        } catch (_) {
+          // doesn't really matter
+        }
+      }
+      var ret = await mioClient.uploadFile(
+          fullpath: path, dir: serverNodes.join("/"));
+      mainNav.albums = mioClient.getAlbums();
+      return ret;
+    } finally {
+      finished = true;
     }
-    var ret =
-        await mioClient.uploadFile(fullpath: path, dir: serverNodes.join("/"));
-    finished = true;
-    mainNav.albums = mioClient.getAlbums();
-    return ret;
   }
 }
 

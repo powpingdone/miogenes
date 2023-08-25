@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS track (
     cover_art BLOB NULL,
     -- vector for position of the track
     track_vec BLOB NOT NULL CHECK (
-        length(id) == (
+        length(track_vec) == (
             /* float */
             4 *
             /* vec length */

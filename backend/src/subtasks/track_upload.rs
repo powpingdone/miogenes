@@ -51,7 +51,11 @@ pub async fn track_upload_process(
     userid: Uuid,
     orig_filename: String,
 ) -> Result<(), MioInnerError> {
+    static LIMIT_TASKS: Lazy<tokio::sync::Semaphore> =
+        Lazy::new(|| tokio::sync::Semaphore::new((num_cpus::get() / 2).max(1)));
+
     // process metadata
+    let permit = LIMIT_TASKS.acquire().await.unwrap();
     let (mdata, track_vec, encoded) = tokio::task::spawn_blocking({
         let orig_filename = orig_filename.clone();
         let path = path.clone();
@@ -83,6 +87,7 @@ pub async fn track_upload_process(
         )
     })?
     .map_err(|err| MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))?;
+    drop(permit);
 
     // write out new encoded file
     trace!("{orig_filename}: writing out encoding");
@@ -378,10 +383,12 @@ fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QO
 }
 
 fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<Vec<f32>> {
+    use ndarray::*;
+
     // pad tracks shorter than 5 seconds
     let padded = {
         let full_len = sample_rate as usize * 5;
-        let mut new = orig.iter().copied().collect::<Vec<i16>>();
+        let mut new = orig.to_vec();
         if orig.len() < full_len {
             new.extend(std::iter::repeat(0).take(full_len - orig.len()));
         }
@@ -436,13 +443,75 @@ fn create_vec(orig: &[i16], channels: u32, sample_rate: u32) -> anyhow::Result<V
         use mel_spec_pipeline::*;
 
         debug!("CREATE_VEC: making spectrogram for inference");
-        let pipeline = Pipeline::new(PipelineConfig::new(
-            MelConfig::new(2048, 512, 96, 22050.0),
+        let mut pipeline = Pipeline::new(PipelineConfig::new(
+            // hop length is different here because, I dont know, but it makes 216 samples.
+            MelConfig::new(2048, 503, 96, 22050.0),
             None,
         ));
-        todo!()
+        let handles = pipeline.start();
+        // technically, it's 7.5 seconds that's the minimum, not 8, but this looks cleaner
+        let range = if floated.len() > 22050 * 8 {
+            floated.len() / 3..floated.len() / 3 + 22050 * 5
+        } else {
+            0..22050 * 5
+        };
+        pipeline.send_pcm(&floated[range]).unwrap();
+        pipeline.close_ingress();
+        let specs = pipeline.rx().into_iter().collect::<Vec<_>>();
+        trace!("CREATE_VEC: joining spectrogram threads");
+        handles.into_iter().for_each(|x| x.join().unwrap());
+        let specs = specs.into_iter().map(|x| x.1).collect::<Vec<_>>();
+        let spec = ndarray::concatenate(
+            ndarray::Axis(1),
+            specs
+                .iter()
+                .map(|x| x.view())
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
+        .unwrap();
+        let shape = spec.shape().to_owned();
+        trace!("CREATE_VEC: shape of array is {shape:?}");
+
+        CowArray::from(
+            spec.into_shape([1, 1, shape[0], shape[1]])?
+                .map(|x| *x as f32),
+        )
+        .into_dyn()
     };
-    todo!()
+
+    Ok({
+        use ort::*;
+
+        static SESSION: Lazy<InMemorySession> = Lazy::new(|| {
+            trace!("CREATE_VEC: creating session");
+            let model = include_bytes!("deejai.onnx");
+            let env = Environment::builder()
+                .with_name("deej_ai")
+                .with_log_level(LoggingLevel::Info)
+                .build()
+                .unwrap()
+                .into_arc();
+            SessionBuilder::new(&env)
+                .unwrap()
+                .with_parallel_execution(false)
+                .unwrap()
+                .with_memory_pattern(true)
+                .unwrap()
+                .with_model_from_memory(model)
+                .unwrap()
+        });
+
+        let inp = vec![Value::from_array(SESSION.allocator(), &spec)?];
+        let out = SESSION.run(inp)?;
+        out.get(0)
+            .ok_or_else(|| anyhow!("when picking out output, index 0 does not exist"))?
+            .try_extract::<f32>()?
+            .view()
+            .to_slice()
+            .map(|x| x.to_vec())
+            .ok_or_else(|| anyhow!("arr is not contigious or in standard order"))?
+    })
 }
 
 async fn insert_into_db(
@@ -567,6 +636,7 @@ async fn insert_into_db(
 
             // insert track, check on audiohash
             let other_tags = metadata.other_tags;
+            dbg!(track_vec.len());
             sqlx::query!(
                 "INSERT INTO track 
                     (id,
