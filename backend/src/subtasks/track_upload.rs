@@ -51,11 +51,7 @@ pub async fn track_upload_process(
     userid: Uuid,
     orig_filename: String,
 ) -> Result<(), MioInnerError> {
-    static LIMIT_TASKS: Lazy<tokio::sync::Semaphore> =
-        Lazy::new(|| tokio::sync::Semaphore::new((num_cpus::get() / 2).max(1)));
-
     // process metadata
-    let permit = LIMIT_TASKS.acquire().await.unwrap();
     let (mdata, track_vec, encoded) = tokio::task::spawn_blocking({
         let orig_filename = orig_filename.clone();
         let path = path.clone();
@@ -87,7 +83,6 @@ pub async fn track_upload_process(
         )
     })?
     .map_err(|err| MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))?;
-    drop(permit);
 
     // write out new encoded file
     trace!("{orig_filename}: writing out encoding");
@@ -105,28 +100,24 @@ pub async fn track_upload_process(
 }
 
 fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::Error> {
-    // TODO: make this timeout configurable
     let discover = gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(10))?;
     let fname = glib::filename_to_uri(Path::new(&fname).absolutize()?, None)?;
     trace!("{orig_path}: new uri created: '{fname}'");
     let data = discover.discover_uri(&fname)?;
-
-    // TODO: implement errors for the rest (possibly, may not be needed)
-    trace!("{orig_path}: result: {:?}", data.result());
     match data.result() {
         DiscovererResult::Ok => (),
         DiscovererResult::MissingPlugins => {
             anyhow::bail!("Missing plugin needed for file {orig_path}");
-        }
+        },
         DiscovererResult::Timeout => {
             anyhow::bail!("Timeout reached for processing tags");
-        }
+        },
         // these branches _shouldn't_ fail.
         //
         // Busy -> each discoverer is in it's own thread, where it only reads one file
-        DiscovererResult::Busy => unimplemented!(),
+        DiscovererResult::Busy |
         // UriInvalid -> fname is produced via glib::filename_to_uri
-        DiscovererResult::UriInvalid => unimplemented!(),
+        DiscovererResult::UriInvalid |
         // Error -> discover_uri can return an error, so this shouldn't happen here
         DiscovererResult::Error => unimplemented!(),
         _other => panic!("unhandled enum: {_other:?}"),
@@ -298,7 +289,7 @@ fn proc_tag(data: SendValue) -> Option<String> {
 fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QOADesc, Vec<i16>)> {
     use symphonia::core::errors::Error;
 
-    info!("{fn_dis}: creating qoa encoding");
+    info!("{fn_dis}: extracting waveforms");
     let file = Box::new(std::fs::File::open(file)?);
     let mss = MediaSourceStream::new(file, Default::default());
     let fops: FormatOptions = Default::default();

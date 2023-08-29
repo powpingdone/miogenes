@@ -51,7 +51,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         password: _passwordController.text,
         password2: _password2Controller.text);
     nav.pushReplacement(
-        MaterialPageRoute(builder: (context) => const MainNavWidgetPage()));
+        MaterialPageRoute(builder: (context) => const MainNav()));
   }
 
   @override

@@ -186,8 +186,7 @@ async fn track_stream(
     .ok_or_else(|| MioInnerError::NotFound(anyhow!("{id} under {userid} does not exist")))?;
     drop(conn);
 
-    // TODO: transcode into something browser friendly, as the file on disk may not
-    // actually be consumable by the browser read in file
+    // load track into stream
     trace!("/track/stream requesting track {id} under user {userid} via dir {dir}");
     let file = tokio::fs::read(
         [

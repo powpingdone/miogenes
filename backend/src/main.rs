@@ -70,9 +70,6 @@ async fn main() -> anyhow::Result<()> {
     .init();
     gstreamer::init()?;
 
-    // setup threads for onnx
-    std::env::set_var("OMP_NUM_THREADS", "1");
-
     // create the main passing state
     let state = gen_state().await;
 

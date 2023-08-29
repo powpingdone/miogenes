@@ -220,10 +220,7 @@ pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError
                 let mut best_lms = LMSFilter::default();
                 let mut best_scalefactor = 0u64;
 
-                // TODO: poss optimization: order the scale factors and check their errors for
-                // early bailout
-                //
-                // for now, bruteforce all 16 slices
+                // bruteforce all 16 slices
                 for sfi in 0u64..16 {
                     // test best scalefactor of previous slice first
                     let scalefactor = (sfi + prev_scalefactor[channel]) % 16;

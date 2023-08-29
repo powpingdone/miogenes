@@ -49,6 +49,7 @@ ort = "1.15"
 mel_spec = "0.2"
 mel_spec_pipeline = "0.2.2"
 ndarray = "0.15.6"
+dotenvy = "0.15.7"
 
 [dev-dependencies]
 axum-test = "9.1"

@@ -2066,6 +2066,7 @@ dependencies = [
  "axum-test",
  "base64 0.21.2",
  "chrono",
+ "dotenvy",
  "env_logger",
  "futures",
  "gstreamer",
