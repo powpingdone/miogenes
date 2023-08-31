@@ -4,29 +4,22 @@ use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::*;
 use log::*;
-use once_cell::sync::OnceCell;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::SqlitePool;
+use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
 mod db;
 mod endpoints;
+mod env;
 mod error;
 mod subtasks;
 mod user;
 
+pub(crate) use crate::env::*;
 pub(crate) use crate::error::*;
 use endpoints::*;
-
-// TODO: use the user supplied dir
-static DATA_DIR: OnceCell<&str> = OnceCell::with_value({
-    if cfg!(test) {
-        "test_files"
-    } else {
-        "files"
-    }
-});
 
 #[derive(Clone)]
 pub struct MioState {
@@ -59,6 +52,8 @@ pub async fn get_version() -> impl IntoResponse {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    init_from_env().await;
+
     // TODO: tracing
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(
         if cfg!(test) || cfg!(debug_assertions) {
@@ -78,9 +73,9 @@ async fn main() -> anyhow::Result<()> {
     let router = gen_public_router(state.clone());
 
     // TODO: bind to user settings
-    static BINDING: &str = "127.0.0.1:8081";
-    info!("main: starting server on {BINDING}");
-    Server::bind(&BINDING.parse().unwrap())
+    let socket = SocketAddr::new(*IP_ADDR.get().unwrap(), *PORT.get().unwrap());
+    info!("main: starting server on {socket}");
+    Server::bind(&socket)
         .serve(router.into_make_service())
         .await
         .expect("server exited improperly: {}");

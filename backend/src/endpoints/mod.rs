@@ -15,7 +15,7 @@ pub mod track_manage;
 // util function to check if path is in user path
 fn check_dir_in_data_dir(path: impl AsRef<Path>, userid: Uuid) -> Result<(), MioInnerError> {
     debug!("CD_IN_DD checking {:?}", path.as_ref());
-    let real_path = Path::new(&format!("{}/{userid}/", DATA_DIR.get().unwrap())).to_path_buf();
+    let real_path = DATA_DIR.get().unwrap().join(&format!("{userid}"));
     debug!("CD_IN_DD real path is {real_path:?}");
     let mut ask_path = real_path.clone();
     ask_path.push(&path);
@@ -40,9 +40,9 @@ fn check_dir_in_data_dir(path: impl AsRef<Path>, userid: Uuid) -> Result<(), Mio
     // real path.
     let ret_err = {
         if cfg!(test) {
-            anyhow!("bad path")
-        } else {
             anyhow!("invalid path: {:?}", path.as_ref().as_os_str())
+        } else {
+            anyhow!("bad path")
         }
     };
     if ask_path.len() < real_path.len() {

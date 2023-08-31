@@ -13,7 +13,6 @@ use chrono::Utc;
 use log::*;
 use mio_common::*;
 use sqlx::SqliteConnection;
-use std::path::PathBuf;
 use uuid::Uuid;
 
 const SECRET_SIZE: usize = 1024;
@@ -198,13 +197,17 @@ async fn create_new_token(
     })
 }
 
-// TODO: user config to disable signing up
-//
 // TODO: is this a good idea to be an endpoint or to have a private thing?
 pub async fn signup(
     State(state): State<MioState>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
 ) -> Result<impl IntoResponse, MioInnerError> {
+    if !crate::env::SIGNUP_ENABLED.get().unwrap() {
+        return Err(MioInnerError::UserCreationFail(
+            anyhow!("signing up is currently disabled"),
+            StatusCode::FORBIDDEN,
+        ));
+    }
     let uname = auth.username().to_owned();
     let passwd = auth.password().to_owned();
 
@@ -265,12 +268,7 @@ pub async fn signup(
 
             // create the user dir if not exists
             if let Err(err) = {
-                tokio::fs::create_dir(
-                    [*crate::DATA_DIR.get().unwrap(), &format!("{uid}")]
-                        .into_iter()
-                        .collect::<PathBuf>(),
-                )
-                .await
+                tokio::fs::create_dir(crate::DATA_DIR.get().unwrap().join(&format!("{uid}"))).await
             } {
                 if err.kind() != std::io::ErrorKind::AlreadyExists {
                     error!("POST /user/signup failed to create user directory: {err}");

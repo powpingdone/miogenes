@@ -144,7 +144,7 @@ impl MioClient {
         let lock = self.0.read().unwrap();
         if let Err(err) = lock.attempt_signup(&username, &password) {
             rewrap_error(err, |status, resp| match status {
-                409 => bail!("{resp}"),
+                403 | 409 => bail!("{resp}"),
                 _ => Ok((status, resp)),
             })
         } else {

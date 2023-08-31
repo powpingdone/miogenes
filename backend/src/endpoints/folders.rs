@@ -50,9 +50,12 @@ async fn folder_create(
         })
     );
     task??;
-    let pbuf: PathBuf = [*DATA_DIR.get().unwrap(), &format!("{userid}"), &path, &name]
-        .iter()
-        .collect();
+    let pbuf = DATA_DIR
+        .get()
+        .unwrap()
+        .join(format!("{userid}"))
+        .join(&path)
+        .join(&name);
     create_dir(pbuf).await.map_err(|err| match err.kind() {
         std::io::ErrorKind::AlreadyExists => MioInnerError::Conflict(anyhow!("{name}")),
         _ => MioInnerError::from(err),
@@ -76,9 +79,7 @@ async fn folder_rename(
                 check_dir_in_data_dir(&new_path, userid)?;
 
                 // generate paths
-                let pbuf: PathBuf = [*DATA_DIR.get().unwrap(), &format!("{userid}")]
-                    .iter()
-                    .collect();
+                let pbuf: PathBuf = DATA_DIR.get().unwrap().join(format!("{userid}"));
                 let mut old = pbuf.clone();
                 old.push(&old_path);
                 let old = old.absolutize()?.into_owned();
@@ -129,9 +130,7 @@ async fn folder_query(
     path_query: Option<Query<msgstructs::FolderQuery>>,
 ) -> Result<impl IntoResponse, MioInnerError> {
     let _hold = state.lock_files.read().await;
-    let top_level = [*crate::DATA_DIR.get().unwrap(), &format!("{userid}")]
-        .into_iter()
-        .collect::<PathBuf>();
+    let top_level = crate::DATA_DIR.get().unwrap().join(format!("{userid}"));
     if let Some(Query(msgstructs::FolderQuery { path })) = path_query {
         debug!(
             "GET /api/folder querying folder {}, {path}",
@@ -252,14 +251,12 @@ async fn folder_delete(
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> Result<impl IntoResponse, MioInnerError> {
-    let real_path = [
-        *crate::DATA_DIR.get().unwrap(),
-        &format!("{userid}"),
-        &path,
-        &name,
-    ]
-    .into_iter()
-    .collect::<PathBuf>();
+    let real_path = crate::DATA_DIR
+        .get()
+        .unwrap()
+        .join(format!("{userid}"))
+        .join(&path)
+        .join(&name);
     debug!(
         "DELETE /api/folder attemping to delete folder {}",
         real_path.display()

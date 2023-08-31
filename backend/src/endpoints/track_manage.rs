@@ -11,7 +11,6 @@ use futures::StreamExt;
 #[allow(unused)]
 use log::*;
 use mio_common::*;
-use std::path::PathBuf;
 use tokio::fs::{remove_file, rename, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
 use tokio::time::timeout;
@@ -47,14 +46,12 @@ async fn track_upload(
     // generate filename
     loop {
         track_id = Uuid::new_v4();
-        real_fname = [
-            *crate::DATA_DIR.get().unwrap(),
-            &format!("{userid}"),
-            dir.as_ref(),
-            &format!("{track_id}"),
-        ]
-        .into_iter()
-        .collect::<PathBuf>();
+        real_fname = crate::DATA_DIR
+            .get()
+            .unwrap()
+            .join(format!("{userid}"))
+            .join(&dir)
+            .join(format!("{track_id}"));
         check_dir_in_data_dir(real_fname.clone(), userid)?;
 
         // check if file is already taken
@@ -189,14 +186,12 @@ async fn track_stream(
     // load track into stream
     trace!("/track/stream requesting track {id} under user {userid} via dir {dir}");
     let file = tokio::fs::read(
-        [
-            *crate::DATA_DIR.get().unwrap(),
-            &format!("{userid}"),
-            &dir,
-            &format!("{id}"),
-        ]
-        .into_iter()
-        .collect::<PathBuf>(),
+        crate::DATA_DIR
+            .get()
+            .unwrap()
+            .join(format!("{userid}"))
+            .join(&dir)
+            .join(format!("{id}")),
     )
     .await;
     match file {
@@ -246,22 +241,18 @@ async fn track_move(
             })?;
 
             // curr_fname is not checked as it comes directly from the server
-            let curr_fname = [
-                *crate::DATA_DIR.get().unwrap(),
-                &format!("{userid}"),
-                dir.as_ref(),
-                &format!("{id}"),
-            ]
-            .into_iter()
-            .collect::<PathBuf>();
-            let next_fname = [
-                *crate::DATA_DIR.get().unwrap(),
-                &format!("{userid}"),
-                new_path.as_ref(),
-                &format!("{id}"),
-            ]
-            .into_iter()
-            .collect::<PathBuf>();
+            let curr_fname = crate::DATA_DIR
+                .get()
+                .unwrap()
+                .join(format!("{userid}"))
+                .join(&dir)
+                .join(format!("{id}"));
+            let next_fname = crate::DATA_DIR
+                .get()
+                .unwrap()
+                .join(format!("{userid}"))
+                .join(&new_path)
+                .join(format!("{id}"));
             check_dir_in_data_dir(next_fname.clone(), userid)?;
 
             // note: no collision check is needed because every id is almost certainly
@@ -309,14 +300,12 @@ async fn track_delete(
                 .await?;
 
             // delete realspace file
-            let path = [
-                *crate::DATA_DIR.get().unwrap(),
-                &format!("{userid}"),
-                &path,
-                &format!("{id}"),
-            ]
-            .into_iter()
-            .collect::<PathBuf>();
+            let path = crate::DATA_DIR
+                .get()
+                .unwrap()
+                .join(format!("{userid}"))
+                .join(&path)
+                .join(format!("{id}"));
             trace!("/track/delete path to delete is {path:?}");
             remove_file(path).await?;
             Ok::<_, MioInnerError>(StatusCode::OK)
