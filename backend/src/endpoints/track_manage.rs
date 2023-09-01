@@ -27,6 +27,7 @@ pub fn routes() -> Router<MioState> {
     )
 }
 
+#[tracing::instrument]
 async fn track_upload(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -161,6 +162,7 @@ async fn track_upload(
     ))
 }
 
+#[tracing::instrument]
 async fn track_stream(
     State(state): State<MioState>,
     Query(msgstructs::IdInfoQuery { id }): Query<msgstructs::IdInfoQuery>,
@@ -217,6 +219,7 @@ async fn track_stream(
     }
 }
 
+#[tracing::instrument]
 async fn track_move(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -272,6 +275,7 @@ async fn track_move(
     .await
 }
 
+#[tracing::instrument]
 async fn track_delete(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,

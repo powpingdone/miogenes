@@ -28,7 +28,7 @@ use tokio::io::AsyncWriteExt;
 use uuid::*;
 
 // metadata parsed from the individual file
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Metadata {
     title: String,
     other_tags: String,
@@ -43,6 +43,7 @@ struct Metadata {
 // TODO: upload process time limits
 //
 // TODO: size limits
+#[tracing::instrument]
 pub async fn track_upload_process(
     state: MioState,
     id: Uuid,
@@ -59,20 +60,31 @@ pub async fn track_upload_process(
             let mdata = get_metadata(path.clone(), orig_filename.clone())?;
 
             // get waveform & desc
-            let (desc, waveform) = create_qoa(path, orig_filename.clone())
+            let (desc, waveform) = extract_waveform(path, orig_filename.clone())
                 .map_err(|err| MioInnerError::TrackProcessingError(err, StatusCode::BAD_REQUEST))?;
 
             // generate vec
-            let track_vec = create_vec(&waveform, desc.channels, desc.sample_rate, orig_filename)
-                .map_err(|err| {
-                MioInnerError::TrackProcessingError(err, StatusCode::INTERNAL_SERVER_ERROR)
-            })?;
+            std::thread::scope(|s| {
+                let track_vec = s.spawn(|| {
+                    create_vec(&waveform, desc.channels, desc.sample_rate, orig_filename).map_err(
+                        |err| {
+                            MioInnerError::TrackProcessingError(
+                                err,
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                            )
+                        },
+                    )
+                });
 
-            // conv into Quite Ok Audio
-            let encoded = mio_qoa_impl::encode(waveform, &desc).map_err(|err| {
-                MioInnerError::TrackProcessingError(err.into(), StatusCode::BAD_REQUEST)
-            })?;
-            Ok((mdata, track_vec, encoded))
+                // conv into Quite Ok Audio
+                let encoded = s.spawn(|| {
+                    mio_qoa_impl::encode(&waveform, &desc).map_err(|err| {
+                        MioInnerError::TrackProcessingError(err.into(), StatusCode::BAD_REQUEST)
+                    })
+                });
+
+                Ok((mdata, track_vec.join().unwrap()?, encoded.join().unwrap()?))
+            })
         }
     })
     .await
@@ -99,6 +111,7 @@ pub async fn track_upload_process(
     insert_into_db(state.db, id, userid, dir, mdata, orig_filename, track_vec).await
 }
 
+#[tracing::instrument]
 fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::Error> {
     let discover = gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(10))?;
     let fname = glib::filename_to_uri(Path::new(&fname).absolutize()?, None)?;
@@ -216,20 +229,8 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
                 if data.is_some() {
                     let ret = set.insert(tag.clone(), data.clone());
 
-                    fn truncate(x: String) -> String {
-                        const LEN: usize = 80;
-                        if x.len() > LEN {
-                            let mut trunc = x.chars().take(LEN).collect::<String>();
-                            trunc.push_str("...");
-                            trunc
-                        } else {
-                            x
-                        }
-                    }
-
-                    let data = truncate(format!("{data:?}"));
                     trace!(
-                        "{orig_path}: KV inserted on {tag}, {data}{}",
+                        "{orig_path}: KV inserted on {tag}{}",
                         if ret.is_some() {
                             ", replaced prev KV"
                         } else {
@@ -286,7 +287,11 @@ fn proc_tag(data: SendValue) -> Option<String> {
     }
 }
 
-fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QOADesc, Vec<i16>)> {
+#[tracing::instrument]
+fn extract_waveform(
+    file: PathBuf,
+    fn_dis: String,
+) -> anyhow::Result<(mio_qoa_impl::QOADesc, Vec<i16>)> {
     use symphonia::core::errors::Error;
 
     info!("{fn_dis}: extracting waveforms");
@@ -365,6 +370,7 @@ fn create_qoa(file: PathBuf, fn_dis: String) -> anyhow::Result<(mio_qoa_impl::QO
     }
 }
 
+#[tracing::instrument(skip(orig))]
 fn create_vec(
     orig: &[i16],
     channels: u32,
@@ -501,6 +507,7 @@ fn create_vec(
     })
 }
 
+#[tracing::instrument]
 async fn insert_into_db(
     db: SqlitePool,
     id: Uuid,

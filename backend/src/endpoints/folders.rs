@@ -35,6 +35,7 @@ pub fn routes() -> Router<MioState> {
     )
 }
 
+#[tracing::instrument]
 async fn folder_create(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -62,6 +63,7 @@ async fn folder_create(
     })
 }
 
+#[tracing::instrument]
 async fn folder_rename(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -124,6 +126,7 @@ async fn folder_rename(
     rename(old, new).await.map_err(MioInnerError::from)
 }
 
+#[tracing::instrument]
 async fn folder_query(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -246,6 +249,7 @@ fn folder_tree_inner(
     })
 }
 
+#[tracing::instrument]
 async fn folder_delete(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,

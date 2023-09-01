@@ -23,3 +23,7 @@ files/
 
 # openapi json export
 api.json
+
+# perf
+flamegraph.svg
+perf.data*

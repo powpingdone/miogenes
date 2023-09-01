@@ -3,6 +3,9 @@ edition = "2021"
 name = "mio-backend"
 version = "0.1.0"
 
+[target.'cfg(any(target_arch = "x86_64"))']
+rustflags = ["-C", "target-cpu=x86-64-v2"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
@@ -17,7 +20,7 @@ gstreamer-pbutils = { version = "0.20", features = ["v1_20"] }
 image = { version = "0.24", features = ["webp-encoder"] }
 konst = "0.3"
 log = "0.4"
-mio-qoa-impl = {path = "../qoa-enc"}
+mio-qoa-impl = { path = "../qoa-enc" }
 mio-common = { path = "../common" }
 num_cpus = "1.15"
 once_cell = { version = "1.17", features = ["parking_lot"] }
@@ -27,7 +30,7 @@ sanitize-filename = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full", "tracing"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "1.0"
 async-trait = "0.1"
@@ -43,13 +46,21 @@ sqlx = { version = "0.7", features = [
   "uuid",
   "migrate",
 ] }
-symphonia = { version = "0.5", features = ["all-codecs", "all-formats", "all", "mpa"] }
+symphonia = { version = "0.5", features = [
+  "all-codecs",
+  "all-formats",
+  "all",
+  "mpa",
+] }
 rubato = { version = "0.14", features = ["log"] }
 ort = "1.15"
 mel_spec = "0.2"
-mel_spec_pipeline = "0.2.2"
-ndarray = "0.15.6"
-dotenvy = "0.15.7"
+mel_spec_pipeline = "0.2"
+ndarray = "0.15"
+dotenvy = "0.15"
+tracing = "0.1"
+console-subscriber = { version = "0.1", features = ["parking_lot"] }
+ctrlc = "3.4"
 
 [dev-dependencies]
 axum-test = "9.1"

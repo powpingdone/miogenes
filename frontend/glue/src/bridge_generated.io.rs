@@ -1,6 +1,6 @@
 use super::*;
-
 // Section: wire functions
+
 #[no_mangle]
 pub extern "C" fn wire_init_self() -> support::WireSyncReturn {
     wire_init_self_impl()
@@ -206,6 +206,7 @@ pub extern "C" fn wire_make_dir__method__MioClient(
 }
 
 // Section: allocate functions
+
 #[no_mangle]
 pub extern "C" fn new_ArcRwLockMioClientState() -> wire_ArcRwLockMioClientState {
     wire_ArcRwLockMioClientState::new_with_null_ptr()
@@ -236,6 +237,7 @@ pub extern "C" fn new_uint_8_list_0(len: i32) -> *mut wire_uint_8_list {
 }
 
 // Section: related functions
+
 #[no_mangle]
 pub extern "C" fn drop_opaque_ArcRwLockMioClientState(ptr: *const c_void) {
     unsafe {
@@ -267,46 +269,41 @@ pub extern "C" fn share_opaque_Player(ptr: *const c_void) -> *const c_void {
 }
 
 // Section: impl Wire2Api
+
 impl Wire2Api<RustOpaque<Arc<RwLock<MioClientState>>>> for wire_ArcRwLockMioClientState {
     fn wire2api(self) -> RustOpaque<Arc<RwLock<MioClientState>>> {
         unsafe { support::opaque_from_dart(self.ptr as _) }
     }
 }
-
 impl Wire2Api<RustOpaque<Player>> for wire_Player {
     fn wire2api(self) -> RustOpaque<Player> {
         unsafe { support::opaque_from_dart(self.ptr as _) }
     }
 }
-
 impl Wire2Api<String> for *mut wire_uint_8_list {
     fn wire2api(self) -> String {
         let vec: Vec<u8> = self.wire2api();
         String::from_utf8_lossy(&vec).into_owned()
     }
 }
-
 impl Wire2Api<uuid::Uuid> for *mut wire_uint_8_list {
     fn wire2api(self) -> uuid::Uuid {
         let single: Vec<u8> = self.wire2api();
         wire2api_uuid_ref(single.as_slice())
     }
 }
-
 impl Wire2Api<Vec<uuid::Uuid>> for *mut wire_uint_8_list {
     fn wire2api(self) -> Vec<uuid::Uuid> {
         let multiple: Vec<u8> = self.wire2api();
         wire2api_uuids(multiple)
     }
 }
-
 impl Wire2Api<MioClient> for *mut wire_MioClient {
     fn wire2api(self) -> MioClient {
         let wrap = unsafe { support::box_from_leak_ptr(self) };
         Wire2Api::<MioClient>::wire2api(*wrap).into()
     }
 }
-
 impl Wire2Api<MioPlayer> for *mut wire_MioPlayer {
     fn wire2api(self) -> MioPlayer {
         let wrap = unsafe { support::box_from_leak_ptr(self) };
@@ -319,7 +316,6 @@ impl Wire2Api<MioClient> for wire_MioClient {
         MioClient(self.field0.wire2api())
     }
 }
-
 impl Wire2Api<MioPlayer> for wire_MioPlayer {
     fn wire2api(self) -> MioPlayer {
         MioPlayer(self.field0.wire2api())
@@ -334,8 +330,8 @@ impl Wire2Api<Vec<u8>> for *mut wire_uint_8_list {
         }
     }
 }
-
 // Section: wire structs
+
 #[repr(C)]
 #[derive(Clone)]
 pub struct wire_ArcRwLockMioClientState {
@@ -368,6 +364,7 @@ pub struct wire_uint_8_list {
 }
 
 // Section: impl NewWithNullPtr
+
 pub trait NewWithNullPtr {
     fn new_with_null_ptr() -> Self;
 }
@@ -385,7 +382,6 @@ impl NewWithNullPtr for wire_ArcRwLockMioClientState {
         }
     }
 }
-
 impl NewWithNullPtr for wire_Player {
     fn new_with_null_ptr() -> Self {
         Self {
@@ -423,6 +419,7 @@ impl Default for wire_MioPlayer {
 }
 
 // Section: sync execution mode utility
+
 #[no_mangle]
 pub extern "C" fn free_WireSyncReturn(ptr: support::WireSyncReturn) {
     unsafe {

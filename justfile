@@ -11,10 +11,17 @@ spin: gen
     cd frontend && flutter run
 
 drun: 
-    cargo run -p mio-backend 
+    DATA_DIR="./files" IP_ADDR="127.0.0.1" PORT=8081 SIGNUP_ENABLED=1 cargo run -p mio-backend 
 
 rrun:
-    RUST_LOG="trace" cargo run -p mio-backend --release
+    DATA_DIR="./files" IP_ADDR="127.0.0.1" PORT=8081 SIGNUP_ENABLED=1 RUST_LOG="trace" cargo run -p mio-backend --release
+
+prun:
+    CARGO_PROFILE_RELEASE_DEBUG=true \
+    RUSTFLAGS='--cfg tokio_unstable -C force-frame-pointers=y' \
+    LD_LIBRARY_PATH="./target/release/" \
+    DATA_DIR="./files" IP_ADDR="127.0.0.1" PORT=8081 SIGNUP_ENABLED=1 \
+    cargo flamegraph -p mio-backend
 
 clean:
     cargo clean

@@ -115,7 +115,8 @@ pub enum QOAError {
 
 // Waveform is encoded as raw signed 16 bit pcm data, where channels interleave
 // each u16 per sample
-pub fn encode(waveform: Vec<i16>, desc: &QOADesc) -> Result<QOAEncoded, QOAError> {
+pub fn encode(waveform: impl AsRef<[i16]>, desc: &QOADesc) -> Result<QOAEncoded, QOAError> {
+    let waveform = waveform.as_ref();
     // prelude to make sure that the description is good
     if waveform.is_empty() || waveform.len() > u32::MAX as usize {
         return Err(QOAError::InvalidOpts(

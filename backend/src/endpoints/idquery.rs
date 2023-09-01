@@ -8,6 +8,7 @@ pub fn routes() -> Router<MioState> {
         .route("/playlists", get(get_playlists))
 }
 
+#[tracing::instrument]
 async fn get_albums(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -33,6 +34,7 @@ async fn get_albums(
     ))
 }
 
+#[tracing::instrument]
 async fn get_playlists(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,

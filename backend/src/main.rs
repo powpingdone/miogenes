@@ -1,5 +1,4 @@
-use axum::http::{Request, StatusCode};
-use axum::middleware::Next;
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::*;
 use axum::*;
@@ -21,7 +20,7 @@ pub(crate) use crate::env::*;
 pub(crate) use crate::error::*;
 use endpoints::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MioState {
     db: SqlitePool,
     lock_files: Arc<tokio::sync::RwLock<()>>,
@@ -38,6 +37,7 @@ impl MioStateRegen for MioState {
     }
 }
 
+#[tracing::instrument]
 pub async fn get_version() -> impl IntoResponse {
     use konst::primitive::parse_u16;
     use konst::result::unwrap_ctx;
@@ -53,16 +53,7 @@ pub async fn get_version() -> impl IntoResponse {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     init_from_env().await;
-
-    // TODO: tracing
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(
-        if cfg!(test) || cfg!(debug_assertions) {
-            "trace"
-        } else {
-            "warn"
-        },
-    ))
-    .init();
+    console_subscriber::init();
     gstreamer::init()?;
 
     // create the main passing state
@@ -74,9 +65,15 @@ async fn main() -> anyhow::Result<()> {
 
     // TODO: bind to user settings
     let socket = SocketAddr::new(*IP_ADDR.get().unwrap(), *PORT.get().unwrap());
+    let (tx_die, mut rx_die) = tokio::sync::mpsc::unbounded_channel();
+    ctrlc::set_handler(move || tx_die.send(()).unwrap())
+        .expect("failed to setup graceful shutdown: {}");
     info!("main: starting server on {socket}");
     Server::bind(&socket)
         .serve(router.into_make_service())
+        .with_graceful_shutdown(async {
+            rx_die.recv().await;
+        })
         .await
         .expect("server exited improperly: {}");
     trace!("main: cleaning up nicely");
@@ -90,9 +87,10 @@ async fn gen_state() -> MioState {
         if cfg!(test) {
             SqliteConnectOptions::from_str(":memory:").unwrap()
         } else {
-            SqliteConnectOptions::from_str("sqlite://files/music.db")
-                .unwrap()
+            SqliteConnectOptions::new()
+                .filename(DATA_DIR.get().unwrap().join("music.db"))
                 .create_if_missing(true)
+                .optimize_on_close(true, Some(400))
         }
     };
     let db = SqlitePool::connect_with(settings)
@@ -161,15 +159,7 @@ fn gen_public_router(state: MioState) -> Router<()> {
                 .into_response()
             },
         ))
-        // always log what request is coming through
-        .layer(axum::middleware::from_fn(log_req))
         .with_state(state)
-}
-
-// small logging function that logs the method (eg, GET) and endpoint uri
-async fn log_req<B>(req: Request<B>, next: Next<B>) -> impl IntoResponse {
-    info!("{} {}", req.method(), req.uri());
-    next.run(req).await
 }
 
 #[cfg(test)]

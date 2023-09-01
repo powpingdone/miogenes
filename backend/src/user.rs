@@ -13,6 +13,7 @@ use chrono::Utc;
 use log::*;
 use mio_common::*;
 use sqlx::SqliteConnection;
+use std::fmt::Debug;
 use uuid::Uuid;
 
 const SECRET_SIZE: usize = 1024;
@@ -22,10 +23,11 @@ pub(crate) struct Authenticate;
 #[async_trait]
 impl<S> FromRequestParts<S> for Authenticate
 where
-    S: Send + Sync + MioStateRegen,
+    S: Send + Sync + MioStateRegen + Debug,
 {
     type Rejection = MioInnerError;
 
+    #[tracing::instrument(name = "check_auth")]
     async fn from_request_parts(req: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = state.get_self();
 
@@ -106,6 +108,7 @@ where
     }
 }
 
+#[tracing::instrument]
 pub async fn login(
     State(state): State<MioState>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
@@ -198,6 +201,7 @@ async fn create_new_token(
 }
 
 // TODO: is this a good idea to be an endpoint or to have a private thing?
+#[tracing::instrument]
 pub async fn signup(
     State(state): State<MioState>,
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,

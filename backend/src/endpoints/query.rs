@@ -28,6 +28,7 @@ fn uuid_map_back(x: Option<Vec<u8>>) -> Result<Option<Uuid>, MioInnerError> {
     }
 }
 
+#[tracing::instrument]
 async fn track_info(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -61,6 +62,7 @@ async fn track_info(
     ))
 }
 
+#[tracing::instrument]
 async fn album_info(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -110,6 +112,7 @@ async fn album_info(
     ))
 }
 
+#[tracing::instrument]
 async fn playlist_info(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -157,6 +160,7 @@ async fn playlist_info(
     ))
 }
 
+#[tracing::instrument]
 async fn cover_art(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -184,6 +188,7 @@ async fn cover_art(
     ))
 }
 
+#[tracing::instrument]
 async fn artist_info(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
@@ -212,6 +217,7 @@ async fn artist_info(
     ))
 }
 
+#[tracing::instrument]
 async fn closest_track(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
