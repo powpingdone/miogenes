@@ -3,9 +3,6 @@ edition = "2021"
 name = "mio-backend"
 version = "0.1.0"
 
-[target.'cfg(any(target_arch = "x86_64"))']
-rustflags = ["-C", "target-cpu=x86-64-v2"]
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }

@@ -25,7 +25,7 @@ const QOA_QUANT_TAB: [usize; 17] = [7, 7, 7, 5, 5, 3, 3, 1, 0, 0, 2, 2, 4, 4, 6,
 //
 // The reciprocal_tab is computed as: reciprocal_tab[s] <- ((1<<16) +
 // scalefactor_tab[s] - 1) / scalefactor_tab[s]
-const QOA_RECIPROCAL_TAB: [i32; 16] = [
+const QOA_RECIPROCAL_TAB: [i64; 16] = [
     65536, 9363, 3121, 1457, 781, 475, 311, 216, 156, 117, 90, 71, 57, 47, 39, 32,
 ];
 
@@ -92,6 +92,7 @@ pub struct QOAEncoded {
 }
 
 impl QOAEncoded {
+    #[inline]
     fn write_into<T>(&mut self, x: T)
     where
         T: NoUninit,
@@ -115,6 +116,7 @@ pub enum QOAError {
 
 // Waveform is encoded as raw signed 16 bit pcm data, where channels interleave
 // each u16 per sample
+#[inline(never)]
 pub fn encode(waveform: impl AsRef<[i16]>, desc: &QOADesc) -> Result<QOAEncoded, QOAError> {
     let waveform = waveform.as_ref();
     // prelude to make sure that the description is good
@@ -185,7 +187,7 @@ pub fn encode(waveform: impl AsRef<[i16]>, desc: &QOADesc) -> Result<QOAEncoded,
 
         // reset weights if too large, see https://github.com/phoboslab/qoa/issues/25
         for weights in lms_channel.iter_mut().map(|x| &mut x.weights) {
-            if weights.iter().map(|x| x * x).sum::<i32>() > 0x2fffffff {
+            if weights.iter().map(|x| x.pow(2)).sum::<i32>() > 0x2fffffff {
                 weights.iter_mut().for_each(|x| *x = 0);
             }
         }
@@ -241,7 +243,7 @@ pub fn encode(waveform: impl AsRef<[i16]>, desc: &QOADesc) -> Result<QOAEncoded,
 
                         // qoa_div
                         let scaled = {
-                            let right = QOA_RECIPROCAL_TAB[scalefactor as usize] as i64;
+                            let right = QOA_RECIPROCAL_TAB[scalefactor as usize];
                             let n = (residual as i64 * right + (1 << 15)) >> 16;
                             n + ((residual > 0) as i64 - (residual < 0) as i64)
                                 - ((n > 0) as i64 - (n < 0) as i64)

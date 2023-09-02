@@ -27,3 +27,5 @@ api.json
 # perf
 flamegraph.svg
 perf.data*
+cachegrind.out.*
+callgrind.out.*
