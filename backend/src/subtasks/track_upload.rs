@@ -82,7 +82,6 @@ pub async fn track_upload_process(
                         MioInnerError::TrackProcessingError(err.into(), StatusCode::BAD_REQUEST)
                     })
                 });
-
                 Ok((mdata, track_vec.join().unwrap()?, encoded.join().unwrap()?))
             })
         }
@@ -228,7 +227,6 @@ fn get_metadata(fname: PathBuf, orig_path: String) -> Result<Metadata, anyhow::E
                 let data = proc_tag(data);
                 if data.is_some() {
                     let ret = set.insert(tag.clone(), data.clone());
-
                     trace!(
                         "{orig_path}: KV inserted on {tag}{}",
                         if ret.is_some() {

@@ -18,11 +18,11 @@ rrun:
 
 prun:
     CARGO_PROFILE_RELEASE_DEBUG=true \
-    RUSTFLAGS='--cfg tokio_unstable -C force-frame-pointers=y -C target-cpu=x86-64-v2' \
+    RUSTFLAGS='--cfg tokio_unstable -C target-cpu=x86-64-v2' \
     cargo build -p mio-backend --release
     LD_LIBRARY_PATH="./target/release/" \
     DATA_DIR="./files" IP_ADDR="127.0.0.1" PORT=8081 SIGNUP_ENABLED=1 \
-    valgrind --tool=callgrind --dump-instr=yes --collect-jumps=yes target/release/mio-backend
+    target/release/mio-backend
 
 clean:
     cargo clean

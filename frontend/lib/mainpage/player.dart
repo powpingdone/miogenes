@@ -9,9 +9,7 @@ import "package:text_scroll/text_scroll.dart";
 import "package:uuid/uuid.dart";
 
 class Player extends StatefulWidget {
-  const Player({super.key, required this.minified});
-
-  final bool minified;
+  const Player({super.key});
 
   @override
   State<Player> createState() => _PlayerState();
@@ -62,7 +60,7 @@ class _PlayerState extends State<Player> {
             return Container(
                 alignment: Alignment.topLeft,
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                child: const Text("Not currently playing..."));
+                child: const Center(child: Text("Not currently playing...")));
           }
 
           // begin fetch
@@ -80,50 +78,32 @@ class _PlayerState extends State<Player> {
                 } else if (fetchShot.connectionState == ConnectionState.done &&
                     fetchShot.hasData) {
                   Track track = fetchShot.data!;
-                  if (widget.minified) {
-                    return Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Container(
-                            alignment: Alignment.topLeft,
-                            child: CoverArtImg(track.coverArt, size: 84)),
-                        const Padding(padding: EdgeInsets.all(8.0)),
-                        TitleArtistAlbumText(
-                            artist: track.artist,
-                            album: track.album,
+                  return Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        CoverArtImg(track.coverArt, size: 300), // Cover Art
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(top: 24.0, bottom: 8.0),
+                          child: TitleArtistAlbumText(
                             title: track.title,
-                            minified: widget.minified),
-                      ]),
-                    );
-                  } else {
-                    return Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          CoverArtImg(track.coverArt, size: 300), // Cover Art
-                          Padding(
-                            padding:
-                                const EdgeInsets.only(top: 24.0, bottom: 8.0),
-                            child: TitleArtistAlbumText(
-                              title: track.title,
-                              album: track.album,
-                              artist: track.artist,
-                              minified: widget.minified,
-                            ),
+                            album: track.album,
+                            artist: track.artist,
                           ),
-                          MediaControls(
-                            paused: playerStatus.data!.paused,
-                          ), // Play/Pause, Next
-                          VolumeSlider(
-                            vol: playerStatus.data!.volume,
-                          ), // Volume Control
-                        ],
-                      ),
-                    );
-                  }
+                        ),
+                        MediaControls(
+                          paused: playerStatus.data!.paused,
+                        ), // Play/Pause, Next
+                        VolumeSlider(
+                          vol: playerStatus.data!.volume,
+                        ), // Volume Control
+                      ],
+                    ),
+                  );
                 } else {
                   return Container(
                       alignment: Alignment.topLeft,
@@ -142,12 +122,10 @@ class TitleArtistAlbumText extends StatefulWidget {
     required this.artist,
     required this.album,
     required this.title,
-    required this.minified,
   });
 
   final String title;
   final UuidValue? artist, album;
-  final bool minified;
 
   @override
   State<TitleArtistAlbumText> createState() => _TitleArtistAlbumTextState();
@@ -188,44 +166,19 @@ class _TitleArtistAlbumTextState extends State<TitleArtistAlbumText> {
         builder: (context, snapshot) {
           final album = snapshot.data?[0] == null ? "..." : snapshot.data![0]!;
           final artist = snapshot.data?[1] == null ? "..." : snapshot.data![1]!;
-          if (widget.minified) {
-            return LimitedBox(
-              // 84
-              maxHeight: 84,
-              maxWidth: MediaQuery.of(context).size.width * 0.70,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  title,
-                  const Padding(padding: EdgeInsets.symmetric(vertical: 4.0)),
-                  TextScroll(
-                    artist,
-                    mode: TextScrollMode.bouncing,
-                  ),
-                  TextScroll(
-                    album,
-                    mode: TextScrollMode.bouncing,
-                  ),
-                  Expanded(child: Container()),
-                ],
+          return Column(
+            children: [
+              title,
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4.0),
               ),
-            );
-          } else {
-            return Column(
-              children: [
-                title,
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 4.0),
-                ),
-                TextScroll(
-                  artist,
-                  mode: TextScrollMode.endless,
-                ),
-                TextScroll(album, mode: TextScrollMode.endless),
-              ],
-            );
-          }
+              TextScroll(
+                artist,
+                mode: TextScrollMode.endless,
+              ),
+              TextScroll(album, mode: TextScrollMode.endless),
+            ],
+          );
         });
   }
 }

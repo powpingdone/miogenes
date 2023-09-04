@@ -6,7 +6,6 @@ import 'package:frontend/main.dart';
 import 'package:frontend/mainpage/folderview.dart';
 import 'package:frontend/mainpage/player.dart' as ui_player;
 import 'package:provider/provider.dart';
-import 'package:sliding_up_panel2/sliding_up_panel2.dart';
 
 import 'albums.dart';
 import 'upload.dart';
@@ -73,7 +72,6 @@ class MainNavWidgetPage extends StatefulWidget {
 
 class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
   var _pageIndex = 0;
-  bool _playerMini = true;
 
   @override
   Widget build(BuildContext context) {
@@ -92,9 +90,12 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
     Widget page;
     switch (_pageIndex) {
       case 0:
-        page = const AlbumPage();
+        page = const ui_player.Player();
         break;
       case 1:
+        page = const AlbumPage();
+        break;
+      case 2:
         page = const UploadPage();
         break;
       // TODO: folder track select page
@@ -106,14 +107,15 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
       appBar: AppBar(
         title: Text(
           switch (_pageIndex) {
-            0 => "Albums",
-            1 => "Upload Files",
+            0 => "Player",
+            1 => "Albums",
+            2 => "Upload Files",
             _ => throw UnimplementedError(),
           },
           style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
         ),
         actions: switch (_pageIndex) {
-          1 => [
+          2 => [
               SafeArea(
                 child: IconButton(
                     onPressed: () => mainState.cleanup(),
@@ -128,7 +130,7 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
         backgroundColor: Theme.of(context).colorScheme.primary,
       ),
       // FAB for upload
-      floatingActionButton: _pageIndex != 1
+      floatingActionButton: _pageIndex != 2
           ? null
           : SpeedDial(
               children: [
@@ -191,33 +193,26 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
               icon: Icons.upload,
             ),
       // nav rail, and child
-      body: SlidingUpPanel(
-        panelBuilder: () => ui_player.Player(minified: _playerMini),
-        onPanelClosed: () => setState(() => _playerMini = true),
-        onPanelOpened: () => setState(() => _playerMini = false),
-        // TODO: set height depending on platform and on if currently playing
-        minHeight: 100.0,
-        maxHeight: 600.0,
-
-        body: SafeArea(
-            child: Row(
-          children: [
-            NavigationRail(
-              extended: false,
-              destinations: const [
-                NavigationRailDestination(
-                    icon: Icon(Icons.album), label: Text("Album")),
-                NavigationRailDestination(
-                    icon: Icon(Icons.upload_file), label: Text("Upload files"))
-              ],
-              selectedIndex: _pageIndex,
-              onDestinationSelected: (value) =>
-                  setState(() => _pageIndex = value),
-            ),
-            Expanded(child: page),
-          ],
-        )),
-      ),
+      body: SafeArea(
+          child: Row(
+        children: [
+          NavigationRail(
+            extended: MediaQuery.of(context).size.width > 500,
+            destinations: const [
+              NavigationRailDestination(
+                  icon: Icon(Icons.music_note), label: Text("Player")),
+              NavigationRailDestination(
+                  icon: Icon(Icons.album), label: Text("Album")),
+              NavigationRailDestination(
+                  icon: Icon(Icons.upload_file), label: Text("Upload files"))
+            ],
+            selectedIndex: _pageIndex,
+            onDestinationSelected: (value) =>
+                setState(() => _pageIndex = value),
+          ),
+          Expanded(child: page),
+        ],
+      )),
     );
   }
 }

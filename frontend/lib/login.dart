@@ -64,7 +64,10 @@ class _LoginBaseUrlState extends State<LoginBaseUrl>
 
     return Scaffold(
         appBar: AppBar(
-          title: const Text("Login"),
+          title: Text(
+            "Login",
+            style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+          ),
           backgroundColor: Theme.of(context).colorScheme.primary,
         ),
         body: Padding(

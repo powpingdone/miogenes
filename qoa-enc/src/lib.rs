@@ -119,6 +119,7 @@ pub enum QOAError {
 #[inline(never)]
 pub fn encode(waveform: impl AsRef<[i16]>, desc: &QOADesc) -> Result<QOAEncoded, QOAError> {
     let waveform = waveform.as_ref();
+
     // prelude to make sure that the description is good
     if waveform.is_empty() || waveform.len() > u32::MAX as usize {
         return Err(QOAError::InvalidOpts(

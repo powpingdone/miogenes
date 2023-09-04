@@ -26,12 +26,20 @@ class AlbumPage extends StatelessWidget {
               snapshot.hasData) {
             List<UuidValue> albums = (snapshot.data)?.albums ?? [];
 
-            return SafeArea(
-              child: GridView.extent(
-                maxCrossAxisExtent: 300,
-                children: [for (UuidValue album in albums) AlbumPreview(album)],
-              ),
-            );
+            if (albums.isEmpty) {
+              return const Center(
+                  child: Text(
+                      "No albums have been uploaded to the server! Upload some to start listening."));
+            } else {
+              return SafeArea(
+                child: GridView.extent(
+                  maxCrossAxisExtent: 300,
+                  children: [
+                    for (UuidValue album in albums) AlbumPreview(album)
+                  ],
+                ),
+              );
+            }
           } else {
             // show checking
             return SpinKitWanderingCubes(
