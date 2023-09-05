@@ -78,7 +78,7 @@ class _MainNavWidgetPageState extends State<MainNavWidgetPage> {
     final mtl = Provider.of<MioTopLevel>(context);
     var mioState = mtl.mioClient;
     final mainState = Provider.of<MainNavTopLevel>(context);
-    final List<String> commonExts = [
+    const List<String> commonExts = [
       // lossless
       "wav", "flac", "alac",
       // typical lossy
