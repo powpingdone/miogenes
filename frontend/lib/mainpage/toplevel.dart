@@ -1,3 +1,4 @@
+import 'package:audio_service/audio_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
@@ -30,9 +31,30 @@ class MainNav extends StatelessWidget {
 
 // Music audio player state
 class MioPlayerState {
-  MioPlayerState(this._mioInternal);
+  MioPlayerState(mioInternal) {
+    AudioService.init(builder: () => MioAudioServiceGlue(mioInternal))
+        .then((x) => audioService = x);
+  }
+  late MioAudioServiceGlue audioService;
+}
+
+class MioAudioServiceGlue extends BaseAudioHandler {
+  MioAudioServiceGlue(this._mioInternal);
   final MioPlayer _mioInternal;
-  MioPlayer get mioPlayer => _mioInternal;
+
+  // TODO: android
+
+  @override
+  Future<void> play() => Future.sync(() => _mioInternal.play());
+
+  @override
+  Future<void> pause() => Future.sync(() => _mioInternal.pause());
+
+  @override
+  Future<void> stop() => Future.sync(() => _mioInternal.stop());
+
+  @override
+  Future<void> skipToNext() => Future.sync(() => _mioInternal.forward());
 }
 
 // UI state for post login

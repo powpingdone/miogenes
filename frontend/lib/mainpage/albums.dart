@@ -68,7 +68,7 @@ class _AlbumPreviewState extends State<AlbumPreview> {
 
   @override
   Widget build(BuildContext context) {
-    final player = Provider.of<MioPlayerState>(context).mioPlayer;
+    final player = Provider.of<MioPlayerState>(context).audioService;
     final mioState = Provider.of<MioTopLevel>(context).mioClient;
     album ??= mioState.getAlbum(id: widget.albumId);
 

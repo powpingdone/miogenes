@@ -7,6 +7,7 @@ import "package:frontend/mainpage/toplevel.dart";
 import "package:provider/provider.dart";
 import "package:text_scroll/text_scroll.dart";
 import "package:uuid/uuid.dart";
+import "package:audio_service/audio_service.dart";
 
 class Player extends StatefulWidget {
   const Player({super.key});
@@ -24,7 +25,7 @@ class _PlayerState extends State<Player> {
   @override
   Widget build(BuildContext context) {
     final mioState = Provider.of<MioTopLevel>(context).mioClient;
-    final player = Provider.of<MioPlayerState>(context).mioPlayer;
+    final player = Provider.of<MioPlayerState>(context).audioService;
     stream ??= player.infoStream();
     return StreamBuilder(
         stream: stream,
@@ -193,7 +194,7 @@ class MediaControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var player = Provider.of<MioPlayerState>(context).mioPlayer;
+    var player = Provider.of<MioPlayerState>(context).audioService;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -220,7 +221,7 @@ class VolumeSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var player = Provider.of<MioPlayerState>(context).mioPlayer;
+    var player = Provider.of<MioPlayerState>(context).audioService;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [

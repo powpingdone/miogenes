@@ -118,7 +118,7 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
         }
 
         // yes double locking is very much shitty and suboptimal, but PlayerMsg::SetSink
-        // forced my hand. why do we not have partial borrows yet
+        // forced my hand.
         let mut lock = state.decoder.lock();
         let queue = lock.copy_queue();
 
