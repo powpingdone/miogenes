@@ -87,137 +87,162 @@ fn wire_info_stream__method__MioPlayer_impl(
 }
 
 fn wire_play__method__MioPlayer_impl(
+    port_: MessagePort,
     that: impl Wire2Api<MioPlayer> + UnwindSafe,
     id: impl Wire2Api<Option<uuid::Uuid>> + UnwindSafe,
-) -> support::WireSyncReturn {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
         WrapInfo {
             debug_name: "play__method__MioPlayer",
-            port: None,
-            mode: FfiCallMode::Sync,
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
         },
         move || {
             let api_that = that.wire2api();
             let api_id = id.wire2api();
-            Ok(MioPlayer::play(&api_that, api_id))
+            move |task_callback| Ok(MioPlayer::play(&api_that, api_id))
         },
     )
 }
 
 fn wire_pause__method__MioPlayer_impl(
+    port_: MessagePort,
     that: impl Wire2Api<MioPlayer> + UnwindSafe,
-) -> support::WireSyncReturn {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
         WrapInfo {
             debug_name: "pause__method__MioPlayer",
-            port: None,
-            mode: FfiCallMode::Sync,
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
         },
         move || {
             let api_that = that.wire2api();
-            Ok(MioPlayer::pause(&api_that))
+            move |task_callback| Ok(MioPlayer::pause(&api_that))
         },
     )
 }
 
 fn wire_toggle__method__MioPlayer_impl(
+    port_: MessagePort,
     that: impl Wire2Api<MioPlayer> + UnwindSafe,
-) -> support::WireSyncReturn {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
         WrapInfo {
             debug_name: "toggle__method__MioPlayer",
-            port: None,
-            mode: FfiCallMode::Sync,
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
         },
         move || {
             let api_that = that.wire2api();
-            Ok(MioPlayer::toggle(&api_that))
+            move |task_callback| Ok(MioPlayer::toggle(&api_that))
         },
     )
 }
 
 fn wire_queue__method__MioPlayer_impl(
+    port_: MessagePort,
     that: impl Wire2Api<MioPlayer> + UnwindSafe,
     id: impl Wire2Api<uuid::Uuid> + UnwindSafe,
-) -> support::WireSyncReturn {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
         WrapInfo {
             debug_name: "queue__method__MioPlayer",
-            port: None,
-            mode: FfiCallMode::Sync,
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
         },
         move || {
             let api_that = that.wire2api();
             let api_id = id.wire2api();
-            Ok(MioPlayer::queue(&api_that, api_id))
+            move |task_callback| Ok(MioPlayer::queue(&api_that, api_id))
         },
     )
 }
 
 fn wire_unqueue__method__MioPlayer_impl(
+    port_: MessagePort,
     that: impl Wire2Api<MioPlayer> + UnwindSafe,
     id: impl Wire2Api<uuid::Uuid> + UnwindSafe,
-) -> support::WireSyncReturn {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
         WrapInfo {
             debug_name: "unqueue__method__MioPlayer",
-            port: None,
-            mode: FfiCallMode::Sync,
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
         },
         move || {
             let api_that = that.wire2api();
             let api_id = id.wire2api();
-            Ok(MioPlayer::unqueue(&api_that, api_id))
+            move |task_callback| Ok(MioPlayer::unqueue(&api_that, api_id))
         },
     )
 }
 
 fn wire_stop__method__MioPlayer_impl(
+    port_: MessagePort,
     that: impl Wire2Api<MioPlayer> + UnwindSafe,
-) -> support::WireSyncReturn {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
         WrapInfo {
             debug_name: "stop__method__MioPlayer",
-            port: None,
-            mode: FfiCallMode::Sync,
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
         },
         move || {
             let api_that = that.wire2api();
-            Ok(MioPlayer::stop(&api_that))
+            move |task_callback| Ok(MioPlayer::stop(&api_that))
         },
     )
 }
 
 fn wire_forward__method__MioPlayer_impl(
+    port_: MessagePort,
     that: impl Wire2Api<MioPlayer> + UnwindSafe,
-) -> support::WireSyncReturn {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
         WrapInfo {
             debug_name: "forward__method__MioPlayer",
-            port: None,
-            mode: FfiCallMode::Sync,
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
         },
         move || {
             let api_that = that.wire2api();
-            Ok(MioPlayer::forward(&api_that))
+            move |task_callback| Ok(MioPlayer::forward(&api_that))
         },
     )
 }
 
-fn wire_volume__method__MioPlayer_impl(
+fn wire_backward__method__MioPlayer_impl(
+    port_: MessagePort,
     that: impl Wire2Api<MioPlayer> + UnwindSafe,
-    volume: impl Wire2Api<f32> + UnwindSafe,
-) -> support::WireSyncReturn {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
         WrapInfo {
-            debug_name: "volume__method__MioPlayer",
-            port: None,
-            mode: FfiCallMode::Sync,
+            debug_name: "backward__method__MioPlayer",
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
         },
         move || {
             let api_that = that.wire2api();
-            let api_volume = volume.wire2api();
-            Ok(MioPlayer::volume(&api_that, api_volume))
+            move |task_callback| Ok(MioPlayer::backward(&api_that))
+        },
+    )
+}
+
+fn wire_seek__method__MioPlayer_impl(
+    port_: MessagePort,
+    that: impl Wire2Api<MioPlayer> + UnwindSafe,
+    ms: impl Wire2Api<u64> + UnwindSafe,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
+        WrapInfo {
+            debug_name: "seek__method__MioPlayer",
+            port: Some(port_),
+            mode: FfiCallMode::Normal,
+        },
+        move || {
+            let api_that = that.wire2api();
+            let api_ms = ms.wire2api();
+            move |task_callback| Ok(MioPlayer::seek(&api_that, api_ms))
         },
     )
 }
@@ -580,8 +605,8 @@ where
     }
 }
 
-impl Wire2Api<f32> for f32 {
-    fn wire2api(self) -> f32 {
+impl Wire2Api<u64> for u64 {
+    fn wire2api(self) -> u64 {
         self
     }
 }
@@ -681,6 +706,26 @@ impl rust2dart::IntoIntoDart<mirror_CoverArt> for CoverArt {
     }
 }
 
+impl support::IntoDart for DecoderStatus {
+    fn into_dart(self) -> support::DartAbi {
+        match self {
+            Self::Playing => 0,
+            Self::Paused => 1,
+            Self::Buffering => 2,
+            Self::Loading => 3,
+        }
+        .into_dart()
+    }
+}
+
+impl support::IntoDartExceptPrimitive for DecoderStatus {}
+
+impl rust2dart::IntoIntoDart<DecoderStatus> for DecoderStatus {
+    fn into_into_dart(self) -> Self {
+        self
+    }
+}
+
 impl support::IntoDart for FakeMapItem {
     fn into_dart(self) -> support::DartAbi {
         vec![
@@ -694,6 +739,25 @@ impl support::IntoDart for FakeMapItem {
 impl support::IntoDartExceptPrimitive for FakeMapItem {}
 
 impl rust2dart::IntoIntoDart<FakeMapItem> for FakeMapItem {
+    fn into_into_dart(self) -> Self {
+        self
+    }
+}
+
+impl support::IntoDart for MediaStatus {
+    fn into_dart(self) -> support::DartAbi {
+        vec![
+            self.id.into_into_dart().into_dart(),
+            self.length.into_into_dart().into_dart(),
+            self.amt_loaded.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+
+impl support::IntoDartExceptPrimitive for MediaStatus {}
+
+impl rust2dart::IntoIntoDart<MediaStatus> for MediaStatus {
     fn into_into_dart(self) -> Self {
         self
     }
@@ -732,8 +796,9 @@ impl support::IntoDart for PStatus {
         vec![
             self.err_msg.into_dart(),
             self.queue.into_into_dart().into_dart(),
-            self.volume.into_into_dart().into_dart(),
-            self.paused.into_into_dart().into_dart(),
+            self.status.into_dart(),
+            self.curr_playing.into_dart(),
+            self.playback_pos.into_into_dart().into_dart(),
         ]
         .into_dart()
     }

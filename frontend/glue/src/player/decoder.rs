@@ -1,35 +1,36 @@
-use std::{io::Read, sync::{Arc, RwLock}, collections::VecDeque, time::Duration};
-
+use crate::*;
 use log::*;
 use qoaudio::QoaRodioSource;
 use rodio::Source;
+use std::{
+    collections::VecDeque,
+    io::Read,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 use uuid::Uuid;
-
-use crate::*;
 
 pub struct ControllingDecoder {
     true_dec: Option<qoaudio::QoaRodioSource<Box<dyn Read + Send + Sync + 'static>>>,
-    pub pause: bool,
-    pub vol: f32,
     playing_id: Option<Uuid>,
     client: Arc<RwLock<MioClientState>>,
-    next_ids: VecDeque<Uuid>,
+    full_queue: VecDeque<Uuid>,
+    status: Option<api::DecoderStatus>,
 }
 
 impl ControllingDecoder {
     pub fn new(client: Arc<RwLock<MioClientState>>) -> Self {
         Self {
             true_dec: None,
-            pause: false,
-            vol: 1.0,
             playing_id: None,
             client,
-            next_ids: VecDeque::new(),
+            full_queue: VecDeque::new(),
+            status: None,
         }
     }
 
     pub fn dec_kickover(&mut self) -> bool {
-        if self.true_dec.is_none() && self.playing_id.is_none() && !self.next_ids.is_empty() {
+        if self.true_dec.is_none() && self.playing_id.is_none() && !self.full_queue.is_empty() {
             // needed to be kicked
             debug!("kicking over");
             self.forward();
@@ -40,7 +41,7 @@ impl ControllingDecoder {
                 "no kickover required: {} && {} && {}",
                 self.true_dec.is_none(),
                 self.playing_id.is_none(),
-                !self.next_ids.is_empty()
+                !self.full_queue.is_empty()
             );
             false
         }
@@ -68,17 +69,17 @@ impl ControllingDecoder {
 
     pub fn queue(&mut self, id: Uuid) {
         trace!("queueing {id}");
-        self.next_ids.push_back(id)
+        self.full_queue.push_back(id)
     }
 
     pub fn dequeue(&mut self, id: Uuid) {
         trace!("dequeueing {id}");
-        self.next_ids.retain(|x| *x != id)
+        self.full_queue.retain(|x| *x != id)
     }
 
     pub fn forward(&mut self) {
         loop {
-            if let Some(id) = self.next_ids.pop_front() {
+            if let Some(id) = self.full_queue.pop_front() {
                 debug!("next track is {id}, setting");
                 self.set_new(id);
                 if self.true_dec.is_none() {
@@ -97,10 +98,9 @@ impl ControllingDecoder {
 
     pub fn clear_self(&mut self) {
         trace!("cleaning self");
-        self.next_ids.clear();
+        self.full_queue.clear();
         self.true_dec = None;
         self.playing_id = None;
-        self.pause = true;
     }
 
     pub fn copy_queue(&self) -> Vec<Uuid> {
@@ -109,7 +109,7 @@ impl ControllingDecoder {
         } else {
             vec![]
         };
-        ret.extend(self.next_ids.iter().copied());
+        ret.extend(self.full_queue.iter().copied());
         ret
     }
 }
@@ -118,17 +118,18 @@ impl Iterator for ControllingDecoder {
     type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let scale = |x: i16| -> f32 { (x as f32 / i16::MAX as f32).clamp(-1.0, 1.0) * self.vol };
         if self.pause {
             Some(0.0)
         } else if let Some(ref mut dec) = self.true_dec {
-            let sample = dec.next().map(scale);
+            let sample = dec
+                .next()
+                .map(|x: i16| -> f32 { (x as f32 / i16::MAX as f32).clamp(-1.0, 1.0) });
 
             // if finished
             if sample.is_none() {
                 // there is no need to notify player_track_mgr because it will poll and then pick
                 // this up, once it acquires the lock
-                if self.next_ids.is_empty() {
+                if self.full_queue.is_empty() {
                     self.clear_self();
                 } else {
                     self.forward();

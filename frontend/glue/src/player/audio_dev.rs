@@ -20,9 +20,10 @@ pub(crate) enum PlayerMsg {
     Toggle,
     Queue(Uuid),
     Unqueue(Uuid),
-    Volume(f32),
     Stop,
     Forward,
+    Backward,
+    Seek(Duration),
 }
 
 impl std::fmt::Debug for PlayerMsg {
@@ -34,9 +35,10 @@ impl std::fmt::Debug for PlayerMsg {
             Self::Toggle => write!(f, "Toggle"),
             Self::Queue(arg0) => f.debug_tuple("Queue").field(arg0).finish(),
             Self::Unqueue(arg0) => f.debug_tuple("Unqueue").field(arg0).finish(),
-            Self::Volume(arg0) => f.debug_tuple("Volume").field(arg0).finish(),
             Self::Stop => write!(f, "Stop"),
             Self::Forward => write!(f, "Forward"),
+            Self::Backward => write!(f, "Backward"),
+            Self::Seek(dur) => f.debug_tuple("Seek").field(dur).finish(),
         }
     }
 }
@@ -50,8 +52,8 @@ impl Player {
     pub(crate) fn new(client: Arc<RwLock<MioClientState>>) -> Self {
         let (tx_player, rx_player) = crossbeam::channel::unbounded();
 
-        // I don't like doing this, but i'm not joining this thread. Ignore the dropped
-        // handle.
+        // thread does not get joined due to if tx_player gets dropped, then everything
+        // else will die as well
         std::thread::Builder::new()
             .name("MioPlayerT".to_owned())
             .spawn(move || player_track_mgr(client, rx_player))
@@ -76,8 +78,9 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
                         sink.add(api::PStatus {
                             err_msg: Some(err.to_string()),
                             queue: Vec::new(),
-                            volume: 0.0,
-                            paused: true,
+                            status: None,
+                            curr_playing: None,
+                            playback_pos: 0,
                         })
                     });
                 }
@@ -93,24 +96,18 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
             Ok(msg) => match msg {
                 PlayerMsg::SetSink(new_sink) => state.set_ui_sink(new_sink),
                 PlayerMsg::Play(id) => {
-                    let mut lock = state.decoder.lock();
-                    if let Some(id) = id {
-                        lock.clear_self();
-                        lock.set_new(id);
-                    }
-                    lock.pause = false;
-                    lock.dec_kickover();
+                    todo!()
                 }
-                PlayerMsg::Pause => state.decoder.lock().pause = true,
+                PlayerMsg::Pause => todo!(),
                 PlayerMsg::Toggle => {
-                    let mut lock = state.decoder.lock();
-                    lock.pause = !lock.pause;
+                    todo!()
                 }
-                PlayerMsg::Queue(id) => state.decoder.lock().queue(id),
-                PlayerMsg::Unqueue(id) => state.decoder.lock().dequeue(id),
-                PlayerMsg::Stop => state.decoder.lock().clear_self(),
-                PlayerMsg::Forward => state.decoder.lock().forward(),
-                PlayerMsg::Volume(vol) => state.decoder.lock().vol = vol,
+                PlayerMsg::Queue(id) => todo!(),
+                PlayerMsg::Unqueue(id) => todo!(),
+                PlayerMsg::Stop => todo!(),
+                PlayerMsg::Forward => todo!(),
+                PlayerMsg::Backward => todo!(),
+                PlayerMsg::Seek(_dur) => todo!(),
             },
             Err(err) if err == RecvTimeoutError::Disconnected => return,
             Err(err) if err == RecvTimeoutError::Timeout => (),
@@ -119,63 +116,33 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
 
         // yes double locking is very much shitty and suboptimal, but PlayerMsg::SetSink
         // forced my hand.
-        let mut lock = state.decoder.lock();
-        let queue = lock.copy_queue();
+        let queue: Vec<api::MediaStatus> = todo!();
+        let status: Option<api::DecoderStatus> = todo!();
+        let curr_playing = todo!();
+        let playback_pos = todo!();
 
         // add to radio queue
-        if queue.len() < 50 && !queue.is_empty() {
+        if queue.len() < 50 && status.is_some() {
             let next = client
                 .read()
                 .unwrap()
-                .get_closest(queue[0], queue.clone())
+                .get_closest(
+                    queue[0].id,
+                    queue.clone().into_iter().map(|x| x.id).collect(),
+                )
                 .unwrap()
                 .id;
-            lock.queue(next);
+
             // next iteration will pickup the new id in the queue
+            todo!()
         }
         state.send_ui(api::PStatus {
             err_msg: _err_msg,
             queue,
-            volume: lock.vol,
-            paused: lock.pause,
+            status,
+            curr_playing,
+            playback_pos,
         });
-    }
-}
-
-struct SharedSource<T: Iterator> {
-    pub i: Arc<Mutex<T>>,
-}
-
-impl<T> Source for SharedSource<T>
-where
-    T: Source,
-    <T as Iterator>::Item: rodio::Sample,
-{
-    fn current_frame_len(&self) -> Option<usize> {
-        self.i.lock().current_frame_len()
-    }
-
-    fn channels(&self) -> u16 {
-        self.i.lock().channels()
-    }
-
-    fn sample_rate(&self) -> u32 {
-        self.i.lock().sample_rate()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        self.i.lock().total_duration()
-    }
-}
-
-impl<T> Iterator for SharedSource<T>
-where
-    T: Iterator,
-{
-    type Item = T::Item;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.i.lock().next()
     }
 }
 
@@ -184,7 +151,7 @@ struct PlayerState {
     _dev: rodio::OutputStream,
     _s_handle: rodio::OutputStreamHandle,
     _s_thread: std::thread::JoinHandle<()>,
-    pub decoder: Arc<Mutex<ControllingDecoder>>,
+    pub decoder: (),
 }
 
 impl PlayerState {
@@ -192,7 +159,7 @@ impl PlayerState {
         trace!("acqiring dev");
         let (_dev, s_handle) = find_dev()?;
         trace!("setting up decoder");
-        let decoder = Arc::new(Mutex::new(ControllingDecoder::new(client)));
+        let decoder: () = todo!();
         Ok(Self {
             ui_sink: None,
             _dev,
@@ -201,7 +168,9 @@ impl PlayerState {
                 let s_handle = s_handle.clone();
                 move || {
                     trace!("spinning s_thread");
-                    s_handle.play_raw(SharedSource { i: decoder }).unwrap();
+
+                    // s_handle.play_raw( "source" ).unwrap();
+                    todo!()
                 }
             }),
             _s_handle: s_handle,
@@ -252,7 +221,7 @@ fn find_dev() -> anyhow::Result<(rodio::OutputStream, rodio::OutputStreamHandle)
         target_os = "netbsd"
     ))]
     {
-        use cpal::traits::HostTrait;
+        use rodio::cpal::traits::HostTrait;
 
         trace!("on \"linux\": trying to get jack");
         rodio::OutputStream::try_from_device(

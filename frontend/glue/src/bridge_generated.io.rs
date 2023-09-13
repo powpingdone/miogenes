@@ -23,62 +23,59 @@ pub extern "C" fn wire_info_stream__method__MioPlayer(port_: i64, that: *mut wir
 
 #[no_mangle]
 pub extern "C" fn wire_play__method__MioPlayer(
+    port_: i64,
     that: *mut wire_MioPlayer,
     id: *mut wire_uint_8_list,
-) -> support::WireSyncReturn {
-    wire_play__method__MioPlayer_impl(that, id)
+) {
+    wire_play__method__MioPlayer_impl(port_, that, id)
 }
 
 #[no_mangle]
-pub extern "C" fn wire_pause__method__MioPlayer(
-    that: *mut wire_MioPlayer,
-) -> support::WireSyncReturn {
-    wire_pause__method__MioPlayer_impl(that)
+pub extern "C" fn wire_pause__method__MioPlayer(port_: i64, that: *mut wire_MioPlayer) {
+    wire_pause__method__MioPlayer_impl(port_, that)
 }
 
 #[no_mangle]
-pub extern "C" fn wire_toggle__method__MioPlayer(
-    that: *mut wire_MioPlayer,
-) -> support::WireSyncReturn {
-    wire_toggle__method__MioPlayer_impl(that)
+pub extern "C" fn wire_toggle__method__MioPlayer(port_: i64, that: *mut wire_MioPlayer) {
+    wire_toggle__method__MioPlayer_impl(port_, that)
 }
 
 #[no_mangle]
 pub extern "C" fn wire_queue__method__MioPlayer(
+    port_: i64,
     that: *mut wire_MioPlayer,
     id: *mut wire_uint_8_list,
-) -> support::WireSyncReturn {
-    wire_queue__method__MioPlayer_impl(that, id)
+) {
+    wire_queue__method__MioPlayer_impl(port_, that, id)
 }
 
 #[no_mangle]
 pub extern "C" fn wire_unqueue__method__MioPlayer(
+    port_: i64,
     that: *mut wire_MioPlayer,
     id: *mut wire_uint_8_list,
-) -> support::WireSyncReturn {
-    wire_unqueue__method__MioPlayer_impl(that, id)
+) {
+    wire_unqueue__method__MioPlayer_impl(port_, that, id)
 }
 
 #[no_mangle]
-pub extern "C" fn wire_stop__method__MioPlayer(
-    that: *mut wire_MioPlayer,
-) -> support::WireSyncReturn {
-    wire_stop__method__MioPlayer_impl(that)
+pub extern "C" fn wire_stop__method__MioPlayer(port_: i64, that: *mut wire_MioPlayer) {
+    wire_stop__method__MioPlayer_impl(port_, that)
 }
 
 #[no_mangle]
-pub extern "C" fn wire_forward__method__MioPlayer(
-    that: *mut wire_MioPlayer,
-) -> support::WireSyncReturn {
-    wire_forward__method__MioPlayer_impl(that)
+pub extern "C" fn wire_forward__method__MioPlayer(port_: i64, that: *mut wire_MioPlayer) {
+    wire_forward__method__MioPlayer_impl(port_, that)
 }
 
 #[no_mangle]
-pub extern "C" fn wire_volume__method__MioPlayer(
-    that: *mut wire_MioPlayer,
-    volume: f32,
-) -> support::WireSyncReturn {
-    wire_volume__method__MioPlayer_impl(that, volume)
+pub extern "C" fn wire_backward__method__MioPlayer(port_: i64, that: *mut wire_MioPlayer) {
+    wire_backward__method__MioPlayer_impl(port_, that)
+}
+
+#[no_mangle]
+pub extern "C" fn wire_seek__method__MioPlayer(port_: i64, that: *mut wire_MioPlayer, ms: u64) {
+    wire_seek__method__MioPlayer_impl(port_, that, ms)
 }
 
 #[no_mangle]

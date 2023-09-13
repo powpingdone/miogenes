@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -20,41 +22,51 @@ class MainNav extends StatelessWidget {
       ChangeNotifierProvider(create: (_) => MainNavTopLevel()),
       Provider(
           lazy: false,
-          create: (context) {
+          create: (context) async {
             final mtl = Provider.of<MioTopLevel>(context, listen: false);
             var mioState = mtl.mioClient;
-            return MioPlayerState(api.newPlayer(client: mioState));
+            // TODO: android
+            return await AudioService.init(
+              builder: () => MioPlayerState(api.newPlayer(client: mioState)),
+              // config:
+            );
           })
     ], builder: (_, __) => const MainNavWidgetPage());
   }
 }
 
 // Music audio player state
-class MioPlayerState {
-  MioPlayerState(mioInternal) {
-    AudioService.init(builder: () => MioAudioServiceGlue(mioInternal))
-        .then((x) => audioService = x);
-  }
-  late MioAudioServiceGlue audioService;
-}
-
-class MioAudioServiceGlue extends BaseAudioHandler {
-  MioAudioServiceGlue(this._mioInternal);
-  final MioPlayer _mioInternal;
-
+class MioPlayerState extends BaseAudioHandler {
   // TODO: android
+  MioPlayerState(this._mioInternal) {
+    _mioStatusStream = _mioInternal.infoStream();
+    _mioStatusListener = _mioStatusStream.listen(_update);
+  }
+  final MioPlayer _mioInternal;
+  late Stream<PStatus> _mioStatusStream;
+  // ignore: unused_field
+  late StreamSubscription<void> _mioStatusListener;
+
+  void _update(PStatus status) async {}
 
   @override
-  Future<void> play() => Future.sync(() => _mioInternal.play());
+  Future<void> play() => _mioInternal.play();
 
   @override
-  Future<void> pause() => Future.sync(() => _mioInternal.pause());
+  Future<void> pause() => _mioInternal.pause();
 
   @override
-  Future<void> stop() => Future.sync(() => _mioInternal.stop());
+  Future<void> stop() => _mioInternal.stop();
 
   @override
-  Future<void> skipToNext() => Future.sync(() => _mioInternal.forward());
+  Future<void> skipToNext() => _mioInternal.forward();
+
+  @override
+  Future<void> skipToPrevious() => _mioInternal.backward();
+
+  @override
+  Future<void> seek(Duration position) =>
+      _mioInternal.seek(ms: position.inMilliseconds);
 }
 
 // UI state for post login

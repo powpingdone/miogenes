@@ -10,10 +10,10 @@ use flutter_rust_bridge::StreamSink;
 pub use flutter_rust_bridge::SyncReturn;
 use log::*;
 pub use mio_common::*;
-use std::path::Path;
 pub use std::sync::Arc;
 use std::sync::Once;
 pub use std::sync::RwLock;
+use std::{path::Path, time::Duration};
 use uuid::Uuid;
 
 pub fn init_self() -> SyncReturn<()> {
@@ -46,11 +46,30 @@ pub fn new_mio_client() -> SyncReturn<MioClient> {
 }
 
 #[derive(Clone)]
+pub enum DecoderStatus {
+    Playing,
+    Paused,
+    Buffering,
+    Loading,
+}
+
+#[derive(Clone)]
+pub struct MediaStatus {
+    pub id: Uuid,
+    // duration in ms
+    pub length: u64,
+    // duration in ms
+    pub amt_loaded: u64,
+}
+
+#[derive(Clone)]
 pub struct PStatus {
     pub err_msg: Option<String>,
-    pub queue: Vec<Uuid>,
-    pub volume: f32,
-    pub paused: bool,
+    pub queue: Vec<MediaStatus>,
+    pub status: Option<DecoderStatus>,
+    pub curr_playing: Option<Uuid>,
+    // duration in ms
+    pub playback_pos: u64,
 }
 
 pub struct MioPlayer(pub RustOpaque<Player>);
@@ -69,52 +88,50 @@ impl MioPlayer {
         drop(self.0.tx.send(PlayerMsg::SetSink(x)));
     }
 
-    pub fn play(&self, id: Option<Uuid>) -> SyncReturn<()> {
+    pub fn play(&self, id: Option<Uuid>) {
         debug!("requesting play {id:?}");
         self.0.tx.send(PlayerMsg::Play(id)).unwrap();
-        SyncReturn(())
     }
 
-    pub fn pause(&self) -> SyncReturn<()> {
+    pub fn pause(&self) {
         debug!("requesting pause");
         self.0.tx.send(PlayerMsg::Pause).unwrap();
-        SyncReturn(())
     }
 
-    pub fn toggle(&self) -> SyncReturn<()> {
+    pub fn toggle(&self) {
         debug!("requesting toggle");
         self.0.tx.send(PlayerMsg::Toggle).unwrap();
-        SyncReturn(())
     }
 
-    pub fn queue(&self, id: Uuid) -> SyncReturn<()> {
+    pub fn queue(&self, id: Uuid) {
         debug!("requesting queue {id:}");
         self.0.tx.send(PlayerMsg::Queue(id)).unwrap();
-        SyncReturn(())
     }
 
-    pub fn unqueue(&self, id: Uuid) -> SyncReturn<()> {
+    pub fn unqueue(&self, id: Uuid) {
         debug!("requesting unqueue {id:}");
         self.0.tx.send(PlayerMsg::Unqueue(id)).unwrap();
-        SyncReturn(())
     }
 
-    pub fn stop(&self) -> SyncReturn<()> {
+    pub fn stop(&self) {
         debug!("requesting stop");
         self.0.tx.send(PlayerMsg::Stop).unwrap();
-        SyncReturn(())
     }
 
-    pub fn forward(&self) -> SyncReturn<()> {
+    pub fn forward(&self) {
         debug!("requesting forward");
         self.0.tx.send(PlayerMsg::Forward).unwrap();
-        SyncReturn(())
     }
 
-    pub fn volume(&self, volume: f32) -> SyncReturn<()> {
-        debug!("requesting volume {volume}");
-        self.0.tx.send(PlayerMsg::Volume(volume)).unwrap();
-        SyncReturn(())
+    pub fn backward(&self) {
+        debug!("requesting backward");
+        self.0.tx.send(PlayerMsg::Backward).unwrap();
+    }
+
+    pub fn seek(&self, ms: u64) {
+        let ms = Duration::from_millis(ms);
+        debug!("requesting seek {ms:?}");
+        self.0.tx.send(PlayerMsg::Seek(ms)).unwrap();
     }
 }
 
