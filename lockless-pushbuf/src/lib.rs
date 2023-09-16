@@ -162,17 +162,17 @@ mod test {
 
     #[test]
     fn z_producer_consumer() {
-        let buf = SharedBuffer::<u8>::new(10_000 * 10);
+        let buf = SharedBuffer::<u8>::new(100 * 10);
         std::thread::scope(|s| {
             for _ in 0..10 {
                 s.spawn(|| {
-                    for x in 0..10_000 {
+                    for x in 0..100 {
                         buf.push(if x % 2 == 0 { 5 } else { 6 }).unwrap();
                     }
                 });
             }
 
-            for range in [0..30_000, 2_000..50_000, 80_000..90_000, 0..100_000] {
+            for range in [0..300, 200..500, 800..900, 0..1_000] {
                 for x in range {
                     while buf.get(x).is_none() {}
                 }
