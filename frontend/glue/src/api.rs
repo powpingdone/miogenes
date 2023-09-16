@@ -45,7 +45,7 @@ pub fn new_mio_client() -> SyncReturn<MioClient> {
     )))))
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum DecoderStatus {
     Playing,
     Paused,
