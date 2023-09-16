@@ -78,7 +78,6 @@ impl<'a, T> SharedBuffer<'a, T> {
         else {
             return Err(PushError(val));
         };
-        let pos = pos - 1;
 
         // push value
         let cell = &self.buf[pos];
@@ -118,8 +117,8 @@ impl<'a, T> SharedBuffer<'a, T> {
 
 impl<'a, T> Drop for SharedBuffer<'a, T> {
     fn drop(&mut self) {
-        for val in &self.buf[0..self.filled_amt.load(Ordering::Relaxed)] {
-            debug_assert!(val.0.load(Ordering::Relaxed));
+        for val in &self.buf[0..self.filled_amt.load(Ordering::SeqCst)] {
+            debug_assert!(val.0.load(Ordering::SeqCst));
             let cell = val.1.get();
             // SAFETY: cell was initialized because it was behind self.filled_amt
             unsafe {
@@ -140,6 +139,14 @@ mod test {
         assert!(buf.push(0.0).is_err());
         assert!(buf.get(0).is_none());
     }
+    
+    #[test]
+    fn just_one_item() {
+        let buf = SharedBuffer::<f64>::new(1);
+        assert!(buf.get(0).is_none());
+        assert!(buf.push(0.0).is_ok());
+        assert!(buf.get(0).copied().is_some_and(|x| x == 0.0));
+    }
 
     #[test]
     fn something() {
@@ -154,7 +161,7 @@ mod test {
     }
 
     #[test]
-    fn producer_consumer() {
+    fn z_producer_consumer() {
         let buf = SharedBuffer::<u8>::new(10_000 * 10);
         std::thread::scope(|s| {
             for _ in 0..10 {
