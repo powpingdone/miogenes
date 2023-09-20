@@ -27,7 +27,8 @@ rodio = { version = "0.17", default-features = false }
 parking_lot = "0.12"
 cpal = { version = "0.15", features = ["jack"] }
 log = "0.4"
-souvlaki = "0.6.1"
+souvlaki = "0.6"
+ringbuffer = "0.15"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 env_logger = "0.10"

@@ -22,8 +22,8 @@ pub(self) struct CurrentlyDecoding {
 
 pub(self) enum DecoderMsg {
     SeekAbs(Duration),
-    Load(Uuid),
-    Play(Uuid),
+    Enqueue(Uuid),
+    Play,
     Reset,
     Pause,
     Stop,
