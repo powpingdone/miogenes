@@ -2,7 +2,7 @@ use crate::player::*;
 use crate::*;
 use crossbeam::atomic::AtomicCell;
 use log::*;
-use qoaudio::{QoaRodioSource, QoaDecoder};
+use qoaudio::{QoaDecoder, QoaRodioSource};
 use rodio::Source;
 use std::{
     collections::{HashMap, VecDeque},
@@ -143,11 +143,49 @@ fn decoder_thread(
     status: Arc<AtomicCell<ThreadDecoderStatus>>,
     state_change: crossbeam::channel::Receiver<ThreadDecoderYell>,
     server_stream: Box<dyn Read + Send + Sync + 'static>,
-    mdata: Arc<OnceLock<TrackMetadata>>
+    mdata: Arc<OnceLock<TrackMetadata>>,
 ) {
+    decoder_thread_inner(waveform, status.clone(), state_change, server_stream, mdata);
+    status.store(ThreadDecoderStatus::Dead);
+}
+
+fn decoder_thread_inner(
+    waveform: crossbeam::channel::Sender<f32>,
+    status: Arc<AtomicCell<ThreadDecoderStatus>>,
+    state_change: crossbeam::channel::Receiver<ThreadDecoderYell>,
+    server_stream: Box<dyn Read + Send + Sync + 'static>,
+    mdata: Arc<OnceLock<TrackMetadata>>,
+) {
+    // setup decoder
     let mut server_stream = ReSeeker::new(server_stream);
-    let mut decoder = QoaDecoder::new(&mut server_stream);
+    let mut decoder = match QoaDecoder::new(&mut server_stream) {
+        Ok(x) => x,
+        Err(err) => {
+            error!("decoder died: {err}");
+            return;
+        }
+    };
+    let (channels, sample_rate, samples) = match decoder.mode() {
+        qoaudio::ProcessingMode::FixedSamples {
+            channels,
+            sample_rate,
+            samples,
+        } => (channels, sample_rate, samples),
+        qoaudio::ProcessingMode::Streaming => {
+            error!("the decoded file is a streaming file");
+            return;
+        }
+    };
+    drop(mdata.set(TrackMetadata {
+        len: Duration::from_secs_f64(*samples as f64 / *sample_rate as f64),
+        channels: *channels as u16,
+        sample_rate: *sample_rate,
+    }));
+    let mut next_samp: Option<f32> = None;
+
+    // decoder loop
     loop {
+        // handle state change
         match state_change.try_recv() {
             Err(crossbeam::channel::TryRecvError::Disconnected) | Ok(ThreadDecoderYell::Die) => {
                 return
@@ -170,14 +208,43 @@ fn decoder_thread(
                             }
                         };
 
-                        // convert to sample time
+                        // get samples needed
                         let metadata = mdata.get().unwrap();
+                        let how_many_dur = metadata.len - to_where;
+                        let how_many = (how_many_dur.as_secs_f64() * metadata.sample_rate as f64)
+                            .floor() as usize;
 
-                        todo!();
+                        // recreate decoder
+                        server_stream.seek(std::io::SeekFrom::Start(0)).unwrap();
+                        let mut new_dec = QoaDecoder::new(&mut server_stream).unwrap();
+                        (0..how_many).for_each(|_| drop(new_dec.next()));
+                        decoder = new_dec;
                     }
                     ThreadDecoderYell::Die => unreachable!(),
                 }
             }
+        }
+
+        // send over new waveform
+        if next_samp.is_none() {
+            next_samp = match decoder.next() {
+                None => return,
+                Some(Err(err)) => {
+                    error!("decoding error: {err}");
+                    return;
+                }
+                Some(Ok(dec)) => match dec {
+                    qoaudio::QoaItem::Sample(x) => {
+                        Some((x as f32 / i16::MAX as f32).clamp(-1.0, 1.0))
+                    }
+                    qoaudio::QoaItem::FrameHeader(_) => continue,
+                },
+            };
+        }
+        match waveform.send_timeout(next_samp.unwrap(), Duration::from_millis(5)) {
+            Ok(_) => next_samp = None,
+            Err(crossbeam::channel::SendTimeoutError::Timeout(_)) => continue,
+            Err(crossbeam::channel::SendTimeoutError::Disconnected(_)) => return,
         }
     }
 }
