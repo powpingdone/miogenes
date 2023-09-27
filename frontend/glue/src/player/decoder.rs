@@ -9,12 +9,14 @@ use std::{
     io::{BufReader, Read, Seek},
     ops::Add,
     sync::{Arc, RwLock},
+    thread::JoinHandle,
     time::Duration,
 };
 use uuid::Uuid;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum ThreadDecoderStatus {
+    WaitingForThread,
     Decoding,
     Loading,
     Ready,
@@ -46,10 +48,36 @@ struct TrackInner {
     pub msgs: ThreadMsgs,
     pub mdata: Arc<OnceLock<TrackMetadata>>,
     pub age: u64,
+    _t_handle: JoinHandle<()>,
 }
 
 impl TrackInner {
-    pub fn reset(&self) {
+    fn new(download: Box<dyn Read + Send + Sync + 'static>, age: u64) -> Self {
+        // thread comms
+        let (buf_tx, buf_rx) = crossbeam::channel::bounded(16384);
+        let status = Arc::new(AtomicCell::new(ThreadDecoderStatus::WaitingForThread));
+        let (decoder_tx, decoder_rx) = crossbeam::channel::unbounded();
+
+        // other
+        let mdata = Arc::new(OnceLock::new());
+        let _t_handle = std::thread::spawn({
+            let status = status.clone();
+            let mdata = mdata.clone();
+            move || decoder_thread(buf_tx, status, decoder_rx, download, mdata)
+        });
+        Self {
+            msgs: ThreadMsgs {
+                buf: buf_rx,
+                status,
+                back_to_decoder: decoder_tx,
+            },
+            mdata,
+            age,
+            _t_handle,
+        }
+    }
+
+    fn reset(&self) {
         // send back to beginning
         if let Err(res) = self
             .msgs
@@ -63,6 +91,12 @@ impl TrackInner {
         for _ in 0..self.msgs.buf.capacity().unwrap() {
             let _ = self.msgs.buf.try_recv();
         }
+    }
+}
+
+impl Drop for TrackInner {
+    fn drop(&mut self) {
+        drop(self.msgs.back_to_decoder.send(ThreadDecoderYell::Die));
     }
 }
 
@@ -112,7 +146,6 @@ impl Read for ReSeeker {
         for (byte, copy) in buf_iter.zip(remaining.into_iter()) {
             *byte = copy;
         }
-
         Ok(read)
     }
 }
@@ -120,8 +153,20 @@ impl Read for ReSeeker {
 impl Seek for ReSeeker {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         match pos {
-            std::io::SeekFrom::Start(at) => self.pos = at as usize,
-            std::io::SeekFrom::End(_) => self.pos = self.internal_buf.len(),
+            std::io::SeekFrom::Start(at) => {
+                self.pos = (at as usize).clamp(0, self.internal_buf.len())
+            }
+            std::io::SeekFrom::End(at) => {
+                self.pos = {
+                    let x = self.internal_buf.len();
+                    if at.is_negative() {
+                        x.saturating_sub(at.abs() as usize)
+                    } else {
+                        x.saturating_add(at.abs() as usize)
+                    }
+                }
+                .clamp(0, self.internal_buf.len())
+            }
             std::io::SeekFrom::Current(append) => {
                 self.pos = {
                     let abs = append.abs() as usize;
@@ -145,6 +190,7 @@ fn decoder_thread(
     server_stream: Box<dyn Read + Send + Sync + 'static>,
     mdata: Arc<OnceLock<TrackMetadata>>,
 ) {
+    status.store(ThreadDecoderStatus::Ready);
     decoder_thread_inner(waveform, status.clone(), state_change, server_stream, mdata);
     status.store(ThreadDecoderStatus::Dead);
 }
@@ -195,13 +241,14 @@ fn decoder_thread_inner(
                 match action {
                     ThreadDecoderYell::Seek(to_where) => {
                         status.store(ThreadDecoderStatus::Decoding);
+
                         // debounce
+                        let mut to_where_inner = to_where;
                         let to_where = loop {
-                            let mut to_where = to_where;
                             match state_change.recv_timeout(Duration::from_millis(5)) {
-                                Ok(ThreadDecoderYell::Seek(at)) => to_where = at,
+                                Ok(ThreadDecoderYell::Seek(at)) => to_where_inner = at,
                                 Err(crossbeam::channel::RecvTimeoutError::Timeout) => {
-                                    break to_where;
+                                    break to_where_inner;
                                 }
                                 Err(crossbeam::channel::RecvTimeoutError::Disconnected)
                                 | Ok(ThreadDecoderYell::Die) => return,
@@ -227,6 +274,7 @@ fn decoder_thread_inner(
 
         // send over new waveform
         if next_samp.is_none() {
+            status.store(ThreadDecoderStatus::Loading);
             next_samp = match decoder.next() {
                 None => return,
                 Some(Err(err)) => {
@@ -243,7 +291,10 @@ fn decoder_thread_inner(
         }
         match waveform.send_timeout(next_samp.unwrap(), Duration::from_millis(5)) {
             Ok(_) => next_samp = None,
-            Err(crossbeam::channel::SendTimeoutError::Timeout(_)) => continue,
+            Err(crossbeam::channel::SendTimeoutError::Timeout(_)) => {
+                status.store(ThreadDecoderStatus::Ready);
+                continue;
+            }
             Err(crossbeam::channel::SendTimeoutError::Disconnected(_)) => return,
         }
     }
@@ -265,12 +316,12 @@ pub(super) struct ControllingDecoder {
 impl ControllingDecoder {
     pub fn new(
         client: Arc<RwLock<MioClientState>>,
-        ret_status: Arc<AtomicCell<Option<CurrentlyDecoding>>>,
+//        ret_status: Arc<AtomicCell<Option<CurrentlyDecoding>>>,
         frontend_poll: std::sync::mpsc::Receiver<DecoderMsg>,
     ) -> Self {
         Self {
             client,
-            ret_status,
+            ret_status: todo!(),
             frontend_poll,
             queue: HashMap::new(),
             order: VecDeque::new(),
@@ -301,7 +352,6 @@ impl Iterator for ControllingDecoder {
             // kills the audio thread, because the upper level has disconnected
             Err(std::sync::mpsc::TryRecvError::Disconnected) => return None::<Self::Item>,
         };
-
         if let Some(action) = action {
             match action {
                 DecoderMsg::SeekAbs(dur) => {
@@ -335,15 +385,28 @@ impl Iterator for ControllingDecoder {
                             self.pos = self.pos.saturating_sub(1);
                         }
                     }
+
                     // reset if dead
-                    if let Some(ti) = self.get_curr_mut() {
+                    let mut dead = false;
+                    if let Some(ti) = self.get_curr() {
                         let status = ti.msgs.status.load();
                         if let ThreadDecoderStatus::Dead = status {
-                            todo!()
+                            dead = true;
                         }
                     }
-
-                    todo!()
+                    if dead {
+                        // minor work around for borrowing issues
+                        let age = self.age;
+                        let id = self.order[self.pos];
+                        let read = self.client.read().unwrap().stream(id);
+                        let ti = self.get_curr_mut().unwrap();
+                        if read.is_err() {
+                            error!("encountered error while getting decoder");
+                            return None::<Self::Item>;
+                        }
+                        *ti = TrackInner::new(read.unwrap(), age);
+                        self.age += 1;
+                    }
                 }
                 DecoderMsg::Reset => {
                     self.queue.clear();
@@ -355,10 +418,20 @@ impl Iterator for ControllingDecoder {
             }
         }
 
-        if !self.active {
+        // TODO: auto cleanup via self.age
+        if !self.active || self.get_curr().is_none() {
             Some(0.0)
         } else {
-            todo!()
+            let x = self.get_curr().and_then(|x| x.msgs.buf.try_recv().ok());
+            if x.is_none()
+                && self.get_curr().unwrap().msgs.status.load() == ThreadDecoderStatus::Dead
+            {
+                // goto next track
+                self.pos += 1;
+                self.next()
+            } else {
+                x
+            }
         }
     }
 }

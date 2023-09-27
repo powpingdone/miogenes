@@ -9,7 +9,6 @@ pub use audio_dev::*;
 
 pub(self) struct TrackDecoderMetaData {
     pub id: Uuid,
-    pub buffered: Duration,
     pub duration: Duration,
     pub status: api::DecoderStatus,
 }
