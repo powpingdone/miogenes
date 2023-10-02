@@ -46,11 +46,6 @@ abstract class MioGlue {
 
   FlutterRustBridgeTaskConstMeta get kQueueMethodMioPlayerConstMeta;
 
-  Future<void> unqueueMethodMioPlayer(
-      {required MioPlayer that, required UuidValue id, dynamic hint});
-
-  FlutterRustBridgeTaskConstMeta get kUnqueueMethodMioPlayerConstMeta;
-
   Future<void> stopMethodMioPlayer({required MioPlayer that, dynamic hint});
 
   FlutterRustBridgeTaskConstMeta get kStopMethodMioPlayerConstMeta;
@@ -250,6 +245,7 @@ enum DecoderStatus {
   Paused,
   Buffering,
   Loading,
+  Dead,
 }
 
 class FakeMapItem {
@@ -259,18 +255,6 @@ class FakeMapItem {
   const FakeMapItem({
     required this.key,
     this.value,
-  });
-}
-
-class MediaStatus {
-  final UuidValue id;
-  final int length;
-  final int amtLoaded;
-
-  const MediaStatus({
-    required this.id,
-    required this.length,
-    required this.amtLoaded,
   });
 }
 
@@ -413,12 +397,6 @@ class MioPlayer {
         id: id,
       );
 
-  Future<void> unqueue({required UuidValue id, dynamic hint}) =>
-      bridge.unqueueMethodMioPlayer(
-        that: this,
-        id: id,
-      );
-
   Future<void> stop({dynamic hint}) => bridge.stopMethodMioPlayer(
         that: this,
       );
@@ -440,10 +418,11 @@ class MioPlayer {
 
 class PStatus {
   final String? errMsg;
-  final List<MediaStatus> queue;
+  final List<UuidValue> queue;
   final DecoderStatus? status;
   final UuidValue? currPlaying;
-  final int playbackPos;
+  final double playbackPos;
+  final double playbackLen;
 
   const PStatus({
     this.errMsg,
@@ -451,6 +430,7 @@ class PStatus {
     this.status,
     this.currPlaying,
     required this.playbackPos,
+    required this.playbackLen,
   });
 }
 
@@ -632,26 +612,6 @@ class MioGlueImpl implements MioGlue {
   FlutterRustBridgeTaskConstMeta get kQueueMethodMioPlayerConstMeta =>
       const FlutterRustBridgeTaskConstMeta(
         debugName: "queue__method__MioPlayer",
-        argNames: ["that", "id"],
-      );
-
-  Future<void> unqueueMethodMioPlayer(
-      {required MioPlayer that, required UuidValue id, dynamic hint}) {
-    var arg0 = _platform.api2wire_box_autoadd_mio_player(that);
-    var arg1 = _platform.api2wire_Uuid(id);
-    return _platform.executeNormal(FlutterRustBridgeTask(
-      callFfi: (port_) =>
-          _platform.inner.wire_unqueue__method__MioPlayer(port_, arg0, arg1),
-      parseSuccessData: _wire2api_unit,
-      constMeta: kUnqueueMethodMioPlayerConstMeta,
-      argValues: [that, id],
-      hint: hint,
-    ));
-  }
-
-  FlutterRustBridgeTaskConstMeta get kUnqueueMethodMioPlayerConstMeta =>
-      const FlutterRustBridgeTaskConstMeta(
-        debugName: "unqueue__method__MioPlayer",
         argNames: ["that", "id"],
       );
 
@@ -1137,6 +1097,10 @@ class MioGlueImpl implements MioGlue {
     return raw as double;
   }
 
+  double _wire2api_f64(dynamic raw) {
+    return raw as double;
+  }
+
   FakeMapItem _wire2api_fake_map_item(dynamic raw) {
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
@@ -1157,21 +1121,6 @@ class MioGlueImpl implements MioGlue {
 
   List<FakeMapItem> _wire2api_list_fake_map_item(dynamic raw) {
     return (raw as List<dynamic>).map(_wire2api_fake_map_item).toList();
-  }
-
-  List<MediaStatus> _wire2api_list_media_status(dynamic raw) {
-    return (raw as List<dynamic>).map(_wire2api_media_status).toList();
-  }
-
-  MediaStatus _wire2api_media_status(dynamic raw) {
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return MediaStatus(
-      id: _wire2api_Uuid(arr[0]),
-      length: _wire2api_u64(arr[1]),
-      amtLoaded: _wire2api_u64(arr[2]),
-    );
   }
 
   MioClient _wire2api_mio_client(dynamic raw) {
@@ -1216,14 +1165,15 @@ class MioGlueImpl implements MioGlue {
 
   PStatus _wire2api_p_status(dynamic raw) {
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return PStatus(
       errMsg: _wire2api_opt_String(arr[0]),
-      queue: _wire2api_list_media_status(arr[1]),
+      queue: _wire2api_Uuids(arr[1]),
       status: _wire2api_opt_box_autoadd_decoder_status(arr[2]),
       currPlaying: _wire2api_opt_Uuid(arr[3]),
-      playbackPos: _wire2api_u64(arr[4]),
+      playbackPos: _wire2api_f64(arr[4]),
+      playbackLen: _wire2api_f64(arr[5]),
     );
   }
 
@@ -1240,10 +1190,6 @@ class MioGlueImpl implements MioGlue {
       disk: _wire2api_opt_box_autoadd_i64(arr[5]),
       track: _wire2api_opt_box_autoadd_i64(arr[6]),
     );
-  }
-
-  int _wire2api_u64(dynamic raw) {
-    return castInt(raw);
   }
 
   int _wire2api_u8(dynamic raw) {
@@ -1619,28 +1565,6 @@ class MioGlueWire implements FlutterRustBridgeWireBase {
               ffi.Pointer<wire_uint_8_list>)>>('wire_queue__method__MioPlayer');
   late final _wire_queue__method__MioPlayer =
       _wire_queue__method__MioPlayerPtr.asFunction<
-          void Function(int, ffi.Pointer<wire_MioPlayer>,
-              ffi.Pointer<wire_uint_8_list>)>();
-
-  void wire_unqueue__method__MioPlayer(
-    int port_,
-    ffi.Pointer<wire_MioPlayer> that,
-    ffi.Pointer<wire_uint_8_list> id,
-  ) {
-    return _wire_unqueue__method__MioPlayer(
-      port_,
-      that,
-      id,
-    );
-  }
-
-  late final _wire_unqueue__method__MioPlayerPtr = _lookup<
-          ffi.NativeFunction<
-              ffi.Void Function(ffi.Int64, ffi.Pointer<wire_MioPlayer>,
-                  ffi.Pointer<wire_uint_8_list>)>>(
-      'wire_unqueue__method__MioPlayer');
-  late final _wire_unqueue__method__MioPlayer =
-      _wire_unqueue__method__MioPlayerPtr.asFunction<
           void Function(int, ffi.Pointer<wire_MioPlayer>,
               ffi.Pointer<wire_uint_8_list>)>();
 

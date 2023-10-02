@@ -1,5 +1,6 @@
-use crate::player::decoder::ControllingDecoder;
+use super::{CurrentlyDecoding, DecoderMsg};
 use crate::*;
+use crate::{api::DecoderStatus, player::decoder::ControllingDecoder};
 use crossbeam::channel::{Receiver, RecvTimeoutError};
 use flutter_rust_bridge::StreamSink;
 use log::*;
@@ -19,7 +20,6 @@ pub(crate) enum PlayerMsg {
     Pause,
     Toggle,
     Queue(Uuid),
-    Unqueue(Uuid),
     Stop,
     Forward,
     Backward,
@@ -34,7 +34,6 @@ impl std::fmt::Debug for PlayerMsg {
             Self::Pause => write!(f, "Pause"),
             Self::Toggle => write!(f, "Toggle"),
             Self::Queue(arg0) => f.debug_tuple("Queue").field(arg0).finish(),
-            Self::Unqueue(arg0) => f.debug_tuple("Unqueue").field(arg0).finish(),
             Self::Stop => write!(f, "Stop"),
             Self::Forward => write!(f, "Forward"),
             Self::Backward => write!(f, "Backward"),
@@ -80,7 +79,8 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
                             queue: Vec::new(),
                             status: None,
                             curr_playing: None,
-                            playback_pos: 0,
+                            playback_pos: 0.0,
+                            playback_len: 0.0,
                         })
                     });
                 }
@@ -96,45 +96,75 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
             Ok(msg) => match msg {
                 PlayerMsg::SetSink(new_sink) => state.set_ui_sink(new_sink),
                 PlayerMsg::Play(id) => {
-                    todo!()
+                    if let Some(id) = id {
+                        state.yell_to_decoder.send(DecoderMsg::Reset).unwrap();
+                        state.yell_to_decoder.send(DecoderMsg::Enqueue(id)).unwrap();
+                    }
+                    state.yell_to_decoder.send(DecoderMsg::Play).unwrap();
                 }
-                PlayerMsg::Pause => todo!(),
+                PlayerMsg::Pause => state.yell_to_decoder.send(DecoderMsg::Pause).unwrap(),
                 PlayerMsg::Toggle => {
-                    todo!()
+                    let full = state.ret_status.lock();
+                    let status: Option<&api::DecoderStatus> = full
+                        .tracks
+                        .iter()
+                        .find(|x| x.id == full.curr)
+                        .map(|x| &x.status);
+                    if let Some(decoder_stat) = status {
+                        if *decoder_stat == DecoderStatus::Playing {
+                            state.yell_to_decoder.send(DecoderMsg::Pause).unwrap();
+                        } else {
+                            state.yell_to_decoder.send(DecoderMsg::Play).unwrap();
+                        }
+                    }
                 }
-                PlayerMsg::Queue(id) => todo!(),
-                PlayerMsg::Unqueue(id) => todo!(),
-                PlayerMsg::Stop => todo!(),
-                PlayerMsg::Forward => todo!(),
-                PlayerMsg::Backward => todo!(),
-                PlayerMsg::Seek(_dur) => todo!(),
+                PlayerMsg::Queue(id) => {
+                    state.yell_to_decoder.send(DecoderMsg::Enqueue(id)).unwrap()
+                }
+                PlayerMsg::Stop => state.yell_to_decoder.send(DecoderMsg::Stop).unwrap(),
+                PlayerMsg::Forward => state.yell_to_decoder.send(DecoderMsg::Next).unwrap(),
+                PlayerMsg::Backward => state.yell_to_decoder.send(DecoderMsg::Previous).unwrap(),
+                PlayerMsg::Seek(dur) => state
+                    .yell_to_decoder
+                    .send(DecoderMsg::SeekAbs(dur))
+                    .unwrap(),
             },
             Err(err) if err == RecvTimeoutError::Disconnected => return,
             Err(err) if err == RecvTimeoutError::Timeout => (),
             _ => unreachable!(),
         }
 
-        // yes double locking is very much shitty and suboptimal, but PlayerMsg::SetSink
-        // forced my hand.
-        let queue: Vec<api::MediaStatus> = todo!();
-        let status: Option<api::DecoderStatus> = todo!();
-        let curr_playing = todo!();
-        let playback_pos = todo!();
+        // get queue back
+        let full = state.ret_status.lock();
+        let queue: Vec<_> = full.tracks.iter().map(|x| x.id).collect();
+        let status: Option<api::DecoderStatus> = full
+            .tracks
+            .iter()
+            .find(|x| x.id == full.curr)
+            .map(|x| x.status.clone());
+        let curr_playing = if full.curr.is_nil() {
+            None
+        } else {
+            Some(full.curr)
+        };
+        let playback_pos = full.at.as_secs_f64();
+        let playback_len = full.len.as_secs_f64();
+        drop(full);
 
         // add to radio queue
         if queue.len() < 50 && status.is_some() {
             let next = client
                 .read()
                 .unwrap()
-                .get_closest(
-                    queue[0].id,
-                    queue.clone().into_iter().map(|x| x.id).collect(),
-                )
+                .get_closest(queue[0], queue.clone())
                 .unwrap()
                 .id;
 
             // next iteration will pickup the new id in the queue
-            todo!()
+            state
+                .yell_to_decoder
+                .send(DecoderMsg::Enqueue(next))
+                .unwrap();
         }
         state.send_ui(api::PStatus {
             err_msg: _err_msg,
@@ -142,6 +172,7 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
             status,
             curr_playing,
             playback_pos,
+            playback_len,
         });
     }
 }
@@ -150,8 +181,9 @@ struct PlayerState {
     ui_sink: Option<StreamSink<api::PStatus>>,
     _dev: rodio::OutputStream,
     _s_handle: rodio::OutputStreamHandle,
-    _s_thread: std::thread::JoinHandle<()>,
-    pub decoder: (),
+    _dec_thread: std::thread::JoinHandle<()>,
+    pub ret_status: Arc<Mutex<CurrentlyDecoding>>,
+    pub yell_to_decoder: std::sync::mpsc::Sender<DecoderMsg>,
 }
 
 impl PlayerState {
@@ -159,22 +191,27 @@ impl PlayerState {
         trace!("acqiring dev");
         let (_dev, s_handle) = find_dev()?;
         trace!("setting up decoder");
-        let decoder: () = todo!();
+        let ret_status = Arc::new(Mutex::new(CurrentlyDecoding {
+            tracks: vec![],
+            curr: Uuid::nil(),
+            at: Duration::from_secs(0),
+            len: Duration::from_secs(0),
+        }));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let decoder = ControllingDecoder::new(client, ret_status.clone(), rx);
         Ok(Self {
-            ui_sink: None,
-            _dev,
-            _s_thread: std::thread::spawn({
-                let decoder = decoder.clone();
+            _dec_thread: std::thread::spawn({
                 let s_handle = s_handle.clone();
                 move || {
                     trace!("spinning s_thread");
-
-                    // s_handle.play_raw( "source" ).unwrap();
-                    todo!()
+                    s_handle.play_raw(decoder).unwrap();
                 }
             }),
+            ui_sink: None,
+            _dev,
+            ret_status,
+            yell_to_decoder: tx,
             _s_handle: s_handle,
-            decoder,
         })
     }
 

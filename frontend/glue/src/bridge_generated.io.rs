@@ -50,15 +50,6 @@ pub extern "C" fn wire_queue__method__MioPlayer(
 }
 
 #[no_mangle]
-pub extern "C" fn wire_unqueue__method__MioPlayer(
-    port_: i64,
-    that: *mut wire_MioPlayer,
-    id: *mut wire_uint_8_list,
-) {
-    wire_unqueue__method__MioPlayer_impl(port_, that, id)
-}
-
-#[no_mangle]
 pub extern "C" fn wire_stop__method__MioPlayer(port_: i64, that: *mut wire_MioPlayer) {
     wire_stop__method__MioPlayer_impl(port_, that)
 }

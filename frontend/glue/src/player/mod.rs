@@ -9,7 +9,6 @@ pub use audio_dev::*;
 
 pub(self) struct TrackDecoderMetaData {
     pub id: Uuid,
-    pub duration: Duration,
     pub status: api::DecoderStatus,
 }
 
@@ -17,6 +16,7 @@ pub(self) struct CurrentlyDecoding {
     pub tracks: Vec<TrackDecoderMetaData>,
     pub curr: Uuid,
     pub at: Duration,
+    pub len: Duration,
 }
 
 pub(self) enum DecoderMsg {

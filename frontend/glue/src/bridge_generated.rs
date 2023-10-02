@@ -158,25 +158,6 @@ fn wire_queue__method__MioPlayer_impl(
     )
 }
 
-fn wire_unqueue__method__MioPlayer_impl(
-    port_: MessagePort,
-    that: impl Wire2Api<MioPlayer> + UnwindSafe,
-    id: impl Wire2Api<uuid::Uuid> + UnwindSafe,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap::<_, _, _, ()>(
-        WrapInfo {
-            debug_name: "unqueue__method__MioPlayer",
-            port: Some(port_),
-            mode: FfiCallMode::Normal,
-        },
-        move || {
-            let api_that = that.wire2api();
-            let api_id = id.wire2api();
-            move |task_callback| Ok(MioPlayer::unqueue(&api_that, api_id))
-        },
-    )
-}
-
 fn wire_stop__method__MioPlayer_impl(
     port_: MessagePort,
     that: impl Wire2Api<MioPlayer> + UnwindSafe,
@@ -713,6 +694,7 @@ impl support::IntoDart for DecoderStatus {
             Self::Paused => 1,
             Self::Buffering => 2,
             Self::Loading => 3,
+            Self::Dead => 4,
         }
         .into_dart()
     }
@@ -739,25 +721,6 @@ impl support::IntoDart for FakeMapItem {
 impl support::IntoDartExceptPrimitive for FakeMapItem {}
 
 impl rust2dart::IntoIntoDart<FakeMapItem> for FakeMapItem {
-    fn into_into_dart(self) -> Self {
-        self
-    }
-}
-
-impl support::IntoDart for MediaStatus {
-    fn into_dart(self) -> support::DartAbi {
-        vec![
-            self.id.into_into_dart().into_dart(),
-            self.length.into_into_dart().into_dart(),
-            self.amt_loaded.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-
-impl support::IntoDartExceptPrimitive for MediaStatus {}
-
-impl rust2dart::IntoIntoDart<MediaStatus> for MediaStatus {
     fn into_into_dart(self) -> Self {
         self
     }
@@ -799,6 +762,7 @@ impl support::IntoDart for PStatus {
             self.status.into_dart(),
             self.curr_playing.into_dart(),
             self.playback_pos.into_into_dart().into_dart(),
+            self.playback_len.into_into_dart().into_dart(),
         ]
         .into_dart()
     }

@@ -51,25 +51,18 @@ pub enum DecoderStatus {
     Paused,
     Buffering,
     Loading,
-}
-
-#[derive(Clone)]
-pub struct MediaStatus {
-    pub id: Uuid,
-    // duration in ms
-    pub length: u64,
-    // duration in ms
-    pub amt_loaded: u64,
+    Dead,
 }
 
 #[derive(Clone)]
 pub struct PStatus {
     pub err_msg: Option<String>,
-    pub queue: Vec<MediaStatus>,
+    pub queue: Vec<Uuid>,
     pub status: Option<DecoderStatus>,
     pub curr_playing: Option<Uuid>,
-    // duration in ms
-    pub playback_pos: u64,
+    // duration in seconds
+    pub playback_pos: f64,
+    pub playback_len: f64,
 }
 
 pub struct MioPlayer(pub RustOpaque<Player>);
@@ -106,11 +99,6 @@ impl MioPlayer {
     pub fn queue(&self, id: Uuid) {
         debug!("requesting queue {id:}");
         self.0.tx.send(PlayerMsg::Queue(id)).unwrap();
-    }
-
-    pub fn unqueue(&self, id: Uuid) {
-        debug!("requesting unqueue {id:}");
-        self.0.tx.send(PlayerMsg::Unqueue(id)).unwrap();
     }
 
     pub fn stop(&self) {

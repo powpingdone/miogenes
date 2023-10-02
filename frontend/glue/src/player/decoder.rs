@@ -2,6 +2,7 @@ use crate::player::*;
 use crate::*;
 use crossbeam::atomic::AtomicCell;
 use log::*;
+use parking_lot::Mutex;
 use qoaudio::{QoaDecoder, QoaRodioSource};
 use rodio::Source;
 use std::{
@@ -10,7 +11,7 @@ use std::{
     ops::Add,
     sync::{Arc, RwLock},
     thread::JoinHandle,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use uuid::Uuid;
 
@@ -34,6 +35,7 @@ struct ThreadMsgs {
     pub buf: crossbeam::channel::Receiver<f32>,
     pub status: Arc<AtomicCell<ThreadDecoderStatus>>,
     pub back_to_decoder: crossbeam::channel::Sender<ThreadDecoderYell>,
+    pub at: Arc<AtomicCell<f64>>,
 }
 
 /// Track metadata
@@ -57,19 +59,22 @@ impl TrackInner {
         let (buf_tx, buf_rx) = crossbeam::channel::bounded(16384);
         let status = Arc::new(AtomicCell::new(ThreadDecoderStatus::WaitingForThread));
         let (decoder_tx, decoder_rx) = crossbeam::channel::unbounded();
+        let at = Arc::new(AtomicCell::new(0.0));
 
         // other
         let mdata = Arc::new(OnceLock::new());
         let _t_handle = std::thread::spawn({
             let status = status.clone();
             let mdata = mdata.clone();
-            move || decoder_thread(buf_tx, status, decoder_rx, download, mdata)
+            let at = at.clone();
+            move || decoder_thread(buf_tx, status, decoder_rx, download, mdata, at)
         });
         Self {
             msgs: ThreadMsgs {
                 buf: buf_rx,
                 status,
                 back_to_decoder: decoder_tx,
+                at,
             },
             mdata,
             age,
@@ -189,9 +194,17 @@ fn decoder_thread(
     state_change: crossbeam::channel::Receiver<ThreadDecoderYell>,
     server_stream: Box<dyn Read + Send + Sync + 'static>,
     mdata: Arc<OnceLock<TrackMetadata>>,
+    at: Arc<AtomicCell<f64>>,
 ) {
     status.store(ThreadDecoderStatus::Ready);
-    decoder_thread_inner(waveform, status.clone(), state_change, server_stream, mdata);
+    decoder_thread_inner(
+        waveform,
+        status.clone(),
+        state_change,
+        server_stream,
+        mdata,
+        at,
+    );
     status.store(ThreadDecoderStatus::Dead);
 }
 
@@ -201,6 +214,7 @@ fn decoder_thread_inner(
     state_change: crossbeam::channel::Receiver<ThreadDecoderYell>,
     server_stream: Box<dyn Read + Send + Sync + 'static>,
     mdata: Arc<OnceLock<TrackMetadata>>,
+    at: Arc<AtomicCell<f64>>,
 ) {
     // setup decoder
     let mut server_stream = ReSeeker::new(server_stream);
@@ -228,6 +242,7 @@ fn decoder_thread_inner(
         sample_rate: *sample_rate,
     }));
     let mut next_samp: Option<f32> = None;
+    let mut pos = 0usize;
 
     // decoder loop
     loop {
@@ -266,6 +281,7 @@ fn decoder_thread_inner(
                         let mut new_dec = QoaDecoder::new(&mut server_stream).unwrap();
                         (0..how_many).for_each(|_| drop(new_dec.next()));
                         decoder = new_dec;
+                        pos = how_many;
                     }
                     ThreadDecoderYell::Die => unreachable!(),
                 }
@@ -290,7 +306,11 @@ fn decoder_thread_inner(
             };
         }
         match waveform.send_timeout(next_samp.unwrap(), Duration::from_millis(5)) {
-            Ok(_) => next_samp = None,
+            Ok(_) => {
+                next_samp = None;
+                pos += 1;
+                at.store(pos as f64 / mdata.get().unwrap().sample_rate as f64);
+            }
             Err(crossbeam::channel::SendTimeoutError::Timeout(_)) => {
                 status.store(ThreadDecoderStatus::Ready);
                 continue;
@@ -303,31 +323,35 @@ fn decoder_thread_inner(
 pub(super) struct ControllingDecoder {
     // outside world interaction
     client: Arc<RwLock<MioClientState>>,
-    ret_status: Arc<AtomicCell<Option<CurrentlyDecoding>>>,
+    ret_status: Arc<Mutex<CurrentlyDecoding>>,
     frontend_poll: std::sync::mpsc::Receiver<DecoderMsg>,
+    time_since_last_msg: std::time::Instant,
     // self status
     queue: HashMap<Uuid, TrackInner>,
     order: VecDeque<Uuid>,
     pos: usize,
     age: u64,
     active: bool,
+    time_since_last_cleanup: std::time::Instant,
 }
 
 impl ControllingDecoder {
     pub fn new(
         client: Arc<RwLock<MioClientState>>,
-//        ret_status: Arc<AtomicCell<Option<CurrentlyDecoding>>>,
+        ret_status: Arc<Mutex<CurrentlyDecoding>>,
         frontend_poll: std::sync::mpsc::Receiver<DecoderMsg>,
     ) -> Self {
         Self {
             client,
-            ret_status: todo!(),
+            ret_status,
             frontend_poll,
+            time_since_last_msg: Instant::now(),
             queue: HashMap::new(),
             order: VecDeque::new(),
             pos: 0,
             age: 0,
             active: false,
+            time_since_last_cleanup: Instant::now(),
         }
     }
 
@@ -346,6 +370,7 @@ impl Iterator for ControllingDecoder {
     type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // handle outside world msg
         let action = match self.frontend_poll.try_recv() {
             Ok(x) => Some(x),
             Err(std::sync::mpsc::TryRecvError::Empty) => None,
@@ -418,7 +443,85 @@ impl Iterator for ControllingDecoder {
             }
         }
 
-        // TODO: auto cleanup via self.age
+        // status update
+        let instant_now = Instant::now();
+        if self.time_since_last_msg.duration_since(instant_now) > Duration::from_millis(50) {
+            let mut lock = self.ret_status.try_lock();
+            if let Some(ref mut status) = lock {
+                match self.get_curr() {
+                    Some(track) => {
+                        let mdata = track.mdata.get();
+                        if let Some(mdata) = mdata {
+                            // set status
+                            status.len = mdata.len;
+                            status.at = Duration::from_secs_f64(track.msgs.at.load());
+                            status.curr = self.order[self.pos];
+                            status.tracks = {
+                                self.order
+                                    .iter()
+                                    .copied()
+                                    .map(|x| TrackDecoderMetaData {
+                                        id: x,
+                                        status: {
+                                            let (status, is_empty) = {
+                                                let msgs = &self.queue[&x].msgs;
+                                                (msgs.status.load(), msgs.buf.is_empty())
+                                            };
+                                            if !is_empty {
+                                                if self.active {
+                                                    api::DecoderStatus::Playing
+                                                } else {
+                                                    api::DecoderStatus::Paused
+                                                }
+                                            } else {
+                                                match status {
+                                                    ThreadDecoderStatus::Decoding => {
+                                                        api::DecoderStatus::Buffering
+                                                    }
+                                                    ThreadDecoderStatus::Ready
+                                                    | ThreadDecoderStatus::Loading
+                                                    | ThreadDecoderStatus::WaitingForThread => {
+                                                        api::DecoderStatus::Loading
+                                                    }
+                                                    ThreadDecoderStatus::Dead => {
+                                                        api::DecoderStatus::Dead
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    })
+                                    .collect()
+                            };
+                            // else don't do anything. 50 ms will pass and it should be set by then
+                        }
+                    }
+                    None => {
+                        status.at = Duration::from_secs(0);
+                        status.len = Duration::from_secs(0);
+                        status.tracks.clear();
+                        status.curr = Uuid::nil();
+                    }
+                }
+                self.time_since_last_msg = instant_now;
+            }
+        }
+
+        // cleanup
+        if self.time_since_last_cleanup.duration_since(Instant::now()) > Duration::from_secs(1) {
+            loop {
+                let Some(x) = self.order.get(0).cloned() else {break;};
+                let Some(curr) = self.get_curr() else {break;};
+                if curr.age - self.queue[&x].age < 25 {
+                    break;
+                }
+                if self.queue[&x].msgs.status.load() == ThreadDecoderStatus::Dead {
+                    self.order.pop_front();
+                    self.queue.remove(&x);
+                } 
+            }
+        }
+
+        // give back current sample
         if !self.active || self.get_curr().is_none() {
             Some(0.0)
         } else {
