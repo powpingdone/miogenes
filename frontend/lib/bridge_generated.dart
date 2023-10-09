@@ -421,16 +421,20 @@ class PStatus {
   final List<UuidValue> queue;
   final DecoderStatus? status;
   final UuidValue? currPlaying;
-  final double playbackPos;
-  final double playbackLen;
+  final int playbackPosS;
+  final int playbackPosMs;
+  final int playbackLenS;
+  final int playbackLenMs;
 
   const PStatus({
     this.errMsg,
     required this.queue,
     this.status,
     this.currPlaying,
-    required this.playbackPos,
-    required this.playbackLen,
+    required this.playbackPosS,
+    required this.playbackPosMs,
+    required this.playbackLenS,
+    required this.playbackLenMs,
   });
 }
 
@@ -1097,10 +1101,6 @@ class MioGlueImpl implements MioGlue {
     return raw as double;
   }
 
-  double _wire2api_f64(dynamic raw) {
-    return raw as double;
-  }
-
   FakeMapItem _wire2api_fake_map_item(dynamic raw) {
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
@@ -1165,15 +1165,17 @@ class MioGlueImpl implements MioGlue {
 
   PStatus _wire2api_p_status(dynamic raw) {
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return PStatus(
       errMsg: _wire2api_opt_String(arr[0]),
       queue: _wire2api_Uuids(arr[1]),
       status: _wire2api_opt_box_autoadd_decoder_status(arr[2]),
       currPlaying: _wire2api_opt_Uuid(arr[3]),
-      playbackPos: _wire2api_f64(arr[4]),
-      playbackLen: _wire2api_f64(arr[5]),
+      playbackPosS: _wire2api_u64(arr[4]),
+      playbackPosMs: _wire2api_u64(arr[5]),
+      playbackLenS: _wire2api_u64(arr[6]),
+      playbackLenMs: _wire2api_u64(arr[7]),
     );
   }
 
@@ -1190,6 +1192,10 @@ class MioGlueImpl implements MioGlue {
       disk: _wire2api_opt_box_autoadd_i64(arr[5]),
       track: _wire2api_opt_box_autoadd_i64(arr[6]),
     );
+  }
+
+  int _wire2api_u64(dynamic raw) {
+    return castInt(raw);
   }
 
   int _wire2api_u8(dynamic raw) {

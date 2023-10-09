@@ -761,8 +761,10 @@ impl support::IntoDart for PStatus {
             self.queue.into_into_dart().into_dart(),
             self.status.into_dart(),
             self.curr_playing.into_dart(),
-            self.playback_pos.into_into_dart().into_dart(),
-            self.playback_len.into_into_dart().into_dart(),
+            self.playback_pos_s.into_into_dart().into_dart(),
+            self.playback_pos_ms.into_into_dart().into_dart(),
+            self.playback_len_s.into_into_dart().into_dart(),
+            self.playback_len_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }

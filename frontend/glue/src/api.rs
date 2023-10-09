@@ -60,9 +60,10 @@ pub struct PStatus {
     pub queue: Vec<Uuid>,
     pub status: Option<DecoderStatus>,
     pub curr_playing: Option<Uuid>,
-    // duration in seconds
-    pub playback_pos: f64,
-    pub playback_len: f64,
+    pub playback_pos_s: u64,
+    pub playback_pos_ms: u32,
+    pub playback_len_s: u64,
+    pub playback_len_ms: u32,
 }
 
 pub struct MioPlayer(pub RustOpaque<Player>);

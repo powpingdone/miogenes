@@ -79,8 +79,10 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
                             queue: Vec::new(),
                             status: None,
                             curr_playing: None,
-                            playback_pos: 0.0,
-                            playback_len: 0.0,
+                            playback_pos_s: 0,
+                            playback_pos_ms: 0,
+                            playback_len_s: 0,
+                            playback_len_ms: 0,
                         })
                     });
                 }
@@ -147,8 +149,10 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
         } else {
             Some(full.curr)
         };
-        let playback_pos = full.at.as_secs_f64();
-        let playback_len = full.len.as_secs_f64();
+        let playback_pos_s = full.at.as_secs();
+        let playback_pos_ms = full.at.subsec_millis();
+        let playback_len_s = full.len.as_secs();
+        let playback_len_ms = full.len.subsec_millis();
         drop(full);
 
         // add to radio queue
@@ -171,8 +175,10 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
             queue,
             status,
             curr_playing,
-            playback_pos,
-            playback_len,
+            playback_pos_s,
+            playback_pos_ms,
+            playback_len_s,
+            playback_len_ms,
         });
     }
 }

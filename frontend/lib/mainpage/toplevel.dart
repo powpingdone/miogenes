@@ -9,6 +9,7 @@ import 'package:frontend/main.dart';
 import 'package:frontend/mainpage/folderview.dart';
 import 'package:frontend/mainpage/player.dart' as ui_player;
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 import 'albums.dart';
 import 'upload.dart';
@@ -27,7 +28,8 @@ class MainNav extends StatelessWidget {
             var mioState = mtl.mioClient;
             // TODO: android
             return await AudioService.init(
-              builder: () => MioPlayerState(api.newPlayer(client: mioState)),
+              builder: () =>
+                  MioPlayerState(api.newPlayer(client: mioState), mioState),
               // config:
             );
           })
@@ -36,37 +38,137 @@ class MainNav extends StatelessWidget {
 }
 
 // Music audio player state
-class MioPlayerState extends BaseAudioHandler {
+class MioPlayerState extends BaseAudioHandler with SeekHandler {
   // TODO: android
-  MioPlayerState(this._mioInternal) {
-    _mioStatusStream = _mioInternal.infoStream();
+  MioPlayerState(this._mioPlayer, this._mioClient) {
+    _mioStatusStream = _mioPlayer.infoStream();
     _mioStatusListener = _mioStatusStream.listen(_update);
   }
-  final MioPlayer _mioInternal;
+  final MioPlayer _mioPlayer;
+  final MioClient _mioClient;
   late Stream<PStatus> _mioStatusStream;
   // ignore: unused_field
   late StreamSubscription<void> _mioStatusListener;
 
-  void _update(PStatus status) async {}
+  // internal player stuff
+  UuidValue? curr;
+  Track? track;
+  Album? album;
+  Artist? artist;
+  CoverArt? coverArt;
+  BigInt futureId = BigInt.zero;
+  Future<void>? who;
+
+  void _update(PStatus status) {
+    // setup background task if id is different
+    if (curr != status.currPlaying) {
+      track = null;
+      album = null;
+      artist = null;
+      coverArt = null;
+      who = null;
+      curr = status.currPlaying;
+      futureId += BigInt.one;
+      if (curr != null) {
+        who = Future(() async {
+          final futureId = this.futureId;
+          final id = status.currPlaying!;
+          final trackMdata = await _mioClient.getTrack(id: id);
+          final Future<Album>? albumMdataFuture = trackMdata.album == null
+              ? _mioClient.getAlbum(id: trackMdata.album!)
+              : null;
+          final Future<Artist>? artistMdataFuture = trackMdata.artist == null
+              ? _mioClient.getArtist(id: trackMdata.artist!)
+              : null;
+          final Future<CoverArt>? coverArtMdataFuture =
+              trackMdata.coverArt == null
+                  ? _mioClient.getCoverArt(id: trackMdata.coverArt!)
+                  : null;
+          final Album? albumMdata = await albumMdataFuture;
+          final Artist? artistMdata = await artistMdataFuture;
+          final CoverArt? coverArtMdata = await coverArtMdataFuture;
+          if (this.futureId == futureId) {
+            track = trackMdata;
+            album = albumMdata;
+            artist = artistMdata;
+            coverArt = coverArtMdata;
+          }
+        });
+      }
+    }
+
+// playback state
+    playbackState.add(PlaybackState(
+        processingState: const {
+          null: AudioProcessingState.idle,
+          DecoderStatus.Loading: AudioProcessingState.loading,
+          DecoderStatus.Buffering: AudioProcessingState.buffering,
+          DecoderStatus.Paused: AudioProcessingState.ready,
+          DecoderStatus.Playing: AudioProcessingState.ready,
+          DecoderStatus.Dead: AudioProcessingState.completed,
+        }[status.status]!,
+        playing: !(status.status == DecoderStatus.Paused ||
+            status.status == DecoderStatus.Dead),
+        updatePosition: Duration(
+            seconds: status.playbackPosS, milliseconds: status.playbackPosMs),
+        controls: [
+          MediaControl.rewind,
+          if (!(status.status == DecoderStatus.Paused ||
+              status.status == DecoderStatus.Dead))
+            MediaControl.play
+          else
+            MediaControl.pause,
+          MediaControl.stop,
+          MediaControl.fastForward,
+        ],
+        systemActions: const {
+          MediaAction.seek,
+          MediaAction.seekForward,
+          MediaAction.seekBackward,
+        }));
+
+    // media item
+    final String title;
+    if (track?.title == null) {
+      if (curr == null) {
+        title = "";
+      } else {
+        title = "Loading...";
+      }
+    } else {
+      title = track!.title;
+    }
+    mediaItem.add(MediaItem(
+        id: status.currPlaying.toString(),
+        title: title,
+        album: album?.title,
+        artist: artist?.name,
+        artUri: coverArt != null
+            ? Uri.dataFromBytes(coverArt!.webmBlob.toList(),
+                mimeType: "image/webp")
+            : null,
+        duration: Duration(
+            seconds: status.playbackLenS, milliseconds: status.playbackLenMs)));
+  }
 
   @override
-  Future<void> play() => _mioInternal.play();
+  Future<void> play() => _mioPlayer.play();
 
   @override
-  Future<void> pause() => _mioInternal.pause();
+  Future<void> pause() => _mioPlayer.pause();
 
   @override
-  Future<void> stop() => _mioInternal.stop();
+  Future<void> stop() => _mioPlayer.stop();
 
   @override
-  Future<void> skipToNext() => _mioInternal.forward();
+  Future<void> skipToNext() => _mioPlayer.forward();
 
   @override
-  Future<void> skipToPrevious() => _mioInternal.backward();
+  Future<void> skipToPrevious() => _mioPlayer.backward();
 
   @override
   Future<void> seek(Duration position) =>
-      _mioInternal.seek(ms: position.inMilliseconds);
+      _mioPlayer.seek(ms: position.inMilliseconds);
 }
 
 // UI state for post login

@@ -509,15 +509,19 @@ impl Iterator for ControllingDecoder {
         // cleanup
         if self.time_since_last_cleanup.duration_since(Instant::now()) > Duration::from_secs(1) {
             loop {
-                let Some(x) = self.order.get(0).cloned() else {break;};
-                let Some(curr) = self.get_curr() else {break;};
+                let Some(x) = self.order.get(0).cloned() else {
+                    break;
+                };
+                let Some(curr) = self.get_curr() else {
+                    break;
+                };
                 if curr.age - self.queue[&x].age < 25 {
                     break;
                 }
                 if self.queue[&x].msgs.status.load() == ThreadDecoderStatus::Dead {
                     self.order.pop_front();
                     self.queue.remove(&x);
-                } 
+                }
             }
         }
 
