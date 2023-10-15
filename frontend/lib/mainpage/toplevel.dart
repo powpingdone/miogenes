@@ -51,27 +51,29 @@ class MioPlayerState extends BaseAudioHandler with SeekHandler {
   late StreamSubscription<void> _mioStatusListener;
 
   // internal player stuff
-  UuidValue? curr;
-  Track? track;
-  Album? album;
-  Artist? artist;
-  CoverArt? coverArt;
-  BigInt futureId = BigInt.zero;
-  Future<void>? who;
+  UuidValue? _curr;
+  Track? _track;
+  Album? _album;
+  Artist? _artist;
+  CoverArt? _coverArt;
+  BigInt _futureId = BigInt.zero;
+
+  void enqueue(UuidValue id) {
+    _mioPlayer.queue(id: id);
+  }
 
   void _update(PStatus status) {
     // setup background task if id is different
-    if (curr != status.currPlaying) {
-      track = null;
-      album = null;
-      artist = null;
-      coverArt = null;
-      who = null;
-      curr = status.currPlaying;
-      futureId += BigInt.one;
-      if (curr != null) {
-        who = Future(() async {
-          final futureId = this.futureId;
+    if (_curr != status.currPlaying) {
+      _track = null;
+      _album = null;
+      _artist = null;
+      _coverArt = null;
+      _curr = status.currPlaying;
+      _futureId += BigInt.one;
+      if (_curr != null) {
+        Future(() async {
+          final futureId = _futureId;
           final id = status.currPlaying!;
           final trackMdata = await _mioClient.getTrack(id: id);
           final Future<Album>? albumMdataFuture = trackMdata.album == null
@@ -87,11 +89,11 @@ class MioPlayerState extends BaseAudioHandler with SeekHandler {
           final Album? albumMdata = await albumMdataFuture;
           final Artist? artistMdata = await artistMdataFuture;
           final CoverArt? coverArtMdata = await coverArtMdataFuture;
-          if (this.futureId == futureId) {
-            track = trackMdata;
-            album = albumMdata;
-            artist = artistMdata;
-            coverArt = coverArtMdata;
+          if (_futureId == futureId) {
+            _track = trackMdata;
+            _album = albumMdata;
+            _artist = artistMdata;
+            _coverArt = coverArtMdata;
           }
         });
       }
@@ -129,27 +131,29 @@ class MioPlayerState extends BaseAudioHandler with SeekHandler {
 
     // media item
     final String title;
-    if (track?.title == null) {
-      if (curr == null) {
+    if (_track?.title == null) {
+      if (_curr == null) {
         title = "";
       } else {
         title = "Loading...";
       }
     } else {
-      title = track!.title;
+      title = _track!.title;
     }
     mediaItem.add(MediaItem(
         id: status.currPlaying.toString(),
         title: title,
-        album: album?.title,
-        artist: artist?.name,
-        artUri: coverArt != null
-            ? Uri.dataFromBytes(coverArt!.webmBlob.toList(),
+        album: _album?.title,
+        artist: _artist?.name,
+        artUri: _coverArt != null
+            ? Uri.dataFromBytes(_coverArt!.webmBlob.toList(),
                 mimeType: "image/webp")
             : null,
         duration: Duration(
             seconds: status.playbackLenS, milliseconds: status.playbackLenMs)));
   }
+
+  Future<void> toggle() => _mioPlayer.toggle();
 
   @override
   Future<void> play() => _mioPlayer.play();

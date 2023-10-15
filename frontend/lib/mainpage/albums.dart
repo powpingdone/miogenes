@@ -68,7 +68,7 @@ class _AlbumPreviewState extends State<AlbumPreview> {
 
   @override
   Widget build(BuildContext context) {
-    final player = Provider.of<MioPlayerState>(context).audioService;
+    final player = Provider.of<MioPlayerState>(context);
     final mioState = Provider.of<MioTopLevel>(context).mioClient;
     album ??= mioState.getAlbum(id: widget.albumId);
 
@@ -91,8 +91,8 @@ class _AlbumPreviewState extends State<AlbumPreview> {
                     padding: const EdgeInsets.all(4.0),
                     child: TextButton(
                         onPressed: () {
-                          player.queue(
-                              id: (albumSnapshot.data)!.tracks[Random().nextInt(
+                          player.enqueue(
+                              (albumSnapshot.data)!.tracks[Random().nextInt(
                                   (albumSnapshot.data!.tracks.length))]);
                           player.play();
                         },

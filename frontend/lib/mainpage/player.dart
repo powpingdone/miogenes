@@ -1,3 +1,5 @@
+import "dart:ffi";
+
 import "package:flutter/material.dart";
 import "package:flutter_spinkit/flutter_spinkit.dart";
 import "package:frontend/ffi.dart";
@@ -25,26 +27,10 @@ class _PlayerState extends State<Player> {
   @override
   Widget build(BuildContext context) {
     final mioState = Provider.of<MioTopLevel>(context).mioClient;
-    final player = Provider.of<MioPlayerState>(context).audioService;
-    stream ??= player.infoStream();
+    final player = Provider.of<MioPlayerState>(context);
     return StreamBuilder(
-        stream: stream,
+        stream: player.playbackState.stream,
         builder: (context, playerStatus) {
-          // if data has error
-          if (playerStatus.data?.errMsg != null) {
-            errMsg = playerStatus.data?.errMsg;
-          }
-          if (errMsg != null) {
-            return Column(
-              children: [
-                const Text("An error has occurred."),
-                Text(errMsg!),
-                const Text("This may be a bug in the software itself. "
-                    "You may wish to report it at https://github.com/powpingdone/miogenes"),
-              ],
-            );
-          }
-
           if (playerStatus.hasError && errMsg == null) {
             throw UnimplementedError(extractMsg(playerStatus.error));
           } else if (!playerStatus.hasData) {
@@ -52,22 +38,17 @@ class _PlayerState extends State<Player> {
               color: Theme.of(context).colorScheme.primary,
             );
           }
-          // this is allowed to be late data, too.
-          PStatus data = playerStatus.data!;
+          // pickup player state, and currently playing
+          final PlaybackState data = playerStatus.data!;
+          final pb = player.mediaItem;
 
           // is there a "currently playing" track?
-          if (data.queue.isEmpty) {
+          if (pb.value == null) {
             // TODO: return equiv layout to a "currently playing" layout
             return Container(
                 alignment: Alignment.topLeft,
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                 child: const Center(child: Text("Not currently playing...")));
-          }
-
-          // begin fetch
-          if (data.queue.first != currFetched) {
-            currFetched = data.queue.first;
-            fetchTrack = mioState.getTrack(id: currFetched);
           }
 
           return FutureBuilder(
@@ -99,8 +80,8 @@ class _PlayerState extends State<Player> {
                         MediaControls(
                           paused: playerStatus.data!.paused,
                         ), // Play/Pause, Next
-                        VolumeSlider(
-                          vol: playerStatus.data!.volume,
+                        DurationSlider(
+                          atDur: playerStatus.data!.volume,
                         ), // Volume Control
                       ],
                     ),
@@ -133,7 +114,8 @@ class TitleArtistAlbumText extends StatefulWidget {
 }
 
 class _TitleArtistAlbumTextState extends State<TitleArtistAlbumText> {
-  Future<List<String?>>? albumArtistFetch;
+  // TODO: use currently playing mdata
+  //Future<List<String?>>? albumArtistFetch;
 
   @override
   Widget build(BuildContext context) {
@@ -194,40 +176,40 @@ class MediaControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var player = Provider.of<MioPlayerState>(context).audioService;
+    var player = Provider.of<MioPlayerState>(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         IconButton(
-            onPressed: () => player.toggle(),
+            onPressed: () async => await player.toggle(),
             icon: Icon(
                 paused ? Icons.play_circle_outline : Icons.pause_circle_outline,
                 size: 72)),
         IconButton(
-            onPressed: () => player.forward(),
+            onPressed: () async => await player.skipToNext(),
             icon: const Icon(Icons.skip_next, size: 48)),
       ],
     );
   }
 }
 
-class VolumeSlider extends StatelessWidget {
-  const VolumeSlider({
+class DurationSlider extends StatelessWidget {
+  const DurationSlider({
     super.key,
-    required this.vol,
+    required this.atDur,
   });
 
-  final double vol;
+  final Duration atDur ;
 
   @override
   Widget build(BuildContext context) {
-    var player = Provider.of<MioPlayerState>(context).audioService;
+    var player = Provider.of<MioPlayerState>(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Icon(Icons.volume_up),
         Slider(
-            value: vol,
+            value: atDur,
             min: 0.0,
             max: 1.0,
             onChanged: (newVol) => player.volume(volume: newVol)),
