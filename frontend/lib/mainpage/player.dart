@@ -78,10 +78,15 @@ class _PlayerState extends State<Player> {
                           ),
                         ),
                         MediaControls(
-                          paused: playerStatus.data!.paused,
+                          paused: !playerStatus.data!.playing,
                         ), // Play/Pause, Next
                         DurationSlider(
-                          atDur: playerStatus.data!.volume,
+                          atDur: player.mediaItem.value?.duration != null
+                              ? playerStatus
+                                      .data!.updatePosition.inMilliseconds /
+                                  player
+                                      .mediaItem.value!.duration!.inMilliseconds
+                              : 1.0,
                         ), // Volume Control
                       ],
                     ),
@@ -114,9 +119,6 @@ class TitleArtistAlbumText extends StatefulWidget {
 }
 
 class _TitleArtistAlbumTextState extends State<TitleArtistAlbumText> {
-  // TODO: use currently playing mdata
-  //Future<List<String?>>? albumArtistFetch;
-
   @override
   Widget build(BuildContext context) {
     var mioPlayer = Provider.of<MioPlayerState>(context);
@@ -186,25 +188,40 @@ class DurationSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var player = Provider.of<MioPlayerState>(context);
-    return Row(
+    final player = Provider.of<MioPlayerState>(context);
+    final currDur = player.mediaItem.value?.duration;
+    return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(Icons.volume_up),
         Slider(
             value: atDur,
             min: 0.0,
             max: 1.0,
             onChanged: (newVal) {
-              final x = player.mediaItem.value;
               final Duration dur;
-              if (x?.duration == null) {
-                dur = const Duration();
+              if (currDur == null) {
+                dur = const Duration(seconds: 0);
               } else {
-                dur = Duration(milliseconds: (newVal * x!.duration!.inMilliseconds).toInt());
+                dur = Duration(
+                    milliseconds: (newVal * currDur.inMilliseconds).toInt());
               }
               player.seek(dur);
             }),
+        currDur != null
+            ? Text.rich(TextSpan(
+                text: Duration(
+                        milliseconds: (atDur * currDur.inMilliseconds).toInt())
+                    .toString()
+                    .split('.')[0],
+                style: TextStyle(color: Theme.of(context).hintColor),
+                children: [
+                    const TextSpan(
+                        text: " / ",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 24.0)),
+                    TextSpan(text: currDur.toString().split('.')[0])
+                  ]))
+            : Container(),
       ],
     );
   }

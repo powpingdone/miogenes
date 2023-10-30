@@ -91,9 +91,8 @@ class _AlbumPreviewState extends State<AlbumPreview> {
                     padding: const EdgeInsets.all(4.0),
                     child: TextButton(
                         onPressed: () {
-                          player.enqueue(
-                              (albumSnapshot.data)!.tracks[Random().nextInt(
-                                  (albumSnapshot.data!.tracks.length))]);
+                          player.enqueue((albumSnapshot.data)!.tracks[Random()
+                              .nextInt((albumSnapshot.data!.tracks.length))]);
                           player.play();
                         },
                         style: ButtonStyle(
