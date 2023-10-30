@@ -119,36 +119,19 @@ class _TitleArtistAlbumTextState extends State<TitleArtistAlbumText> {
 
   @override
   Widget build(BuildContext context) {
-    var mioState = Provider.of<MioTopLevel>(context).mioClient;
-    albumArtistFetch ??= Future(() async {
-      Future<Album>? albumFetch =
-          widget.album != null ? mioState.getAlbum(id: widget.album!) : null;
-      Future<Artist>? artistFetch =
-          widget.artist != null ? mioState.getArtist(id: widget.artist!) : null;
-      String? album, artist;
-      try {
-        album = (await albumFetch)?.title;
-      } catch (_) {
-        album = "?";
-      }
-      try {
-        artist = (await artistFetch)?.name;
-      } catch (_) {
-        artist = "?";
-      }
-      return [album, artist];
-    });
-
+    var mioPlayer = Provider.of<MioPlayerState>(context);
     final title = TextScroll(
       widget.title,
       mode: TextScrollMode.bouncing,
       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
     );
-    return FutureBuilder(
-        future: albumArtistFetch,
+    return StreamBuilder(
+        stream: mioPlayer.mediaItem.stream,
         builder: (context, snapshot) {
-          final album = snapshot.data?[0] == null ? "..." : snapshot.data![0]!;
-          final artist = snapshot.data?[1] == null ? "..." : snapshot.data![1]!;
+          final album =
+              snapshot.data?.album == null ? "..." : snapshot.data!.album!;
+          final artist =
+              snapshot.data?.artist == null ? "..." : snapshot.data!.artist!;
           return Column(
             children: [
               title,
@@ -199,7 +182,7 @@ class DurationSlider extends StatelessWidget {
     required this.atDur,
   });
 
-  final Duration atDur ;
+  final double atDur;
 
   @override
   Widget build(BuildContext context) {
@@ -212,7 +195,16 @@ class DurationSlider extends StatelessWidget {
             value: atDur,
             min: 0.0,
             max: 1.0,
-            onChanged: (newVol) => player.volume(volume: newVol)),
+            onChanged: (newVal) {
+              final x = player.mediaItem.value;
+              final Duration dur;
+              if (x?.duration == null) {
+                dur = const Duration();
+              } else {
+                dur = Duration(milliseconds: (newVal * x!.duration!.inMilliseconds).toInt());
+              }
+              player.seek(dur);
+            }),
       ],
     );
   }
