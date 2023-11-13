@@ -21,8 +21,8 @@ class MainNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(providers: [
       ChangeNotifierProvider(create: (_) => MainNavTopLevel()),
-      Provider(
-          lazy: false,
+      FutureProvider(
+          initialData: null,
           create: (context) async {
             final mtl = Provider.of<MioTopLevel>(context, listen: false);
             var mioState = mtl.mioClient;

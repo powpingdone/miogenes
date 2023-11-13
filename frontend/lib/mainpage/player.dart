@@ -20,14 +20,21 @@ class Player extends StatefulWidget {
 
 class _PlayerState extends State<Player> {
   Stream<PStatus>? stream;
-  UuidValue currFetched = UuidValue("00000000-0000-0000-0000-000000000000");
+  UuidValue currFetched =
+      UuidValue.fromString("00000000-0000-0000-0000-000000000000");
   Future<Track>? fetchTrack;
   String? errMsg;
 
   @override
   Widget build(BuildContext context) {
-    final mioState = Provider.of<MioTopLevel>(context).mioClient;
-    final player = Provider.of<MioPlayerState>(context);
+    final player = Provider.of<MioPlayerState?>(context);
+    // Has the AudioService finished loading?
+    if (player == null) {
+      return SpinKitWanderingCubes(
+        color: Theme.of(context).colorScheme.primary,
+      );
+    }
+    // all other invocations can just assert it exists
     return StreamBuilder(
         stream: player.playbackState.stream,
         builder: (context, playerStatus) {
@@ -121,7 +128,7 @@ class TitleArtistAlbumText extends StatefulWidget {
 class _TitleArtistAlbumTextState extends State<TitleArtistAlbumText> {
   @override
   Widget build(BuildContext context) {
-    var mioPlayer = Provider.of<MioPlayerState>(context);
+    var mioPlayer = Provider.of<MioPlayerState?>(context)!;
     final title = TextScroll(
       widget.title,
       mode: TextScrollMode.bouncing,
@@ -161,7 +168,7 @@ class MediaControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var player = Provider.of<MioPlayerState>(context);
+    var player = Provider.of<MioPlayerState?>(context)!;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -188,7 +195,7 @@ class DurationSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final player = Provider.of<MioPlayerState>(context);
+    final player = Provider.of<MioPlayerState?>(context)!;
     final currDur = player.mediaItem.value?.duration;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
