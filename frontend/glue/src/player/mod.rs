@@ -1,4 +1,3 @@
-use crate::api;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -9,7 +8,6 @@ pub use audio_dev::*;
 
 pub(self) struct TrackDecoderMetaData {
     pub id: Uuid,
-    pub status: api::DecoderStatus,
 }
 
 pub(self) struct CurrentlyDecoding {

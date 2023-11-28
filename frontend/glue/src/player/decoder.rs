@@ -460,36 +460,7 @@ impl Iterator for ControllingDecoder {
                                 self.order
                                     .iter()
                                     .copied()
-                                    .map(|x| TrackDecoderMetaData {
-                                        id: x,
-                                        status: {
-                                            let (status, is_empty) = {
-                                                let msgs = &self.queue[&x].msgs;
-                                                (msgs.status.load(), msgs.buf.is_empty())
-                                            };
-                                            if !is_empty {
-                                                if self.active {
-                                                    api::DecoderStatus::Playing
-                                                } else {
-                                                    api::DecoderStatus::Paused
-                                                }
-                                            } else {
-                                                match status {
-                                                    ThreadDecoderStatus::Decoding => {
-                                                        api::DecoderStatus::Buffering
-                                                    }
-                                                    ThreadDecoderStatus::Ready
-                                                    | ThreadDecoderStatus::Loading
-                                                    | ThreadDecoderStatus::WaitingForThread => {
-                                                        api::DecoderStatus::Loading
-                                                    }
-                                                    ThreadDecoderStatus::Dead => {
-                                                        api::DecoderStatus::Dead
-                                                    }
-                                                }
-                                            }
-                                        },
-                                    })
+                                    .map(|x| TrackDecoderMetaData { id: x })
                                     .collect()
                             };
                             // else don't do anything. 50 ms will pass and it should be set by then

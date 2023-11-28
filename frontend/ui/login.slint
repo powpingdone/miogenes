@@ -1,0 +1,53 @@
+// Login ui part
+import { VerticalBox , LineEdit , HorizontalBox, Button } from "std-widgets.slint";
+
+export global LoginBoxCB {
+	callback check_url(string);
+	callback attempt_login(string, string, string);
+}
+
+export component LoginBox inherits HorizontalBox{
+	in-out property <string> server_url: "";
+	in-out property <string> username: "";
+	in-out property <string> password: "";
+	in property <bool> url_is_valid: false;
+
+	alignment: LayoutAlignment.center;
+	
+	VerticalBox {
+		alignment: LayoutAlignment.center;
+		min-width: 320px;
+
+		LineEdit {
+			text: server_url;
+			placeholder-text: @tr("Server URL");
+		}
+		
+		if (url-is-valid): 
+		LineEdit {
+			text: username;
+			placeholder-text: @tr("Username");
+		}
+		
+		if (url-is-valid): 
+		LineEdit {
+			text: password;
+			placeholder-text: @tr("Password");
+			input-type: InputType.password;
+		}
+
+		HorizontalBox {
+			alignment: LayoutAlignment.center;
+
+			Button {
+				text: @tr("Connect to URL");
+				clicked => { LoginBoxCB.check_url(server_url) } 
+			}
+			
+			if (url-is-valid):
+			Button {
+				clicked => { LoginBoxCB.attempt_login(server_url, username, password) }
+			}
+		}
+	}
+}

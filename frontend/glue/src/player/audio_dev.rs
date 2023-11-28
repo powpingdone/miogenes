@@ -1,8 +1,7 @@
 use super::{CurrentlyDecoding, DecoderMsg};
+use crate::player::decoder::ControllingDecoder;
 use crate::*;
-use crate::{api::DecoderStatus, player::decoder::ControllingDecoder};
 use crossbeam::channel::{Receiver, RecvTimeoutError};
-use flutter_rust_bridge::StreamSink;
 use log::*;
 use parking_lot::Mutex;
 use rodio::Source;
@@ -13,9 +12,8 @@ use std::{
 };
 use uuid::Uuid;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum PlayerMsg {
-    SetSink(StreamSink<api::PStatus>),
     Play(Option<Uuid>),
     Pause,
     Toggle,
@@ -24,22 +22,6 @@ pub(crate) enum PlayerMsg {
     Forward,
     Backward,
     Seek(Duration),
-}
-
-impl std::fmt::Debug for PlayerMsg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::SetSink(_) => f.debug_tuple("SetSink").finish(),
-            Self::Play(arg0) => f.debug_tuple("Play").field(arg0).finish(),
-            Self::Pause => write!(f, "Pause"),
-            Self::Toggle => write!(f, "Toggle"),
-            Self::Queue(arg0) => f.debug_tuple("Queue").field(arg0).finish(),
-            Self::Stop => write!(f, "Stop"),
-            Self::Forward => write!(f, "Forward"),
-            Self::Backward => write!(f, "Backward"),
-            Self::Seek(dur) => f.debug_tuple("Seek").field(dur).finish(),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -63,40 +45,12 @@ impl Player {
 
 fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>) {
     trace!("opening track manager");
-    let mut state = match PlayerState::new(client.clone()) {
-        Ok(x) => x,
-        Err(err) => loop {
-            let mut sink = None;
-            let recv = rx.recv();
-            match recv {
-                Ok(x) => {
-                    if let PlayerMsg::SetSink(sink_now) = x {
-                        sink = Some(sink_now);
-                    }
-                    sink.as_ref().map(|sink| {
-                        sink.add(api::PStatus {
-                            err_msg: Some(err.to_string()),
-                            queue: Vec::new(),
-                            status: None,
-                            curr_playing: None,
-                            playback_pos_s: 0,
-                            playback_pos_ms: 0,
-                            playback_len_s: 0,
-                            playback_len_ms: 0,
-                        })
-                    });
-                }
-                Err(_) => return,
-            }
-        },
-    };
+    let mut state = PlayerState::new(client.clone()).unwrap();
     trace!("entering event loop");
     loop {
-        let mut _err_msg = None;
         let recv = rx.recv_deadline(Instant::now() + Duration::from_millis(50));
         match recv {
             Ok(msg) => match msg {
-                PlayerMsg::SetSink(new_sink) => state.set_ui_sink(new_sink),
                 PlayerMsg::Play(id) => {
                     if let Some(id) = id {
                         state.yell_to_decoder.send(DecoderMsg::Reset).unwrap();
@@ -106,19 +60,7 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
                 }
                 PlayerMsg::Pause => state.yell_to_decoder.send(DecoderMsg::Pause).unwrap(),
                 PlayerMsg::Toggle => {
-                    let full = state.ret_status.lock();
-                    let status: Option<&api::DecoderStatus> = full
-                        .tracks
-                        .iter()
-                        .find(|x| x.id == full.curr)
-                        .map(|x| &x.status);
-                    if let Some(decoder_stat) = status {
-                        if *decoder_stat == DecoderStatus::Playing {
-                            state.yell_to_decoder.send(DecoderMsg::Pause).unwrap();
-                        } else {
-                            state.yell_to_decoder.send(DecoderMsg::Play).unwrap();
-                        }
-                    }
+                    todo!()
                 }
                 PlayerMsg::Queue(id) => {
                     state.yell_to_decoder.send(DecoderMsg::Enqueue(id)).unwrap()
@@ -139,11 +81,6 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
         // get queue back
         let full = state.ret_status.lock();
         let queue: Vec<_> = full.tracks.iter().map(|x| x.id).collect();
-        let status: Option<api::DecoderStatus> = full
-            .tracks
-            .iter()
-            .find(|x| x.id == full.curr)
-            .map(|x| x.status.clone());
         let curr_playing = if full.curr.is_nil() {
             None
         } else {
@@ -156,7 +93,7 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
         drop(full);
 
         // add to radio queue
-        if queue.len() < 50 && status.is_some() {
+        if queue.len() < 50 {
             let next = client
                 .read()
                 .unwrap()
@@ -170,21 +107,10 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
                 .send(DecoderMsg::Enqueue(next))
                 .unwrap();
         }
-        state.send_ui(api::PStatus {
-            err_msg: _err_msg,
-            queue,
-            status,
-            curr_playing,
-            playback_pos_s,
-            playback_pos_ms,
-            playback_len_s,
-            playback_len_ms,
-        });
     }
 }
 
 struct PlayerState {
-    ui_sink: Option<StreamSink<api::PStatus>>,
     _dev: rodio::OutputStream,
     _s_handle: rodio::OutputStreamHandle,
     _dec_thread: std::thread::JoinHandle<()>,
@@ -213,20 +139,11 @@ impl PlayerState {
                     s_handle.play_raw(decoder).unwrap();
                 }
             }),
-            ui_sink: None,
             _dev,
             ret_status,
             yell_to_decoder: tx,
             _s_handle: s_handle,
         })
-    }
-
-    pub fn set_ui_sink(&mut self, ui_sink: StreamSink<api::PStatus>) {
-        self.ui_sink = Some(ui_sink);
-    }
-
-    pub fn send_ui(&self, send: api::PStatus) {
-        self.ui_sink.as_ref().map(|x| x.add(send));
     }
 }
 
