@@ -1,7 +1,14 @@
 // Top Level. The main window that contains all other ui components
-import { LoginBox } from "login.slint";
+import { LoginBox, LoginBoxCB } from "login.slint";
 import { SignupBox } from "signup.slint";
 import { MainUIBox } from "mainui.slint";
+
+// callbacks
+export { LoginBoxCB }
+
+// functions
+import { ErrorInfo } from "common.slint";
+export { ErrorInfo }
 
 export enum TopLevelPage {
 	Login,
@@ -10,9 +17,9 @@ export enum TopLevelPage {
 }
 
 export component TopLevelWindow inherits Window {
-	in-out property <TopLevelPage> page: TopLevelPage.Login;
+	in-out property <TopLevelPage> page_t: TopLevelPage.Login;
 
-	if (page == TopLevelPage.Login) : LoginBox {}
-	if (page == TopLevelPage.Signup) : SignupBox {}
-	if (page == TopLevelPage.Ready) : MainUIBox {}
+	if (page_t == TopLevelPage.Login) : LoginBox {}
+	if (page_t == TopLevelPage.Signup) : SignupBox {}
+	if (page_t == TopLevelPage.Ready) : MainUIBox {}
 }
