@@ -1,14 +1,10 @@
-default: gen fmt
+default: fmt
 
 update:
     cargo update
-    flutter pub upgrade
 
-gen:
-    flutter_rust_bridge_codegen --rust-input frontend/glue/src/api.rs --dart-output frontend/lib/bridge_generated.dart
-
-spin: gen 
-    cd frontend && flutter run
+spin: 
+    cargo run -p mio-frontend 
 
 drun: 
     DATA_DIR="./files" IP_ADDR="127.0.0.1" PORT=8081 SIGNUP_ENABLED=1 cargo run -p mio-backend 
@@ -26,10 +22,7 @@ prun:
 
 clean:
     cargo clean
-    cd frontend && flutter clean && flutter pub get
-    rm -r frontend/android/app/src/main/jniLibs/*/libmio_glue.so 
 
 fmt:
     genemichaels -p
     cargo fmt
-    dart format frontend/

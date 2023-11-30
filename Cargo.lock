@@ -3952,6 +3952,7 @@ version = "0.1.0"
 dependencies = [
  "image",
  "mio-glue",
+ "parking_lot",
  "slint",
  "slint-build",
 ]

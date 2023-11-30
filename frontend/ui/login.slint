@@ -27,17 +27,17 @@ component LoginBox inherits HorizontalBox{
 
 		// credential input
 		LineEdit {
-			text: server_url;
 			placeholder-text: @tr("Server URL");
+			edited(x) => { server_url = x }
 		}
 		if (url-is-valid): LineEdit {
-			text: username;
 			placeholder-text: @tr("Username");
+			edited(x) => { username = x }
 		}
 		if (url-is-valid): LineEdit {
-			text: password;
 			placeholder-text: @tr("Password");
 			input-type: InputType.password;
+			edited(x) => { password = x }
 		}
 
 		// buttons for credential checking
@@ -49,7 +49,18 @@ component LoginBox inherits HorizontalBox{
 				clicked => { LoginBoxCB.check_url(server_url) } 
 			}
 			if (LoginBoxCB.url-is-valid): Button {
+				text: @tr("Login to Miogenes Server");
 				clicked => { LoginBoxCB.attempt_login(username, password) }
+			}
+		}
+
+		if (LoginBoxCB.error.is-error): HorizontalBox {
+			Text {
+				text: @tr("error:");
+			}
+
+			Text {
+				text: LoginBoxCB.error.error;
 			}
 		}
 	}
