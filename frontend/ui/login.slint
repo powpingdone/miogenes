@@ -1,20 +1,18 @@
 // Login ui part
 import { VerticalBox , LineEdit , HorizontalBox, Button } from "std-widgets.slint";
-import { ErrorInfo } from "common.slint";
+import { ErrorInfo, GlobalError, TopLevelCB, TopLevelPage } from "common.slint";
 
 // PLEASE HELP
 // I don't know if this is the best way to do this
-
 global LoginBoxCB {
 	in property <bool> url_is_valid: false;
-	in property <ErrorInfo> error;
 	callback check_url(string);
 	callback attempt_login(string, string);
 }
 
 component LoginBox inherits HorizontalBox{
 	property url_is_valid <=> LoginBoxCB.url_is_valid;
-	property error <=> LoginBoxCB.error;
+	property error <=> GlobalError.last_error;
 	out property <string> server_url: "";
 	out property <string> username: "";
 	out property <string> password: "";
@@ -49,18 +47,22 @@ component LoginBox inherits HorizontalBox{
 				clicked => { LoginBoxCB.check_url(server_url) } 
 			}
 			if (LoginBoxCB.url-is-valid): Button {
-				text: @tr("Login to Miogenes Server");
+				text: @tr("Signup");
+				clicked => { TopLevelCB.page_t = TopLevelPage.Signup }
+			}
+			if (LoginBoxCB.url-is-valid): Button {
+				text: @tr("Login");
 				clicked => { LoginBoxCB.attempt_login(username, password) }
 			}
 		}
 
-		if (LoginBoxCB.error.is-error): HorizontalBox {
+		if (error.is-error): HorizontalBox {
 			Text {
 				text: @tr("error:");
 			}
 
 			Text {
-				text: LoginBoxCB.error.error;
+				text: error.error;
 			}
 		}
 	}

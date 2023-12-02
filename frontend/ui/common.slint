@@ -3,3 +3,19 @@ export struct ErrorInfo {
 	is_error: bool,
 }
 
+export global GlobalError {
+	in-out property <ErrorInfo> last_error;
+	public function clear_error() {
+		last_error.is-error = false;
+	}
+}
+
+export enum TopLevelPage {
+	Login,
+	Signup,
+	Ready
+}
+
+export global TopLevelCB {
+	in-out property <TopLevelPage> page_t: TopLevelPage.Login;
+}

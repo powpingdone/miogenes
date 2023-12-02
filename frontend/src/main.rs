@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use mio_glue::MioClientState;
 use parking_lot::Mutex;
+use std::sync::Arc;
 
 slint::include_modules!();
 
@@ -41,7 +40,7 @@ fn main() {
                         Ok(()) => x.set_url_is_valid(true),
                         Err(_) => x.set_url_is_valid(false),
                     }
-                    x.set_error(ret.into());
+                    app.global::<GlobalError>().set_last_error(ret.into());
                 })
                 .unwrap();
         }
@@ -55,13 +54,41 @@ fn main() {
             w_app
                 .upgrade_in_event_loop(move |app| {
                     if ret.is_ok() {
-                        app.set_page_t(TopLevelPage::Ready);
+                        app.global::<TopLevelCB>().set_page_t(TopLevelPage::Ready);
                     }
-                    app.global::<LoginBoxCB>().set_error(ret.into());
+                    app.global::<GlobalError>().set_last_error(ret.into());
                 })
                 .unwrap();
         }
     });
-
+    app.global::<SignupBoxCB>().on_attempt_signup({
+        let int_state = state.clone();
+        let w_app = w_app.clone();
+        move |username, password, password2| {
+            if password != password2 {
+                if let Some(app) = w_app.upgrade() {
+                    app.global::<GlobalError>().set_last_error(ErrorInfo {
+                        is_error: true,
+                        error: "passwords do not match".into(),
+                    })
+                }
+                return;
+            }
+            let mut state = int_state.lock();
+            let (username, password) = (String::from(username), String::from(password));
+            let mut ret = state.attempt_signup(&username, &password);
+            if ret.is_ok() {
+                ret = state.attempt_login(&username, &password);
+            }
+            w_app
+                .upgrade_in_event_loop(move |app| {
+                    if ret.is_ok() {
+                        app.global::<TopLevelCB>().set_page_t(TopLevelPage::Ready);
+                    }
+                    app.global::<GlobalError>().set_last_error(ret.into());
+                })
+                .unwrap()
+        }
+    });
     app.run().unwrap();
 }
