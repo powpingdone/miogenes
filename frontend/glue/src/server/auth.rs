@@ -1,21 +1,22 @@
 use crate::{error::*, MioClientState};
 use anyhow::anyhow;
-use base64::prelude::*;
 use mio_common::*;
 
 impl MioClientState {
-    pub fn test_set_url(&mut self, url: String) -> anyhow::Result<()> {
+    pub async fn test_set_url(&mut self, url: String) -> GlueResult<()> {
         use konst::primitive::parse_u16;
         use konst::unwrap_ctx;
 
         let vers: Vers = self
             .agent
             .get(&format!("{url}/ver"))
-            .call()
+            .send()
+            .await
             .map_err(|err| {
                 anyhow!("This miogenes server doesn't seem to exist: tried contacting, got {err}")
             })?
-            .into_json()
+            .json()
+            .await
             .map_err(|err| anyhow!("This is not a miogenes server. Serialization error: {err}"))?;
         if vers
             != Vers::new(
@@ -24,18 +25,22 @@ impl MioClientState {
                 unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_PATCH"))),
             )
         {
-            anyhow::bail!("Version mismatch! Update the mobile app or the server.")
+            return Err(anyhow!(
+                "Version mismatch! Update the mobile app or the server."
+            ).into());
         }
         self.url = url;
         Ok(())
     }
 
     // this function merely refreshes the api token to call the server
-    pub fn refresh_token(&mut self) -> GlueResult<()> {
+    pub async fn refresh_token(&mut self) -> GlueResult<()> {
         let new_jwt = self
             .wrap_auth(self.agent.patch(&format!("{}/user/refresh", self.url)))
-            .call()?
-            .into_json::<auth::JWT>()?;
+            .send()
+            .await?
+            .json::<auth::JWT>()
+            .await?;
         if let Some(key) = self.key.get_mut() {
             *key = new_jwt;
         } else {
@@ -45,19 +50,16 @@ impl MioClientState {
     }
 
     // try login
-    pub fn attempt_login(&mut self, username: &str, password: &str) -> GlueResult<()> {
+    pub async fn attempt_login(&mut self, username: &str, password: &str) -> GlueResult<()> {
         let jwt = self
             .agent
             .get(&format!("{}/user/login", self.url))
-            .set(
-                "Authorization",
-                &format!(
-                    "Basic {}",
-                    BASE64_URL_SAFE_NO_PAD.encode(format!("{username}:{password}"))
-                ),
-            )
-            .call()?
-            .into_json::<auth::JWT>()?;
+            .basic_auth(username, Some(password))
+            .send()
+            .await?
+            .json::<auth::JWT>()
+            .await?;
+
         if let Some(key) = self.key.get_mut() {
             *key = jwt;
         } else {
@@ -67,18 +69,12 @@ impl MioClientState {
     }
 
     // try signup
-    pub fn attempt_signup(&self, username: &str, password: &str) -> GlueResult<()> {
+    pub async fn attempt_signup(&self, username: &str, password: &str) -> GlueResult<()> {
         self.agent
             .post(&format!("{}/user/signup", self.url))
-            .set(
-                "Authorization",
-                &format!(
-                    "Basic {}",
-                    BASE64_URL_SAFE_NO_PAD.encode(format!("{username}:{password}"))
-                ),
-            )
-            .call()
-            .map_err(ErrorSplit::from)?;
+            .basic_auth(username, Some(password))
+            .send()
+            .await?;
         Ok(())
     }
 }

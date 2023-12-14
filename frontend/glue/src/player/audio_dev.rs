@@ -94,12 +94,13 @@ fn player_track_mgr(client: Arc<RwLock<MioClientState>>, rx: Receiver<PlayerMsg>
 
         // add to radio queue
         if queue.len() < 50 {
-            let next = client
-                .read()
-                .unwrap()
-                .get_closest(queue[0], queue.clone())
-                .unwrap()
-                .id;
+            //let next = client
+            //    .read()
+            //    .unwrap()
+            //    .get_closest(queue[0], queue.clone())
+            //    .unwrap()
+            //    .id;
+            let next = todo!();
 
             // next iteration will pickup the new id in the queue
             state

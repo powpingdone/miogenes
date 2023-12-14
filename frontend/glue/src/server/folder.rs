@@ -2,28 +2,25 @@ use crate::{error::GlueResult, MioClientState};
 use mio_common::*;
 use std::collections::HashMap;
 
-pub struct FakeMapItem {
-    pub key: String,
-    pub value: Option<Vec<FakeMapItem>>,
-}
+pub struct Interm(Option<HashMap<String, Interm>>);
 
 impl MioClientState {
-    pub fn make_dir(&self, name: String, path: String) -> GlueResult<()> {
+    pub async fn make_dir(&self, name: String, path: String) -> GlueResult<()> {
         self.wrap_auth(self.agent.put(&format!(
             "{}/api/folder?{}",
             self.url,
             serde_urlencoded::to_string(msgstructs::FolderCreateDelete { name, path }).unwrap()
         )))
-        .call()?;
+        .send().await?;
         Ok(())
     }
 
-    pub fn get_folders(&self) -> GlueResult<Vec<FakeMapItem>> {
+    pub async fn get_folders(&self) -> GlueResult<HashMap<String, Interm>> {
         // fetch from server
         let raw_tree = self
             .wrap_auth(self.agent.get(&format!("{}/api/folder", self.url)))
-            .call()?
-            .into_json::<retstructs::FolderQuery>()?
+            .send().await?
+            .json::<retstructs::FolderQuery>().await?
             .ret;
         let split_tree: Vec<Vec<_>> = raw_tree
             .iter()
@@ -31,8 +28,8 @@ impl MioClientState {
             .collect();
 
         // turn into hashmap tree
-        struct Interm(Option<HashMap<String, Interm>>);
-
+        //
+        // TODO: does this need to be Option?
         let mut hmap_master = Some(HashMap::<String, Interm>::new());
         for branch in split_tree {
             let mut curr_hmap: &mut Option<HashMap<String, Interm>> = &mut hmap_master;
@@ -52,23 +49,6 @@ impl MioClientState {
                 curr_hmap = mutref.get_mut(leaf).map(|x| &mut x.0).unwrap();
             }
         }
-
-        // then, turn into fakemap
-        fn create_fakemap(map: Option<HashMap<String, Interm>>) -> Option<Vec<FakeMapItem>> {
-            if let Some(map) = map {
-                let mut ret = Vec::with_capacity(map.len());
-                for (key, value) in map {
-                    ret.push(FakeMapItem {
-                        key,
-                        value: create_fakemap(value.0),
-                    });
-                }
-                Some(ret)
-            } else {
-                None
-            }
-        }
-
-        Ok(create_fakemap(hmap_master).unwrap())
+        Ok(hmap_master.unwrap())
     }
 }

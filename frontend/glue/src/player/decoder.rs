@@ -421,15 +421,15 @@ impl Iterator for ControllingDecoder {
                     }
                     if dead {
                         // minor work around for borrowing issues
-                        let age = self.age;
-                        let id = self.order[self.pos];
-                        let read = self.client.read().unwrap().stream(id);
-                        let ti = self.get_curr_mut().unwrap();
-                        if read.is_err() {
-                            error!("encountered error while getting decoder");
-                            return None::<Self::Item>;
-                        }
-                        *ti = TrackInner::new(read.unwrap(), age);
+                        //let age = self.age;
+                        //let id = self.order[self.pos];
+                        //let read = self.client.read().unwrap().stream(id);
+                        //let ti = self.get_curr_mut().unwrap();
+                        //if read.is_err() {
+                        //    error!("encountered error while getting decoder");
+                        //    return None::<Self::Item>;
+                        //}
+                        //*ti = TrackInner::new(read.unwrap(), age);
                         self.age += 1;
                     }
                 }

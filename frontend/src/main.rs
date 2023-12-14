@@ -1,8 +1,12 @@
+use error::MFResult;
 use mio_glue::MioClientState;
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
+use tokio::sync::RwLock;
 
 slint::include_modules!();
+
+mod error;
+mod user;
 
 // quick and dirty error msg function
 impl<T, E> From<Result<T, E>> for ErrorInfo
@@ -20,75 +24,124 @@ where
     }
 }
 
+// global state that must be held across the whole program
+pub(crate) struct MioFrontendStrong {
+    state: Arc<RwLock<MioClientState>>,
+    app: TopLevelWindow,
+    rt: Arc<tokio::runtime::Runtime>,
+}
+
+// weak version to prevent refcycles
+#[derive(Clone)]
+pub(crate) struct MioFrontendWeak {
+    state: std::sync::Weak<RwLock<MioClientState>>,
+    app: slint::Weak<TopLevelWindow>,
+    rt: std::sync::Weak<tokio::runtime::Runtime>,
+}
+
+impl MioFrontendStrong {
+    pub fn new(
+        state: Arc<RwLock<MioClientState>>,
+        app: TopLevelWindow,
+        rt: Arc<tokio::runtime::Runtime>,
+    ) -> Self {
+        MioFrontendStrong { state, app, rt }
+    }
+
+    pub fn weak(&self) -> MioFrontendWeak {
+        MioFrontendWeak {
+            state: Arc::downgrade(&self.state),
+            app: self.app.as_weak(),
+            rt: Arc::downgrade(&self.rt),
+        }
+    }
+
+    pub fn run(&self) -> MFResult<()> {
+        self.app.run().map_err(|err| err.into())
+    }
+
+    // scoped global function, where the global is used scoped for all
+    #[must_use]
+    pub fn scoped_global<'b, GB, T, Ret>(&'b self, gb_fn: T) -> MFResult<Ret>
+    where
+        T: Fn(GB) -> Ret,
+        GB: slint::Global<'b, TopLevelWindow>,
+    {
+        let gb = self.app.global::<GB>();
+        let ret = gb_fn(gb);
+        Ok(ret)
+    }
+}
+
+impl MioFrontendWeak {
+    // generic helper functions for the weakrefs
+    fn w_app(&self) -> MFResult<TopLevelWindow> {
+        self.app.upgrade().ok_or(error::Error::StrongGoneApp)
+    }
+
+    fn w_state(&self) -> MFResult<Arc<RwLock<MioClientState>>> {
+        self.state.upgrade().ok_or(error::Error::StrongGoneState)
+    }
+
+    fn w_rt(&self) -> MFResult<Arc<tokio::runtime::Runtime>> {
+        self.rt.upgrade().ok_or(error::Error::StrongGoneRuntime)
+    }
+
+    // callback spawner and error reporter
+    #[must_use]
+    fn cb_spawn<B>(&self, fut: B) -> MFResult<()>
+    where
+        B: Future<Output = MFResult<()>> + Send + 'static,
+    {
+        let w_app = self.app.clone();
+        self.w_rt()?.spawn(async move {
+            let ret = fut.await;
+            // TODO: better error reporting, sorta like folke/noice.nvim
+            if ret.is_err() {
+                drop(w_app.upgrade_in_event_loop(|app| {
+                    app.global::<GlobalError>().set_last_error(ret.into())
+                }));
+            }
+        });
+        Ok(())
+    }
+}
+
 fn main() {
-    let state = Arc::new(Mutex::new(MioClientState::new()));
+    // setup strong refs
+    let rt = Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap(),
+    );
+    let state = Arc::new(RwLock::new(MioClientState::new()));
     let app = TopLevelWindow::new().unwrap();
-    let w_app = app.as_weak();
+    let s_state = MioFrontendStrong::new(state, app, rt);
+    let state = s_state.weak();
 
     // setup callbacks
-    let x = app.global::<LoginBoxCB>();
-    x.on_check_url({
-        let int_state = state.clone();
-        let w_app = w_app.clone();
-        move |url| {
-            let mut state = int_state.lock();
-            let ret = state.test_set_url(url.into());
-            w_app
-                .upgrade_in_event_loop(move |app| {
-                    let x = app.global::<LoginBoxCB>();
-                    match ret {
-                        Ok(()) => x.set_url_is_valid(true),
-                        Err(_) => x.set_url_is_valid(false),
-                    }
-                    app.global::<GlobalError>().set_last_error(ret.into());
-                })
-                .unwrap();
-        }
-    });
-    x.on_attempt_login({
-        let int_state = state.clone();
-        let w_app = w_app.clone();
-        move |username, password| {
-            let mut state = int_state.lock();
-            let ret = state.attempt_login(&String::from(username), &String::from(password));
-            w_app
-                .upgrade_in_event_loop(move |app| {
-                    if ret.is_ok() {
-                        app.global::<TopLevelCB>().set_page_t(TopLevelPage::Ready);
-                    }
-                    app.global::<GlobalError>().set_last_error(ret.into());
-                })
-                .unwrap();
-        }
-    });
-    app.global::<SignupBoxCB>().on_attempt_signup({
-        let int_state = state.clone();
-        let w_app = w_app.clone();
-        move |username, password, password2| {
-            if password != password2 {
-                if let Some(app) = w_app.upgrade() {
-                    app.global::<GlobalError>().set_last_error(ErrorInfo {
-                        is_error: true,
-                        error: "passwords do not match".into(),
-                    })
+    s_state
+        .scoped_global::<LoginBoxCB, _, _>(|x| {
+            x.on_check_url({
+                let state = state.clone();
+                move |url| state.check_url(url)
+            });
+            x.on_attempt_login({
+                let state = state.clone();
+                move |username, password| state.attempt_login(username, password)
+            });
+        })
+        .unwrap();
+    s_state
+        .scoped_global::<SignupBoxCB, _, _>(|x| {
+            x.on_attempt_signup({
+                let state = state.clone();
+                move |username, password, password2| {
+                    state.attempt_signup(username, password, password2)
                 }
-                return;
-            }
-            let mut state = int_state.lock();
-            let (username, password) = (String::from(username), String::from(password));
-            let mut ret = state.attempt_signup(&username, &password);
-            if ret.is_ok() {
-                ret = state.attempt_login(&username, &password);
-            }
-            w_app
-                .upgrade_in_event_loop(move |app| {
-                    if ret.is_ok() {
-                        app.global::<TopLevelCB>().set_page_t(TopLevelPage::Ready);
-                    }
-                    app.global::<GlobalError>().set_last_error(ret.into());
-                })
-                .unwrap()
-        }
-    });
-    app.run().unwrap();
+            });
+        })
+        .unwrap();
+    s_state.run().unwrap();
 }
