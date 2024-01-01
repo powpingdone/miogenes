@@ -1,0 +1,21 @@
+import { VerticalBox } from "std-widgets.slint";
+
+export global PlayerCB {
+	in-out property <bool> loading;
+	in property <image> cover_art;
+}
+
+export component Player inherits VerticalBox {
+	alignment: LayoutAlignment.center;
+
+	// TODO: Replicate the layout of a regular player thingy
+	if (PlayerCB.loading): Text {}
+	// else
+	if (!PlayerCB.loading):
+	VerticalBox {
+		alignment: LayoutAlignment.stretch;
+		Image {
+			source: PlayerCB.cover_art;
+		}
+	}
+}

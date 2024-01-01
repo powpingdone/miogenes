@@ -1,19 +1,6 @@
-import { VerticalBox , HorizontalBox} from "std-widgets.slint";
+import { VerticalBox , HorizontalBox } from "std-widgets.slint";
+import { Player } from "player.slint";
 
-export global PlayerCB {
-	in-out property <image> cover_art;
-}
-
-component Player inherits VerticalBox {
-	alignment: LayoutAlignment.center;
-
-	VerticalBox {
-		alignment: LayoutAlignment.stretch;
-		Image {
-			source: PlayerCB.cover_art;
-		}
-	}
-}
 component Albums inherits VerticalBox {}
 component Upload inherits VerticalBox {}
 

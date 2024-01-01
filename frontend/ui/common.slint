@@ -1,3 +1,5 @@
+// global error stuff
+
 export struct ErrorInfo {
 	error: string,
 	is_error: bool,
@@ -7,9 +9,42 @@ export global GlobalError {
 	in-out property <ErrorInfo> last_error;
 	public function clear_error() {
 		last_error.is-error = false;
+		last_error.error = "";
 	}
 }
 
+// Future resolver for strings and images
+export component 
+FutureString {
+	property <bool> set: false;
+	out property <string> out: "";
+
+	// TODO: spiner
+	if(!set) : VerticalLayout {}
+	if(set): Text {
+		text: out;	
+	}
+
+	public function fut_finish(x: string) {
+		if(!set) {
+			set = true;
+			out = x;
+		}
+		
+	}
+
+	public function clear() {
+		set = false;
+		out = "";
+	}
+}
+
+export component FutureImage {
+	property <bool> set: false;
+	out property <image> out;
+}
+
+// toplevel state stuff
 export enum TopLevelPage {
 	Login,
 	Signup,
