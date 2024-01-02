@@ -1,5 +1,4 @@
 // global error stuff
-
 export struct ErrorInfo {
 	error: string,
 	is_error: bool,
@@ -14,8 +13,7 @@ export global GlobalError {
 }
 
 // Future resolver for strings and images
-export component 
-FutureString {
+export component FutureString {
 	property <bool> set: false;
 	out property <string> out: "";
 
@@ -30,7 +28,6 @@ FutureString {
 			set = true;
 			out = x;
 		}
-		
 	}
 
 	public function clear() {
@@ -42,6 +39,23 @@ FutureString {
 export component FutureImage {
 	property <bool> set: false;
 	out property <image> out;
+
+	if(!set): VerticalLayout {}
+	if(set): Image {
+		source:	out;
+	}
+
+	public function fut_finish(x: image) {
+		if(!set) {
+			set = true;
+			out = x;
+		}
+		
+	}
+
+	public function clear() {
+		set = false;
+	}
 }
 
 // toplevel state stuff
