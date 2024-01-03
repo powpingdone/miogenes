@@ -1,21 +1,35 @@
 import { VerticalBox } from "std-widgets.slint";
 
 export global PlayerCB {
-	in-out property <bool> loading;
+	in-out property <bool> loaded: false;
 	in property <image> cover_art;
+	in property <string> title;
+	in property <string> artist;
+	in property <string> album;
+	in-out property <float> playback_pos: 0.0;
+	in property <float> length;
+	in property <bool> playing: false;
 }
 
 export component Player inherits VerticalBox {
 	alignment: LayoutAlignment.center;
 
 	// TODO: Replicate the layout of a regular player thingy
-	if (PlayerCB.loading): Text {}
+	if (PlayerCB.loaded): Text {}
 	// else
-	if (!PlayerCB.loading):
+	if (!PlayerCB.loaded):
 	VerticalBox {
 		alignment: LayoutAlignment.stretch;
 		Image {
 			source: PlayerCB.cover_art;
+		}
+		
+		Text {
+			text: PlayerCB.title;
+		}
+
+		Text {
+			text: PlayerCB.artist + " - " + PlayerCB.album;
 		}
 	}
 }

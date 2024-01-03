@@ -12,52 +12,6 @@ export global GlobalError {
 	}
 }
 
-// Future resolver for strings and images
-export component FutureString {
-	property <bool> set: false;
-	out property <string> out: "";
-
-	// TODO: spiner
-	if(!set) : VerticalLayout {}
-	if(set): Text {
-		text: out;	
-	}
-
-	public function fut_finish(x: string) {
-		if(!set) {
-			set = true;
-			out = x;
-		}
-	}
-
-	public function clear() {
-		set = false;
-		out = "";
-	}
-}
-
-export component FutureImage {
-	property <bool> set: false;
-	out property <image> out;
-
-	if(!set): VerticalLayout {}
-	if(set): Image {
-		source:	out;
-	}
-
-	public function fut_finish(x: image) {
-		if(!set) {
-			set = true;
-			out = x;
-		}
-		
-	}
-
-	public function clear() {
-		set = false;
-	}
-}
-
 // toplevel state stuff
 export enum TopLevelPage {
 	Login,
