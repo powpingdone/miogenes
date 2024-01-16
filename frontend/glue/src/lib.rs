@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 use reqwest::Client;
 
 pub mod error;
-mod player;
+pub mod player;
 mod server;
 
 // https://github.com/RustAudio/cpal/issues/720#issuecomment-1311813294

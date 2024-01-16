@@ -1,11 +1,12 @@
 use error::MFResult;
-use mio_glue::MioClientState;
+use mio_glue::{player::Player, MioClientState};
 use std::{future::Future, sync::Arc};
 use tokio::sync::RwLock;
 
 slint::include_modules!();
 
 mod error;
+mod player;
 mod user;
 
 // quick and dirty error msg function
@@ -29,6 +30,7 @@ pub(crate) struct MioFrontendStrong {
     state: Arc<RwLock<MioClientState>>,
     app: TopLevelWindow,
     rt: Arc<tokio::runtime::Runtime>,
+    player: Player,
 }
 
 // weak version to prevent refcycles
@@ -37,6 +39,7 @@ pub(crate) struct MioFrontendWeak {
     state: std::sync::Weak<RwLock<MioClientState>>,
     app: slint::Weak<TopLevelWindow>,
     rt: std::sync::Weak<tokio::runtime::Runtime>,
+    player: Player,
 }
 
 impl MioFrontendStrong {
@@ -44,8 +47,14 @@ impl MioFrontendStrong {
         state: Arc<RwLock<MioClientState>>,
         app: TopLevelWindow,
         rt: Arc<tokio::runtime::Runtime>,
+        player: Player,
     ) -> Self {
-        MioFrontendStrong { state, app, rt }
+        MioFrontendStrong {
+            state,
+            app,
+            rt,
+            player,
+        }
     }
 
     pub fn weak(&self) -> MioFrontendWeak {
@@ -53,6 +62,7 @@ impl MioFrontendStrong {
             state: Arc::downgrade(&self.state),
             app: self.app.as_weak(),
             rt: Arc::downgrade(&self.rt),
+            player: self.player.clone(),
         }
     }
 
@@ -61,15 +71,13 @@ impl MioFrontendStrong {
     }
 
     // scoped global function, where the global is used scoped for all
-    #[must_use]
-    pub fn scoped_global<'b, GB, T, Ret>(&'b self, gb_fn: T) -> MFResult<Ret>
+    pub fn scoped_global<'b, GB, T, Ret>(&'b self, gb_fn: T) -> Ret
     where
         T: Fn(GB) -> Ret,
         GB: slint::Global<'b, TopLevelWindow>,
     {
         let gb = self.app.global::<GB>();
-        let ret = gb_fn(gb);
-        Ok(ret)
+        gb_fn(gb)
     }
 }
 
@@ -85,6 +93,10 @@ impl MioFrontendWeak {
 
     fn w_rt(&self) -> MFResult<Arc<tokio::runtime::Runtime>> {
         self.rt.upgrade().ok_or(error::Error::StrongGoneRuntime)
+    }
+
+    fn w_player(&self) -> Player {
+        self.player.clone()
     }
 
     // callback spawner and error reporter
@@ -116,32 +128,27 @@ fn main() {
             .unwrap(),
     );
     let state = Arc::new(RwLock::new(MioClientState::new()));
+    let player = Player::new(state.clone());
     let app = TopLevelWindow::new().unwrap();
-    let s_state = MioFrontendStrong::new(state, app, rt);
+    let s_state = MioFrontendStrong::new(state, app, rt, player);
     let state = s_state.weak();
 
     // setup callbacks
-    s_state
-        .scoped_global::<LoginBoxCB, _, _>(|x| {
-            x.on_check_url({
-                let state = state.clone();
-                move |url| state.check_url(url)
-            });
-            x.on_attempt_login({
-                let state = state.clone();
-                move |username, password| state.attempt_login(username, password)
-            });
-        })
-        .unwrap();
-    s_state
-        .scoped_global::<SignupBoxCB, _, _>(|x| {
-            x.on_attempt_signup({
-                let state = state.clone();
-                move |username, password, password2| {
-                    state.attempt_signup(username, password, password2)
-                }
-            });
-        })
-        .unwrap();
+    s_state.scoped_global::<LoginBoxCB, _, _>(|x| {
+        x.on_check_url({
+            let state = state.clone();
+            move |url| state.check_url(url)
+        });
+        x.on_attempt_login({
+            let state = state.clone();
+            move |username, password| state.attempt_login(username, password)
+        });
+    });
+    s_state.scoped_global::<SignupBoxCB, _, _>(|x| {
+        x.on_attempt_signup({
+            let state = state.clone();
+            move |username, password, password2| state.attempt_signup(username, password, password2)
+        });
+    });
     s_state.run().unwrap();
 }

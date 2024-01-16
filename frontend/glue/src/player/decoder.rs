@@ -5,11 +5,12 @@ use log::*;
 use parking_lot::Mutex;
 use qoaudio::{QoaDecoder, QoaRodioSource};
 use rodio::Source;
+use tokio::sync::RwLock;
 use std::{
     collections::{HashMap, VecDeque},
     io::{BufReader, Read, Seek},
     ops::Add,
-    sync::{Arc, RwLock},
+    sync::{Arc, },
     thread::JoinHandle,
     time::{Duration, Instant},
 };

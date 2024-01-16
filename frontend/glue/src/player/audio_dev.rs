@@ -5,9 +5,10 @@ use crossbeam::channel::{Receiver, RecvTimeoutError};
 use log::*;
 use parking_lot::Mutex;
 use rodio::Source;
+use tokio::sync::RwLock;
 use std::{
     fmt::Debug,
-    sync::{Arc, RwLock},
+    sync::{Arc, },
     time::{Duration, Instant},
 };
 use uuid::Uuid;
@@ -24,13 +25,13 @@ pub(crate) enum PlayerMsg {
     Seek(Duration),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Player {
-    pub(crate) tx: crossbeam::channel::Sender<crate::player::PlayerMsg>,
+    pub tx: crossbeam::channel::Sender<crate::player::PlayerMsg>,
 }
 
 impl Player {
-    pub(crate) fn new(client: Arc<RwLock<MioClientState>>) -> Self {
+    pub fn new(client: Arc<RwLock<MioClientState>>) -> Self {
         let (tx_player, rx_player) = crossbeam::channel::unbounded();
 
         // thread does not get joined due to if tx_player gets dropped, then everything

@@ -10,6 +10,7 @@ pub enum Error {
     StrongGoneRuntime,
     StrongGoneApp,
     StrongGoneState,
+    StrongGonePlayer,
     // babe what if slint exploded
     SlintPlatformError(slint::PlatformError),
     // babe I don't think that the gui exists anyway
@@ -48,6 +49,7 @@ impl Display for Error {
             Error::StrongGoneRuntime => f.write_str("runtime could not be upgraded to strong"),
             Error::StrongGoneApp => f.write_str("slint app could not be upgraded to strong"),
             Error::StrongGoneState => f.write_str("state could not be upgraded to strong"),
+            Error::StrongGonePlayer => f.write_str("player could not be upgraded to strong"),
             Error::SlintEventLoopError(err) => err.fmt(f),
             Error::ClientSide(err) => f.write_str(&err),
         }
