@@ -23,7 +23,7 @@ pub extern "C" fn JNI_OnLoad(vm: jni::JavaVM, res: *mut std::os::raw::c_void) ->
 #[derive(Debug)]
 pub struct MioClientState {
     url: String,
-    agent: Client,
+    agent: async_compat::Compat<Client>,
     pub key: OnceLock<mio_common::auth::JWT>,
 }
 
@@ -34,7 +34,7 @@ impl MioClientState {
         Self {
             url: "".to_owned(),
             key: OnceLock::new(),
-            agent: Client::new()
+            agent: async_compat::Compat::new(Client::new())
         }
     }
 

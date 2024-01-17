@@ -23,6 +23,7 @@ impl MioClientState {
         dir: String,
         fname: Option<String>,
     ) -> Result<retstructs::UploadReturn, ErrorSplit> {
+        // TODO: this is also not async
         let buf = read(fullpath).map_err(|err| anyhow!("Failed to read file: {err}"))?;
         Ok(self
             .wrap_auth(self.agent.post(&format!("{}/api/track?", self.url,)))
@@ -39,7 +40,6 @@ fn search_folder_inner(path: impl AsRef<Path>) -> Pin<Box<dyn Future<Output = Gl
     let path = path.as_ref().to_owned();
 
     Box::pin(async move {
-        
         // TODO: add opus support
         //
         // TODO: this is not async

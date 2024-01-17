@@ -3,6 +3,9 @@ use mio_glue::{player::Player, MioClientState};
 use std::{future::Future, sync::Arc};
 use tokio::sync::RwLock;
 
+pub use slint::Weak as SlWeak;
+pub use std::sync::Weak as StdWeak;
+
 slint::include_modules!();
 
 mod error;
@@ -30,30 +33,30 @@ pub(crate) struct MioFrontendStrong {
     state: Arc<RwLock<MioClientState>>,
     app: TopLevelWindow,
     rt: Arc<tokio::runtime::Runtime>,
-    player: Player,
+    player: Arc<Player>,
 }
 
 // weak version to prevent refcycles
 #[derive(Clone)]
 pub(crate) struct MioFrontendWeak {
-    state: std::sync::Weak<RwLock<MioClientState>>,
-    app: slint::Weak<TopLevelWindow>,
-    rt: std::sync::Weak<tokio::runtime::Runtime>,
-    player: Player,
+    state: StdWeak<RwLock<MioClientState>>,
+    app: SlWeak<TopLevelWindow>,
+    rt: StdWeak<tokio::runtime::Runtime>,
+    player: StdWeak<Player>,
 }
 
 impl MioFrontendStrong {
     pub fn new(
         state: Arc<RwLock<MioClientState>>,
         app: TopLevelWindow,
-        rt: Arc<tokio::runtime::Runtime>,
+        rt: tokio::runtime::Runtime,
         player: Player,
     ) -> Self {
         MioFrontendStrong {
-            state,
+            state: state.into(),
             app,
-            rt,
-            player,
+            rt: rt.into(),
+            player: player.into(),
         }
     }
 
@@ -62,7 +65,7 @@ impl MioFrontendStrong {
             state: Arc::downgrade(&self.state),
             app: self.app.as_weak(),
             rt: Arc::downgrade(&self.rt),
-            player: self.player.clone(),
+            player: Arc::downgrade(&self.player),
         }
     }
 
@@ -95,8 +98,8 @@ impl MioFrontendWeak {
         self.rt.upgrade().ok_or(error::Error::StrongGoneRuntime)
     }
 
-    fn w_player(&self) -> Player {
-        self.player.clone()
+    fn w_player(&self) -> MFResult<Arc<Player>> {
+        self.player.upgrade().ok_or(error::Error::StrongGonePlayer)
     }
 
     // callback spawner and error reporter
@@ -121,14 +124,18 @@ impl MioFrontendWeak {
 
 fn main() {
     // setup strong refs
-    let rt = Arc::new(
+    let rt = 
         tokio::runtime::Builder::new_multi_thread()
+            // try very minimal configuration
+            .worker_threads(1)
+            .max_blocking_threads(4)
             .enable_all()
             .build()
-            .unwrap(),
-    );
+            .unwrap()
+    ;
     let state = Arc::new(RwLock::new(MioClientState::new()));
-    let player = Player::new(state.clone());
+    // TODO: make a more clear error message when the player cannot find a device
+    let player = Player::new(state.clone()).unwrap();
     let app = TopLevelWindow::new().unwrap();
     let s_state = MioFrontendStrong::new(state, app, rt, player);
     let state = s_state.weak();

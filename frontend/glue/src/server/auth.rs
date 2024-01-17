@@ -9,6 +9,7 @@ impl MioClientState {
 
         let vers: Vers = self
             .agent
+            .get_ref()
             .get(&format!("{url}/ver"))
             .send()
             .await
@@ -25,9 +26,7 @@ impl MioClientState {
                 unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_PATCH"))),
             )
         {
-            return Err(anyhow!(
-                "Version mismatch! Update the mobile app or the server."
-            ).into());
+            return Err(anyhow!("Version mismatch! Update the mobile app or the server.").into());
         }
         self.url = url;
         Ok(())
@@ -36,7 +35,11 @@ impl MioClientState {
     // this function merely refreshes the api token to call the server
     pub async fn refresh_token(&mut self) -> GlueResult<()> {
         let new_jwt = self
-            .wrap_auth(self.agent.patch(&format!("{}/user/refresh", self.url)))
+            .wrap_auth(
+                self.agent
+                    .get_ref()
+                    .patch(&format!("{}/user/refresh", self.url)),
+            )
             .send()
             .await?
             .json::<auth::JWT>()
@@ -53,6 +56,7 @@ impl MioClientState {
     pub async fn attempt_login(&mut self, username: &str, password: &str) -> GlueResult<()> {
         let jwt = self
             .agent
+            .get_ref()
             .get(&format!("{}/user/login", self.url))
             .basic_auth(username, Some(password))
             .send()
@@ -71,6 +75,7 @@ impl MioClientState {
     // try signup
     pub async fn attempt_signup(&self, username: &str, password: &str) -> GlueResult<()> {
         self.agent
+            .get_ref()
             .post(&format!("{}/user/signup", self.url))
             .basic_auth(username, Some(password))
             .send()

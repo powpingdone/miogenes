@@ -4,9 +4,6 @@ use tokio::sync::RwLock;
 
 use crate::*;
 
-use slint::Weak as SlWeak;
-use std::sync::Weak as StdWeak;
-
 impl MioFrontendWeak {
     pub fn check_url(&self, url: SharedString) {
         self.cb_spawn(check_url_inner(
@@ -55,7 +52,7 @@ async fn check_url_inner(
     let mut state = l_state.write().await;
     state.test_set_url(url.into()).await?;
     w_app.upgrade_in_event_loop(move |app| {
-        app.global::<crate::LoginBoxCB>().set_url_is_valid(true);
+        app.global::<LoginBoxCB>().set_url_is_valid(true);
     })?;
     Ok(())
 }
