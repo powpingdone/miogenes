@@ -9,7 +9,6 @@ impl MioClientState {
 
         let vers: Vers = self
             .agent
-            .get_ref()
             .get(&format!("{url}/ver"))
             .send()
             .await
@@ -37,7 +36,6 @@ impl MioClientState {
         let new_jwt = self
             .wrap_auth(
                 self.agent
-                    .get_ref()
                     .patch(&format!("{}/user/refresh", self.url)),
             )
             .send()
@@ -56,7 +54,6 @@ impl MioClientState {
     pub async fn attempt_login(&mut self, username: &str, password: &str) -> GlueResult<()> {
         let jwt = self
             .agent
-            .get_ref()
             .get(&format!("{}/user/login", self.url))
             .basic_auth(username, Some(password))
             .send()
@@ -75,7 +72,6 @@ impl MioClientState {
     // try signup
     pub async fn attempt_signup(&self, username: &str, password: &str) -> GlueResult<()> {
         self.agent
-            .get_ref()
             .post(&format!("{}/user/signup", self.url))
             .basic_auth(username, Some(password))
             .send()

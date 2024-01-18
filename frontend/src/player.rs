@@ -1,22 +1,30 @@
-use mio_glue::player::Player;
+use mio_glue::player::{CurrentlyDecoding, Player};
+use tokio::sync::oneshot;
 
 use crate::*;
 
-impl MioFrontendWeak {
-    pub fn start_player_thread(&self) {
-        let p = self.player.clone();
-        let a = self.app.clone();
-        tokio::spawn(async move {
-            let ls = LocalSet::new();
-            ls.spawn_local(player_thread(p, a)).await;
-        });
-    }
+pub fn start_player_thread(
+    client: Arc<RwLock<MioClientState>>,
+    rt: &tokio::runtime::Runtime,
+) -> (
+    crossbeam::channel::Sender<DecoderMsg>,
+    tokio::sync::watch::Receiver<CurrentlyDecoding>,
+) {
+    let (tx, rx) = oneshot::channel();
+    rt.spawn_blocking(|| player_thread(client, tx));
+    rx.blocking_recv().unwrap()
 }
 
-async fn player_thread(w_player: StdWeak<Player>, w_app: SlWeak<TopLevelWindow>) {
-    let player = w_player
-        .upgrade()
-        .ok_or(error::Error::StrongGonePlayer)
-        .unwrap();
-
+fn player_thread(
+    client: Arc<RwLock<MioClientState>>,
+    ret: oneshot::Sender<(
+        crossbeam::channel::Sender<DecoderMsg>,
+        tokio::sync::watch::Receiver<CurrentlyDecoding>,
+    )>,
+) {
+    let player = Player::new(client).unwrap();
+    ret.send((player.tx.clone(), player.rx.clone()));
+    loop {}
 }
+
+impl MioFrontendWeak {}

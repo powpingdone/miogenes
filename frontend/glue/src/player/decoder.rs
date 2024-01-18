@@ -2,18 +2,16 @@ use crate::player::*;
 use crate::*;
 use crossbeam::atomic::AtomicCell;
 use log::*;
-use parking_lot::Mutex;
-use qoaudio::{QoaDecoder, QoaRodioSource};
+use qoaudio::QoaDecoder;
 use rodio::Source;
+use tokio::sync::RwLock;
 use std::{
     collections::{HashMap, VecDeque},
-    io::{BufReader, Read, Seek},
-    ops::Add,
+    io::{Read, Seek},
     sync::Arc,
     thread::JoinHandle,
     time::{Duration, Instant},
 };
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -465,7 +463,7 @@ impl Iterator for ControllingDecoder {
                 }
             });
             if ret.is_err() {
-                // apparently, now is when the watcher got dropped. die. 
+                // apparently, now is when the watcher got dropped. die.
                 return None::<Self::Item>;
             }
         }

@@ -20,10 +20,9 @@ pub extern "C" fn JNI_OnLoad(vm: jni::JavaVM, res: *mut std::os::raw::c_void) ->
 
 // The second half of the connections. This actually sends out the raw connections
 // to the server and also handles the state for connecting to it.
-#[derive(Debug)]
 pub struct MioClientState {
     url: String,
-    agent: async_compat::Compat<Client>,
+    agent: Client,
     pub key: OnceLock<mio_common::auth::JWT>,
 }
 
@@ -34,7 +33,7 @@ impl MioClientState {
         Self {
             url: "".to_owned(),
             key: OnceLock::new(),
-            agent: async_compat::Compat::new(Client::new())
+            agent: Client::new()
         }
     }
 

@@ -292,19 +292,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-compat"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f68a707c1feb095d8c07f8a65b9f506b117d30af431cab89374357de7c11461b"
-dependencies = [
- "futures-core",
- "futures-io",
- "once_cell",
- "pin-project-lite",
- "tokio",
-]
-
-[[package]]
 name = "async-compression"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -344,17 +331,6 @@ dependencies = [
  "autocfg",
  "blocking",
  "futures-lite 1.13.0",
-]
-
-[[package]]
-name = "async-fs"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd1f344136bad34df1f83a47f3fd7f2ab85d75cb8a940af4ccf6d482a84ea01b"
-dependencies = [
- "async-lock 3.3.0",
- "blocking",
- "futures-lite 2.2.0",
 ]
 
 [[package]]
@@ -417,17 +393,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-net"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b948000fad4873c1c9339d60f2623323a0cfd3816e5181033c6a5cb68b2accf7"
-dependencies = [
- "async-io 2.3.0",
- "blocking",
- "futures-lite 2.2.0",
-]
-
-[[package]]
 name = "async-once-cell"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -448,24 +413,6 @@ dependencies = [
  "futures-lite 1.13.0",
  "rustix 0.38.30",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "async-process"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15c1cd5d253ecac3d3cf15e390fd96bd92a13b1d14497d81abf077304794fb04"
-dependencies = [
- "async-channel",
- "async-io 2.3.0",
- "async-lock 3.3.0",
- "async-signal",
- "blocking",
- "cfg-if",
- "event-listener 4.0.3",
- "futures-lite 2.2.0",
- "rustix 0.38.30",
- "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4009,12 +3956,12 @@ name = "mio-frontend"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-compat",
+ "crossbeam",
  "image",
  "mio-glue",
  "slint",
  "slint-build",
- "smol",
+ "tokio",
 ]
 
 [[package]]
@@ -4023,7 +3970,6 @@ version = "0.1.0"
 dependencies = [
  "android_logger",
  "anyhow",
- "async-compat",
  "chrono",
  "cpal",
  "crossbeam",
@@ -4042,8 +3988,8 @@ dependencies = [
  "rodio",
  "serde_json",
  "serde_urlencoded",
- "smol",
  "souvlaki",
+ "tokio",
  "uuid",
 ]
 
@@ -5805,23 +5751,6 @@ dependencies = [
  "libc",
  "smithay-client-toolkit",
  "wayland-backend",
-]
-
-[[package]]
-name = "smol"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e635339259e51ef85ac7aa29a1cd991b957047507288697a690e80ab97d07cad"
-dependencies = [
- "async-channel",
- "async-executor",
- "async-fs 2.1.0",
- "async-io 2.3.0",
- "async-lock 3.3.0",
- "async-net",
- "async-process 2.0.1",
- "blocking",
- "futures-lite 2.2.0",
 ]
 
 [[package]]
@@ -8080,10 +8009,10 @@ checksum = "31de390a2d872e4cd04edd71b425e29853f786dc99317ed72d73d6fcf5ebb948"
 dependencies = [
  "async-broadcast",
  "async-executor",
- "async-fs 1.6.0",
+ "async-fs",
  "async-io 1.13.0",
  "async-lock 2.8.0",
- "async-process 1.8.1",
+ "async-process",
  "async-recursion",
  "async-task",
  "async-trait",

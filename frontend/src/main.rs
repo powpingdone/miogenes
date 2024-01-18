@@ -1,5 +1,9 @@
 use error::MFResult;
-use mio_glue::{player::Player, MioClientState};
+use mio_glue::{
+    player::{CurrentlyDecoding, DecoderMsg},
+    MioClientState,
+};
+use slint::ComponentHandle;
 use std::{future::Future, sync::Arc};
 use tokio::sync::RwLock;
 
@@ -33,7 +37,8 @@ pub(crate) struct MioFrontendStrong {
     state: Arc<RwLock<MioClientState>>,
     app: TopLevelWindow,
     rt: Arc<tokio::runtime::Runtime>,
-    player: Arc<Player>,
+    player_tx: crossbeam::channel::Sender<DecoderMsg>,
+    player_rx: tokio::sync::watch::Receiver<CurrentlyDecoding>,
 }
 
 // weak version to prevent refcycles
@@ -42,7 +47,8 @@ pub(crate) struct MioFrontendWeak {
     state: StdWeak<RwLock<MioClientState>>,
     app: SlWeak<TopLevelWindow>,
     rt: StdWeak<tokio::runtime::Runtime>,
-    player: StdWeak<Player>,
+    player_tx: crossbeam::channel::Sender<DecoderMsg>,
+    player_rx: tokio::sync::watch::Receiver<CurrentlyDecoding>,
 }
 
 impl MioFrontendStrong {
@@ -50,13 +56,15 @@ impl MioFrontendStrong {
         state: Arc<RwLock<MioClientState>>,
         app: TopLevelWindow,
         rt: tokio::runtime::Runtime,
-        player: Player,
+        player_tx: crossbeam::channel::Sender<DecoderMsg>,
+        player_rx: tokio::sync::watch::Receiver<CurrentlyDecoding>,
     ) -> Self {
         MioFrontendStrong {
             state: state.into(),
             app,
             rt: rt.into(),
-            player: player.into(),
+            player_tx,
+            player_rx,
         }
     }
 
@@ -65,7 +73,8 @@ impl MioFrontendStrong {
             state: Arc::downgrade(&self.state),
             app: self.app.as_weak(),
             rt: Arc::downgrade(&self.rt),
-            player: Arc::downgrade(&self.player),
+            player_tx: self.player_tx.clone(),
+            player_rx: self.player_rx.clone(),
         }
     }
 
@@ -98,8 +107,12 @@ impl MioFrontendWeak {
         self.rt.upgrade().ok_or(error::Error::StrongGoneRuntime)
     }
 
-    fn w_player(&self) -> MFResult<Arc<Player>> {
-        self.player.upgrade().ok_or(error::Error::StrongGonePlayer)
+    fn w_player_tx(&self) -> MFResult<crossbeam::channel::Sender<DecoderMsg>> {
+        Ok(self.player_tx.clone())
+    }
+
+    fn w_player_rx(&self) -> MFResult<tokio::sync::watch::Receiver<CurrentlyDecoding>> {
+        Ok(self.player_rx.clone())
     }
 
     // callback spawner and error reporter
@@ -124,20 +137,18 @@ impl MioFrontendWeak {
 
 fn main() {
     // setup strong refs
-    let rt = 
-        tokio::runtime::Builder::new_multi_thread()
-            // try very minimal configuration
-            .worker_threads(1)
-            .max_blocking_threads(4)
-            .enable_all()
-            .build()
-            .unwrap()
-    ;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        // try very minimal configuration
+        .worker_threads(2)
+        .max_blocking_threads(16)
+        .enable_all()
+        .build()
+        .unwrap();
     let state = Arc::new(RwLock::new(MioClientState::new()));
     // TODO: make a more clear error message when the player cannot find a device
-    let player = Player::new(state.clone()).unwrap();
     let app = TopLevelWindow::new().unwrap();
-    let s_state = MioFrontendStrong::new(state, app, rt, player);
+    let (player_tx, player_rx) = player::start_player_thread(state.clone(), &rt);
+    let s_state = MioFrontendStrong::new(state, app, rt, player_tx, player_rx);
     let state = s_state.weak();
 
     // setup callbacks
