@@ -147,7 +147,7 @@ fn main() {
     let state = Arc::new(RwLock::new(MioClientState::new()));
     // TODO: make a more clear error message when the player cannot find a device
     let app = TopLevelWindow::new().unwrap();
-    let (player_tx, player_rx) = player::start_player_thread(state.clone(), &rt);
+    let (player_tx, player_rx) = player::start_player_hold_thread(state.clone(), &rt);
     let s_state = MioFrontendStrong::new(state, app, rt, player_tx, player_rx);
     let state = s_state.weak();
 
