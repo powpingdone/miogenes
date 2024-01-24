@@ -5,12 +5,11 @@ pub type MFResult<T> = Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     // Slightly deeper error
-    Glue(mio_glue::error::ErrorSplit),
+    Glue(mio_glue::error::GlueError),
     // Could not upgrade
     StrongGoneRuntime,
     StrongGoneApp,
     StrongGoneState,
-    StrongGonePlayer,
     // babe what if slint exploded
     SlintPlatformError(slint::PlatformError),
     // babe I don't think that the gui exists anyway
@@ -35,8 +34,8 @@ impl From<slint::PlatformError> for Error {
     }
 }
 
-impl From<mio_glue::error::ErrorSplit> for Error {
-    fn from(value: mio_glue::error::ErrorSplit) -> Self {
+impl From<mio_glue::error::GlueError> for Error {
+    fn from(value: mio_glue::error::GlueError) -> Self {
         Error::Glue(value)
     }
 }
@@ -49,7 +48,6 @@ impl Display for Error {
             Error::StrongGoneRuntime => f.write_str("runtime could not be upgraded to strong"),
             Error::StrongGoneApp => f.write_str("slint app could not be upgraded to strong"),
             Error::StrongGoneState => f.write_str("state could not be upgraded to strong"),
-            Error::StrongGonePlayer => f.write_str("player could not be upgraded to strong"),
             Error::SlintEventLoopError(err) => err.fmt(f),
             Error::ClientSide(err) => f.write_str(&err),
         }

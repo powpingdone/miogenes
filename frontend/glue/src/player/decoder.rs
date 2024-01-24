@@ -4,7 +4,6 @@ use crossbeam::atomic::AtomicCell;
 use log::*;
 use qoaudio::QoaDecoder;
 use rodio::Source;
-use tokio::sync::RwLock;
 use std::{
     collections::{HashMap, VecDeque},
     io::{Read, Seek},
@@ -12,6 +11,7 @@ use std::{
     thread::JoinHandle,
     time::{Duration, Instant},
 };
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -53,7 +53,7 @@ struct TrackInner {
 }
 
 impl TrackInner {
-    fn new(download: Box<dyn Read + Send + Sync + 'static>, age: u64) -> Self {
+    fn new(download: reqwest::blocking::Response, age: u64) -> Self {
         // thread comms
         let (buf_tx, buf_rx) = crossbeam::channel::bounded(16384);
         let status = Arc::new(AtomicCell::new(ThreadDecoderStatus::WaitingForThread));
@@ -106,13 +106,13 @@ impl Drop for TrackInner {
 
 /// wraps the ureq reader and gives seeking capabilities
 struct ReSeeker {
-    reader: Box<dyn Read + Send + Sync + 'static>,
+    reader: reqwest::blocking::Response,
     internal_buf: Vec<u8>,
     pos: usize,
 }
 
 impl ReSeeker {
-    fn new(reader: Box<dyn Read + Send + Sync + 'static>) -> Self {
+    fn new(reader: reqwest::blocking::Response) -> Self {
         Self {
             reader,
             internal_buf: vec![],
@@ -191,7 +191,7 @@ fn decoder_thread(
     waveform: crossbeam::channel::Sender<f32>,
     status: Arc<AtomicCell<ThreadDecoderStatus>>,
     state_change: crossbeam::channel::Receiver<ThreadDecoderYell>,
-    server_stream: Box<dyn Read + Send + Sync + 'static>,
+    server_stream: reqwest::blocking::Response,
     mdata: Arc<OnceLock<TrackMetadata>>,
     at: Arc<AtomicCell<f64>>,
 ) {
@@ -211,7 +211,7 @@ fn decoder_thread_inner(
     waveform: crossbeam::channel::Sender<f32>,
     status: Arc<AtomicCell<ThreadDecoderStatus>>,
     state_change: crossbeam::channel::Receiver<ThreadDecoderYell>,
-    server_stream: Box<dyn Read + Send + Sync + 'static>,
+    server_stream: reqwest::blocking::Response,
     mdata: Arc<OnceLock<TrackMetadata>>,
     at: Arc<AtomicCell<f64>>,
 ) {

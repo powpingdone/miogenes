@@ -1,14 +1,15 @@
 use crate::{
-    error::{ErrorSplit, GlueResult},
+    error::{GlueError, GlueResult},
     MioClientState,
 };
 use anyhow::anyhow;
+use futures::StreamExt;
 use mio_common::*;
 use std::{
-    fs::{read, read_dir},
     path::Path,
     pin::Pin, future::Future,
 };
+use tokio::fs::{read, read_dir};
 
 impl MioClientState {
     // recursive function for searching for audio files
@@ -22,9 +23,8 @@ impl MioClientState {
         fullpath: impl AsRef<Path>,
         dir: String,
         fname: Option<String>,
-    ) -> Result<retstructs::UploadReturn, ErrorSplit> {
-        // TODO: this is also not async
-        let buf = read(fullpath).map_err(|err| anyhow!("Failed to read file: {err}"))?;
+    ) -> Result<retstructs::UploadReturn, GlueError> {
+        let buf = read(fullpath).await.map_err(|err| anyhow!("Failed to read file: {err}"))?;
         Ok(self
             .wrap_auth(self.agent.post(&format!("{}/api/track?", self.url,)))
             .query(&msgstructs::TrackUploadQuery { dir, fname })
@@ -45,10 +45,10 @@ fn search_folder_inner(path: impl AsRef<Path>) -> Pin<Box<dyn Future<Output = Gl
         // TODO: this is not async
         const COMMON_EXTS: &[&str] = &["wav", "flac", "alac", "mp3", "ogg", "aac", "m4a"];
         let mut ret = vec![];
-        let dir = read_dir(&path)?;
-        for item in dir {
+        let mut dir = tokio_stream::wrappers::ReadDirStream::new(read_dir(&path).await?);
+        while let Some(item) = dir.next().await {
             let item = item?;
-            let ftype = item.file_type()?;
+            let ftype = item.file_type().await?;
             let mut path_copy = path.to_owned();
             if ftype.is_file() {
                 // check if file has common audio extension

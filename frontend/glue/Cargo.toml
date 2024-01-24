@@ -21,8 +21,15 @@ cpal = { version = "0.15", features = ["jack"] }
 log = "0.4"
 souvlaki = "0.7"
 ringbuffer = "0.15"
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
-tokio = {version = "1.35", features = ["sync"]} # used for tokio::sync::watch
+reqwest = { version = "0.11", default-features = false, features = [
+	"rustls-tls",
+	"json",
+	"stream",
+	"blocking",
+] }
+tokio = { version = "1.35", features = ["sync"] } # used for tokio::sync::watch
+tokio-stream = { version = "0.1.14", features = ["full"] }
+futures = "0.3.30"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 env_logger = "0.10"

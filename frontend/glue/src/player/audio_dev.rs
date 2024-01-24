@@ -11,7 +11,7 @@ pub struct Player {
     pub rx: tokio::sync::watch::Receiver<CurrentlyDecoding>,
     _dev: rodio::OutputStream,
     _s_handle: rodio::OutputStreamHandle,
-    _dec_thread: std::thread::JoinHandle<()>,
+    _dec_thread: tokio::task::JoinHandle<()>,
 }
 
 impl Player {
@@ -34,7 +34,7 @@ impl Player {
             rx: rx_pstate,
             // task does not get joined due to if tx_player gets dropped, then everything
             // else will die as well
-            _dec_thread: std::thread::spawn({
+            _dec_thread: tokio::task::spawn_blocking({
                 let s_handle = s_handle.clone();
                 move || {
                     trace!("spinning s_thread");
