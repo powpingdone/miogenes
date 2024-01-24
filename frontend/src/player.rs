@@ -1,9 +1,8 @@
-use core::slice::SlicePattern;
-use std::{fmt::write, io::Cursor, pin::Pin};
+use std::{io::Cursor, pin::Pin};
 
-use image::{GenericImageView, RgbaImage};
+use image::RgbaImage;
 use mio_glue::player::{CurrentlyDecoding, Player};
-use slint::{Rgba8Pixel, SharedPixelBuffer};
+use slint::Rgba8Pixel;
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
@@ -42,61 +41,78 @@ impl MioFrontendWeak {
         let mut state = PollTaskState::new();
         while let Ok(mut rx) = self.w_player_rx() {
             rx.changed().await.unwrap();
-            let new_state = rx.borrow_and_update();
-            let (is_new_state, is_track_diff) = state.set_new_decoding(&*new_state);
-            if is_new_state {
-                if let Ok(app) = self.w_app() {
-                    // main setup loop
-                    let cb = app.global::<crate::PlayerCB>();
-                    if is_track_diff {
-                        // invalidate UI metadata
-                        cb.set_loaded(false);
-                        // spawn task to fetch new metadata
-                        let rt = self.w_rt().unwrap();
-                        rt.spawn(state.new_fetch_task(new_state.curr));
-                    }
+            let curr_decoding = rx.borrow_and_update().clone();
+            let (is_new_state, is_track_diff) = state.set_new_decoding(&curr_decoding);
+            // invalidate UI metadata if different track
+            if is_track_diff {
+                self.app
+                    .upgrade_in_event_loop(|app| {
+                        app.global::<crate::PlayerCB>().set_loaded(false);
+                    })
+                    .unwrap();
+                // spawn task to fetch new metadata
+                let rt = self.w_rt().unwrap();
+                rt.spawn(state.new_fetch_task(curr_decoding.curr, self.state.clone()));
+            }
 
-                    // set fetched mdata
-                    if state.is_all_mdata_ready() && !cb.get_loaded() {
-                        cb.set_loaded(true);
-                        cb.set_title(state.title.as_ref().unwrap().into());
-                        cb.set_album(
-                            state
-                                .album
-                                .as_ref()
-                                .map(|x| x.as_str())
-                                .unwrap_or("?")
-                                .into(),
-                        );
-                        cb.set_artist(
-                            state
-                                .artist
-                                .as_ref()
-                                .map(|x| x.as_str())
-                                .unwrap_or("?")
-                                .into(),
-                        );
-                        cb.set_cover_art(
-                            image_get(state.cover_art.as_ref().map(|x| x.as_slice()))
-                                .map(|img| {
-                                    slint::Image::from_rgba8(
-                                        slint::SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
+            // set fetched mdata
+            if is_new_state {
+                if state.is_all_mdata_ready()
+                    && !self.w_app().unwrap().global::<PlayerCB>().get_loaded()
+                {
+                    let title = state.title.as_ref().unwrap().into();
+                    let album = state
+                        .album
+                        .as_ref()
+                        .map(String::as_str)
+                        .unwrap_or("?")
+                        .into();
+                    let artist = state
+                        .artist
+                        .as_ref()
+                        .map(String::as_str)
+                        .unwrap_or("?")
+                        .into();
+                    let img = image_get(state.cover_art.as_ref().map(Vec::as_slice));
+                    self.app
+                        .upgrade_in_event_loop({
+                            move |app| {
+                                let cb = app.global::<PlayerCB>();
+                                cb.set_loaded(true);
+                                cb.set_title(title);
+                                cb.set_album(album);
+                                cb.set_artist(artist);
+                                cb.set_cover_art(
+                                    // img is unwrapped in loop due to slint::Image not being Send
+                                    //
+                                    // let's hope that the memcpy is fast enough...!
+                                    img.map(|img| {
+                                        slint::Image::from_rgba8(slint::SharedPixelBuffer::<
+                                            Rgba8Pixel,
+                                        >::clone_from_slice(
                                             img.as_raw(),
                                             img.width(),
                                             img.height(),
-                                        ),
-                                    )
-                                })
-                                .unwrap_or_else(|_| {
-                                    slint::Image::from_rgba8(slint::SharedPixelBuffer::new(0, 0))
-                                }),
-                        );
-                    }
-                    // set currently decoding metadata
-                    todo!()
-                } else {
-                    return;
+                                        ))
+                                    })
+                                    .unwrap_or_else(|_| {
+                                        slint::Image::from_rgba8(slint::SharedPixelBuffer::new(
+                                            0, 0,
+                                        ))
+                                    }),
+                                );
+                            }
+                        })
+                        .unwrap();
                 }
+                // set currently decoding metadata
+                self.app
+                    .upgrade_in_event_loop(move |app| {
+                        let cb = app.global::<PlayerCB>();
+                        cb.set_length(curr_decoding.len.as_secs_f32());
+                        cb.set_playback_pos(curr_decoding.at.as_secs_f32());
+                    })
+                    .unwrap();
             }
         }
     }
@@ -151,13 +167,19 @@ impl PollTaskState {
         (is_new, diff_track)
     }
 
-    pub fn new_fetch_task(&mut self, id: Uuid) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    pub fn new_fetch_task(
+        &mut self,
+        id: Uuid,
+        state: StdWeak<RwLock<MioClientState>>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         // future for recv mdata
         let (title_tx, title_rx) = oneshot::channel();
         let (album_tx, album_rx) = oneshot::channel();
         let (artist_tx, artist_rx) = oneshot::channel();
         let (cover_art_tx, cover_art_rx) = oneshot::channel();
         let fut = Box::pin(fetch_track_mdata(
+            state,
+            id,
             title_tx,
             album_tx,
             artist_tx,
@@ -198,11 +220,53 @@ impl PollTaskState {
     }
 }
 
+// TODO: error reporting
 async fn fetch_track_mdata(
+    state: StdWeak<RwLock<MioClientState>>,
+    track: Uuid,
     title: oneshot::Sender<String>,
     album: oneshot::Sender<Option<String>>,
     artist: oneshot::Sender<Option<String>>,
     cover_art: oneshot::Sender<Option<Vec<u8>>>,
 ) {
-    todo!()
+    let h_state = state.upgrade().unwrap();
+    let state = h_state.read().await;
+    let track_whole = state.get_track_data(track).await.unwrap();
+    tokio::spawn({
+        let h_state = h_state.clone();
+        let id = track_whole.album;
+        async move {
+            if let Some(id) = id {
+                let state = h_state.read().await;
+                let _ = album.send(Some(state.get_album_data(id).await.unwrap().title));
+            } else {
+                let _ = album.send(None);
+            }
+        }
+    });
+    tokio::spawn({
+        let h_state = h_state.clone();
+        let id = track_whole.artist;
+        async move {
+            if let Some(id) = id {
+                let state = h_state.read().await;
+                let _ = artist.send(Some(state.get_artist_data(id).await.unwrap().name));
+            } else {
+                let _ = artist.send(None);
+            }
+        }
+    });
+    tokio::spawn({
+        let h_state = h_state.clone();
+        let id = track_whole.cover_art;
+        async move {
+            if let Some(id) = id {
+                let state = h_state.read().await;
+                let _ = cover_art.send(Some(state.get_cover_art_data(id).await.unwrap().webm_blob));
+            } else {
+                let _ = cover_art.send(None);
+            }
+        }
+    });
+    let _ = title.send(track_whole.title);
 }

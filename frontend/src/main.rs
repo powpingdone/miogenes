@@ -150,6 +150,7 @@ fn main() {
     let (player_tx, player_rx) = player::start_player_hold_thread(state.clone(), &rt);
     let s_state = MioFrontendStrong::new(state, app, rt, player_tx, player_rx);
     let state = s_state.weak();
+    state.start_player_poll_task();
 
     // setup callbacks
     s_state.scoped_global::<LoginBoxCB, _, _>(|x| {
