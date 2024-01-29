@@ -99,6 +99,7 @@ impl MioFrontendWeak {
         self.app.upgrade().ok_or(error::Error::StrongGoneApp)
     }
 
+    #[allow(unused)]
     fn w_state(&self) -> MFResult<Arc<RwLock<MioClientState>>> {
         self.state.upgrade().ok_or(error::Error::StrongGoneState)
     }
@@ -107,6 +108,7 @@ impl MioFrontendWeak {
         self.rt.upgrade().ok_or(error::Error::StrongGoneRuntime)
     }
 
+    #[allow(unused)]
     fn w_player_tx(&self) -> MFResult<crossbeam::channel::Sender<DecoderMsg>> {
         Ok(self.player_tx.clone())
     }
@@ -168,6 +170,28 @@ fn main() {
             let state = state.clone();
             move |username, password, password2| state.attempt_signup(username, password, password2)
         });
+    });
+    s_state.scoped_global::<PlayerCB, _, _>(|x| {
+        x.on_play({
+            let state = state.clone();
+            move || state.play()
+        });
+        x.on_pause({
+            let state = state.clone();
+            move || state.pause()
+        });
+        x.on_next({
+            let state = state.clone();
+            move || state.next()
+        });
+        x.on_prev({
+            let state = state.clone();
+            move || state.prev()
+        });
+        x.on_seek({
+            let state = state.clone();
+            move |pos| state.seek(pos)
+        })
     });
     s_state.run().unwrap();
 }

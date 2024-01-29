@@ -419,7 +419,14 @@ impl Iterator for ControllingDecoder {
                         }
                     }
                     if dead {
-                        // minor work around for borrowing issues
+                        let id = self.order[self.pos];
+                        let stream = self.client.blocking_read().stream(id);
+                        if stream.is_err() {
+                            // TODO: proper error handling
+                            todo!()
+                        }
+                        let new_ti = TrackInner::new(stream.unwrap(), self.age);
+                        *self.get_curr_mut().unwrap() = new_ti;
                         self.age += 1;
                     }
                 }

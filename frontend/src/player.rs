@@ -1,4 +1,4 @@
-use std::{io::Cursor, pin::Pin};
+use std::{io::Cursor, pin::Pin, time::Duration};
 
 use image::RgbaImage;
 use mio_glue::player::{CurrentlyDecoding, Player};
@@ -8,6 +8,39 @@ use uuid::Uuid;
 
 use crate::*;
 
+
+// !
+// Player communication
+// !
+impl MioFrontendWeak {
+    pub fn play(&self) {
+        self.player_tx.send(DecoderMsg::Play).unwrap()
+    }
+
+    pub fn pause(&self) {
+        self.player_tx.send(DecoderMsg::Pause).unwrap()
+    }
+
+    pub fn next(&self) {
+        self.player_tx.send(DecoderMsg::Next).unwrap()
+    }
+
+    pub fn prev(&self) {
+        self.player_tx.send(DecoderMsg::Previous).unwrap()
+    }
+
+    pub fn seek(&self, pt: f32) {
+        self.player_tx.send(DecoderMsg::SeekAbs(Duration::from_secs_f32(pt))).unwrap()
+    }
+
+    pub fn queue(&self, id: Uuid) {
+        self.player_tx.send(DecoderMsg::Enqueue(id)).unwrap()
+    }
+}
+
+// !
+// Player thread
+// !
 pub fn start_player_hold_thread(
     client: Arc<RwLock<MioClientState>>,
     rt: &tokio::runtime::Runtime,

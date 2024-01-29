@@ -1,4 +1,4 @@
-import { VerticalBox } from "std-widgets.slint";
+import { VerticalBox , HorizontalBox, Button, Slider} from "std-widgets.slint";
 
 export global PlayerCB {
 	in-out property <bool> loaded: false;
@@ -9,15 +9,22 @@ export global PlayerCB {
 	in-out property <float> playback_pos: 0.0;
 	in property <float> length;
 	in property <bool> playing: false;
+
+	// player controls
+	callback next();
+	callback prev();
+	callback pause();
+	callback play();
+	callback seek(float);
 }
 
 export component Player inherits VerticalBox {
 	alignment: LayoutAlignment.center;
 
 	// TODO: Replicate the layout of a regular player thingy
-	if (PlayerCB.loaded): Text {}
+	if (!PlayerCB.loaded): Text {}
 	// else
-	if (!PlayerCB.loaded):
+	if (PlayerCB.loaded):
 	VerticalBox {
 		alignment: LayoutAlignment.stretch;
 		Image {
@@ -30,6 +37,31 @@ export component Player inherits VerticalBox {
 
 		Text {
 			text: PlayerCB.artist + " - " + PlayerCB.album;
+		}
+
+		HorizontalBox {
+			alignment: LayoutAlignment.center;
+			Button {
+				text: "Previous";
+				clicked() => { PlayerCB.prev() }
+			}
+			
+			Button {
+				text: PlayerCB.playing ? "Pause" : "Play";
+				clicked() => { PlayerCB.playing ? PlayerCB.pause() : PlayerCB.play() }
+			}
+
+			Button {
+				text: "Next";
+				clicked() => { PlayerCB.next() }
+			}
+		}
+
+		Slider {
+			minimum: 0.0;
+			maximum: PlayerCB.length;
+			value: PlayerCB.playback-pos;
+			changed(val) => { PlayerCB.seek(val) }
 		}
 	}
 }
