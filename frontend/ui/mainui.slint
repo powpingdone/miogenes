@@ -1,0 +1,9 @@
+import { VerticalBox , HorizontalBox } from "std-widgets.slint";
+import { Player } from "player.slint";
+
+component Albums inherits VerticalBox {}
+component Upload inherits VerticalBox {}
+
+export component MainUIBox inherits HorizontalBox {
+	Player {}
+}

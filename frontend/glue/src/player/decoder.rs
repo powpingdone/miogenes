@@ -2,17 +2,16 @@ use crate::player::*;
 use crate::*;
 use crossbeam::atomic::AtomicCell;
 use log::*;
-use parking_lot::Mutex;
-use qoaudio::{QoaDecoder, QoaRodioSource};
+use qoaudio::QoaDecoder;
 use rodio::Source;
 use std::{
     collections::{HashMap, VecDeque},
-    io::{BufReader, Read, Seek},
-    ops::Add,
-    sync::{Arc, RwLock},
+    io::{Read, Seek},
+    sync::Arc,
     thread::JoinHandle,
     time::{Duration, Instant},
 };
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -54,7 +53,7 @@ struct TrackInner {
 }
 
 impl TrackInner {
-    fn new(download: Box<dyn Read + Send + Sync + 'static>, age: u64) -> Self {
+    fn new(download: reqwest::blocking::Response, age: u64) -> Self {
         // thread comms
         let (buf_tx, buf_rx) = crossbeam::channel::bounded(16384);
         let status = Arc::new(AtomicCell::new(ThreadDecoderStatus::WaitingForThread));
@@ -107,13 +106,13 @@ impl Drop for TrackInner {
 
 /// wraps the ureq reader and gives seeking capabilities
 struct ReSeeker {
-    reader: Box<dyn Read + Send + Sync + 'static>,
+    reader: reqwest::blocking::Response,
     internal_buf: Vec<u8>,
     pos: usize,
 }
 
 impl ReSeeker {
-    fn new(reader: Box<dyn Read + Send + Sync + 'static>) -> Self {
+    fn new(reader: reqwest::blocking::Response) -> Self {
         Self {
             reader,
             internal_buf: vec![],
@@ -192,7 +191,7 @@ fn decoder_thread(
     waveform: crossbeam::channel::Sender<f32>,
     status: Arc<AtomicCell<ThreadDecoderStatus>>,
     state_change: crossbeam::channel::Receiver<ThreadDecoderYell>,
-    server_stream: Box<dyn Read + Send + Sync + 'static>,
+    server_stream: reqwest::blocking::Response,
     mdata: Arc<OnceLock<TrackMetadata>>,
     at: Arc<AtomicCell<f64>>,
 ) {
@@ -212,7 +211,7 @@ fn decoder_thread_inner(
     waveform: crossbeam::channel::Sender<f32>,
     status: Arc<AtomicCell<ThreadDecoderStatus>>,
     state_change: crossbeam::channel::Receiver<ThreadDecoderYell>,
-    server_stream: Box<dyn Read + Send + Sync + 'static>,
+    server_stream: reqwest::blocking::Response,
     mdata: Arc<OnceLock<TrackMetadata>>,
     at: Arc<AtomicCell<f64>>,
 ) {
@@ -323,8 +322,8 @@ fn decoder_thread_inner(
 pub(super) struct ControllingDecoder {
     // outside world interaction
     client: Arc<RwLock<MioClientState>>,
-    ret_status: Arc<Mutex<CurrentlyDecoding>>,
-    frontend_poll: std::sync::mpsc::Receiver<DecoderMsg>,
+    ret_status: tokio::sync::watch::Sender<CurrentlyDecoding>,
+    frontend_poll: crossbeam::channel::Receiver<DecoderMsg>,
     time_since_last_msg: std::time::Instant,
     // self status
     queue: HashMap<Uuid, TrackInner>,
@@ -338,8 +337,8 @@ pub(super) struct ControllingDecoder {
 impl ControllingDecoder {
     pub fn new(
         client: Arc<RwLock<MioClientState>>,
-        ret_status: Arc<Mutex<CurrentlyDecoding>>,
-        frontend_poll: std::sync::mpsc::Receiver<DecoderMsg>,
+        ret_status: tokio::sync::watch::Sender<CurrentlyDecoding>,
+        frontend_poll: crossbeam::channel::Receiver<DecoderMsg>,
     ) -> Self {
         Self {
             client,
@@ -373,9 +372,9 @@ impl Iterator for ControllingDecoder {
         // handle outside world msg
         let action = match self.frontend_poll.try_recv() {
             Ok(x) => Some(x),
-            Err(std::sync::mpsc::TryRecvError::Empty) => None,
+            Err(crossbeam::channel::TryRecvError::Empty) => None,
             // kills the audio thread, because the upper level has disconnected
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => return None::<Self::Item>,
+            Err(crossbeam::channel::TryRecvError::Disconnected) => return None::<Self::Item>,
         };
         if let Some(action) = action {
             match action {
@@ -420,16 +419,14 @@ impl Iterator for ControllingDecoder {
                         }
                     }
                     if dead {
-                        // minor work around for borrowing issues
-                        let age = self.age;
                         let id = self.order[self.pos];
-                        let read = self.client.read().unwrap().stream(id);
-                        let ti = self.get_curr_mut().unwrap();
-                        if read.is_err() {
-                            error!("encountered error while getting decoder");
-                            return None::<Self::Item>;
+                        let stream = self.client.blocking_read().stream(id);
+                        if stream.is_err() {
+                            // TODO: proper error handling
+                            todo!()
                         }
-                        *ti = TrackInner::new(read.unwrap(), age);
+                        let new_ti = TrackInner::new(stream.unwrap(), self.age);
+                        *self.get_curr_mut().unwrap() = new_ti;
                         self.age += 1;
                     }
                 }
@@ -443,66 +440,38 @@ impl Iterator for ControllingDecoder {
             }
         }
 
-        // status update
+        // periodic status update
         let instant_now = Instant::now();
         if self.time_since_last_msg.duration_since(instant_now) > Duration::from_millis(50) {
-            let mut lock = self.ret_status.try_lock();
-            if let Some(ref mut status) = lock {
+            self.time_since_last_msg = instant_now;
+            let ret = self.ret_status.send({
                 match self.get_curr() {
                     Some(track) => {
                         let mdata = track.mdata.get();
                         if let Some(mdata) = mdata {
                             // set status
-                            status.len = mdata.len;
-                            status.at = Duration::from_secs_f64(track.msgs.at.load());
-                            status.curr = self.order[self.pos];
-                            status.tracks = {
-                                self.order
-                                    .iter()
-                                    .copied()
-                                    .map(|x| TrackDecoderMetaData {
-                                        id: x,
-                                        status: {
-                                            let (status, is_empty) = {
-                                                let msgs = &self.queue[&x].msgs;
-                                                (msgs.status.load(), msgs.buf.is_empty())
-                                            };
-                                            if !is_empty {
-                                                if self.active {
-                                                    api::DecoderStatus::Playing
-                                                } else {
-                                                    api::DecoderStatus::Paused
-                                                }
-                                            } else {
-                                                match status {
-                                                    ThreadDecoderStatus::Decoding => {
-                                                        api::DecoderStatus::Buffering
-                                                    }
-                                                    ThreadDecoderStatus::Ready
-                                                    | ThreadDecoderStatus::Loading
-                                                    | ThreadDecoderStatus::WaitingForThread => {
-                                                        api::DecoderStatus::Loading
-                                                    }
-                                                    ThreadDecoderStatus::Dead => {
-                                                        api::DecoderStatus::Dead
-                                                    }
-                                                }
-                                            }
-                                        },
-                                    })
-                                    .collect()
-                            };
-                            // else don't do anything. 50 ms will pass and it should be set by then
+                            CurrentlyDecoding {
+                                len: mdata.len,
+                                at: Duration::from_secs_f64(track.msgs.at.load()),
+                                curr: self.order[self.pos],
+                                tracks: {
+                                    self.order
+                                        .iter()
+                                        .copied()
+                                        .map(|x| TrackDecoderMetaData { id: x })
+                                        .collect()
+                                },
+                            }
+                        } else {
+                            CurrentlyDecoding::default()
                         }
                     }
-                    None => {
-                        status.at = Duration::from_secs(0);
-                        status.len = Duration::from_secs(0);
-                        status.tracks.clear();
-                        status.curr = Uuid::nil();
-                    }
+                    None => CurrentlyDecoding::default(),
                 }
-                self.time_since_last_msg = instant_now;
+            });
+            if ret.is_err() {
+                // apparently, now is when the watcher got dropped. die.
+                return None::<Self::Item>;
             }
         }
 

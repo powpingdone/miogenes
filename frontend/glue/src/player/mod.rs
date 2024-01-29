@@ -1,4 +1,3 @@
-use crate::api;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -7,19 +6,20 @@ mod decoder;
 
 pub use audio_dev::*;
 
-pub(self) struct TrackDecoderMetaData {
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
+pub struct TrackDecoderMetaData {
     pub id: Uuid,
-    pub status: api::DecoderStatus,
 }
 
-pub(self) struct CurrentlyDecoding {
-    pub tracks: Vec<TrackDecoderMetaData>,
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
+pub struct CurrentlyDecoding {
     pub curr: Uuid,
     pub at: Duration,
     pub len: Duration,
+    pub tracks: Vec<TrackDecoderMetaData>,
 }
 
-pub(self) enum DecoderMsg {
+pub enum DecoderMsg {
     SeekAbs(Duration),
     Enqueue(Uuid),
     Play,
