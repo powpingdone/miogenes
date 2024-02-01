@@ -4,6 +4,22 @@ import { Player } from "player.slint";
 component Albums inherits VerticalBox {}
 component Upload inherits VerticalBox {}
 
+enum MainUIPage {
+	Player,
+	Albums,
+	Upload
+}
+
+component SideBar {
+    
+}
+
 export component MainUIBox inherits HorizontalBox {
-	Player {}
+	property <MainUIPage> page: MainUIPage.Player;
+
+	
+
+	if page == MainUIPage.Player: Player {}
+	if page == MainUIPage.Albums: Albums {}
+	if page == MainUIPage.Upload: Upload {}
 }
