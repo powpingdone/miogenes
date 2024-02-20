@@ -4,7 +4,7 @@ use mio_glue::{
     MioClientState,
 };
 use slint::ComponentHandle;
-use std::{future::Future, sync::Arc};
+use std::{future::Future, process::exit, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 
 pub use slint::Weak as SlWeak;
@@ -34,9 +34,9 @@ where
 
 // global state that must be held across the whole program
 pub(crate) struct MioFrontendStrong {
+    rt: Arc<tokio::runtime::Runtime>,
     state: Arc<RwLock<MioClientState>>,
     app: TopLevelWindow,
-    rt: Arc<tokio::runtime::Runtime>,
     player_tx: crossbeam::channel::Sender<DecoderMsg>,
     player_rx: tokio::sync::watch::Receiver<CurrentlyDecoding>,
 }
@@ -194,4 +194,6 @@ fn main() {
         })
     });
     s_state.run().unwrap();
+    // TODO: actually cleanup devices
+    exit(0);
 }

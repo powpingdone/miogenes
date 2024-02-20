@@ -22,7 +22,7 @@ export component Player inherits VerticalBox {
 	alignment: LayoutAlignment.center;
 
 	// TODO: Replicate the layout of a regular player thingy
-	if (!PlayerCB.loaded): Text {}
+	if (!PlayerCB.loaded): Text { text: @tr("Not playing...");}
 	// else
 	if (PlayerCB.loaded):
 	VerticalBox {
@@ -42,17 +42,17 @@ export component Player inherits VerticalBox {
 		HorizontalBox {
 			alignment: LayoutAlignment.center;
 			Button {
-				text: "Previous";
+				text: @tr("Previous");
 				clicked() => { PlayerCB.prev() }
 			}
 			
 			Button {
-				text: PlayerCB.playing ? "Pause" : "Play";
+				text: PlayerCB.playing ? @tr("Pause") : @tr("Play");
 				clicked() => { PlayerCB.playing ? PlayerCB.pause() : PlayerCB.play() }
 			}
 
 			Button {
-				text: "Next";
+				text: @tr("Next");
 				clicked() => { PlayerCB.next() }
 			}
 		}
