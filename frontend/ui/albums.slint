@@ -1,7 +1,17 @@
 import { VerticalBox } from "std-widgets.slint";
+import { SlintUUID } from "common.slint";
 
-export global AlbumsCB {
-    
+export struct AlbumMetadata {
+	img_loaded: bool,
+	name_loaded: string,
+	img: image,
+	id: SlintUUID,
+	name: string,
 }
 
-export component Albums inherits VerticalBox {}
+export global AlbumsCB {
+	in property <[AlbumMetadata]> all_albums;
+}
+
+export component Albums inherits VerticalBox {
+}

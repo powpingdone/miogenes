@@ -4,8 +4,9 @@ use mio_glue::{
     MioClientState,
 };
 use slint::ComponentHandle;
-use std::{future::Future, process::exit, sync::Arc, time::Duration};
+use std::{future::Future, process::exit, str::FromStr, sync::Arc};
 use tokio::sync::RwLock;
+use uuid::Uuid;
 
 pub use slint::Weak as SlWeak;
 pub use std::sync::Weak as StdWeak;
@@ -15,6 +16,21 @@ slint::include_modules!();
 mod error;
 mod player;
 mod user;
+
+impl From<Uuid> for SlintUUID {
+    fn from(value: Uuid) -> Self {
+        SlintUUID {
+            id: value.to_string().into(),
+        }
+    }
+}
+
+impl From<SlintUUID> for Uuid {
+    fn from(value: SlintUUID) -> Self {
+        // This really should *not* fail. A slintUUID comes from a Uuid
+        Uuid::from_str(&value.id).unwrap()
+    }
+}
 
 // quick and dirty error msg function
 impl<T, E> From<Result<T, E>> for ErrorInfo

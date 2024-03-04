@@ -11,8 +11,8 @@ import { UploadCB } from "upload.slint";
 export { LoginBoxCB, SignupBoxCB, TopLevelCB, PlayerCB, AlbumsCB, UploadCB }
 
 // common
-import { ErrorInfo, GlobalError, TopLevelPage } from "common.slint";
-export { ErrorInfo, GlobalError, TopLevelPage }
+import { ErrorInfo, GlobalError, TopLevelPage, SlintUUID } from "common.slint";
+export { ErrorInfo, GlobalError, TopLevelPage, SlintUUID }
 
 export component TopLevelWindow inherits Window {
 	in-out property <TopLevelPage> page_t <=> TopLevelCB.page_t;

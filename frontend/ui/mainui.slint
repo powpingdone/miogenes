@@ -1,4 +1,4 @@
-import { HorizontalBox, VerticalBox } from "std-widgets.slint";
+import { HorizontalBox, VerticalBox, StyleMetrics } from "std-widgets.slint";
 import { Player } from "player.slint";
 import { Albums } from "albums.slint";
 import { Upload } from "upload.slint";
@@ -19,6 +19,7 @@ component SideBarItem inherits Rectangle {
 	in property <MainUIPage> on_select;
 	
 	height: 20px;
+	background: StyleMetrics.window-background.darker(selected ? 0.3 : 0.2);
 
 	Text {
 		text: name;
@@ -38,13 +39,16 @@ component SideBar inherits Rectangle {
 	in property <string> title;
 		
 	max-width: 180px;
+	background: StyleMetrics.window-background.darker(0.2);
 
 	VerticalBox {
 		alignment: LayoutAlignment.start;
+		
 		Text { 
 			text: title;
 			font-size: 16px;
 		}
+
 		for p in routes : SideBarItem {
 			name: p.name;
 			on_select: p.to;
