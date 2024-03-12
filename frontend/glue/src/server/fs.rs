@@ -5,17 +5,13 @@ use crate::{
 use anyhow::anyhow;
 use futures::StreamExt;
 use mio_common::*;
-use std::{
-    path::Path,
-    pin::Pin, future::Future,
-};
+use std::{future::Future, path::Path, pin::Pin};
 use tokio::fs::{read, read_dir};
 
 impl MioClientState {
     // recursive function for searching for audio files
     pub async fn search_folder(&self, path: impl AsRef<Path>) -> GlueResult<Vec<String>> {
-         search_folder_inner(path).await
-        
+        search_folder_inner(path).await
     }
 
     pub async fn upload_file(
@@ -24,9 +20,11 @@ impl MioClientState {
         dir: String,
         fname: Option<String>,
     ) -> Result<retstructs::UploadReturn, GlueError> {
-        let buf = read(fullpath).await.map_err(|err| anyhow!("Failed to read file: {err}"))?;
+        let buf = read(fullpath)
+            .await
+            .map_err(|err| anyhow!("Failed to read file: {err}"))?;
         Ok(self
-            .wrap_auth(self.agent.post(&format!("{}/api/track?", self.url,)))
+            .wrap_auth(self.agent.post(&format!("{}/api/track?", self.url)))
             .query(&msgstructs::TrackUploadQuery { dir, fname })
             .body(buf)
             .send()
@@ -36,9 +34,10 @@ impl MioClientState {
     }
 }
 
-fn search_folder_inner(path: impl AsRef<Path>) -> Pin<Box<dyn Future<Output = GlueResult<Vec<String>>>>> {
+fn search_folder_inner(
+    path: impl AsRef<Path>,
+) -> Pin<Box<dyn Future<Output = GlueResult<Vec<String>>>>> {
     let path = path.as_ref().to_owned();
-
     Box::pin(async move {
         // TODO: add opus support
         //

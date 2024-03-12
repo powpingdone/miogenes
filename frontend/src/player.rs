@@ -1,17 +1,12 @@
-use std::{io::Cursor, pin::Pin, time::Duration};
-
+use crate::*;
 use image::RgbaImage;
 use mio_glue::player::{CurrentlyDecoding, Player};
 use slint::Rgba8Pixel;
+use std::{io::Cursor, pin::Pin, time::Duration};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
-use crate::*;
-
-
-// !
-// Player communication
-// !
+// ! Player communication !
 impl MioFrontendWeak {
     pub fn play(&self) {
         self.player_tx.send(DecoderMsg::Play).unwrap()
@@ -30,7 +25,9 @@ impl MioFrontendWeak {
     }
 
     pub fn seek(&self, pt: f32) {
-        self.player_tx.send(DecoderMsg::SeekAbs(Duration::from_secs_f32(pt))).unwrap()
+        self.player_tx
+            .send(DecoderMsg::SeekAbs(Duration::from_secs_f32(pt)))
+            .unwrap()
     }
 
     pub fn queue(&self, id: Uuid) {
@@ -38,9 +35,7 @@ impl MioFrontendWeak {
     }
 }
 
-// !
-// Player thread
-// !
+// ! Player thread !
 pub fn start_player_hold_thread(
     client: Arc<RwLock<MioClientState>>,
     rt: &tokio::runtime::Runtime,
@@ -76,6 +71,7 @@ impl MioFrontendWeak {
             rx.changed().await.unwrap();
             let curr_decoding = rx.borrow_and_update().clone();
             let (is_new_state, is_track_diff) = state.set_new_decoding(&curr_decoding);
+
             // invalidate UI metadata if different track
             if is_track_diff {
                 self.app
@@ -83,6 +79,7 @@ impl MioFrontendWeak {
                         app.global::<crate::PlayerCB>().set_loaded(false);
                     })
                     .unwrap();
+
                 // spawn task to fetch new metadata
                 let rt = self.w_rt().unwrap();
                 rt.spawn(state.new_fetch_task(curr_decoding.curr, self.state.clone()));
@@ -138,6 +135,7 @@ impl MioFrontendWeak {
                         })
                         .unwrap();
                 }
+
                 // set currently decoding metadata
                 self.app
                     .upgrade_in_event_loop(move |app| {
@@ -180,7 +178,6 @@ impl PollTaskState {
             artist_rx: oneshot::channel().1,
             cover_art_rx: oneshot::channel().1,
             title_rx: oneshot::channel().1,
-
             prev_state: None,
             album: None,
             artist: None,
@@ -196,7 +193,6 @@ impl PollTaskState {
             .as_ref()
             .is_some_and(|x| x.curr == new_state.curr);
         self.prev_state = Some(new_state.clone());
-
         (is_new, diff_track)
     }
 
@@ -228,13 +224,12 @@ impl PollTaskState {
         self.album_rx = album_rx;
         self.artist_rx = artist_rx;
         self.cover_art_rx = cover_art_rx;
-
         fut
     }
 
     pub fn is_all_mdata_ready(&mut self) -> bool {
         macro_rules! check_and_set {
-            ($field:ident, $rx:ident) => {
+            ($field: ident, $rx: ident) => {
                 match self.$rx.try_recv() {
                     Ok(x) => {
                         self.$field = x.into();

@@ -36,7 +36,6 @@ async fn track_upload(
     payload: Body,
 ) -> impl IntoResponse {
     let mut payload = payload.into_data_stream();
-
     trace!("/track/upload acquiring directory lock");
     let _lock_hold = state.lock_files.clone();
     let _hold = _lock_hold.read().await;

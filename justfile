@@ -24,5 +24,5 @@ clean:
     cargo clean
 
 fmt:
-    genemichaels -p
+    find | grep -v './target' | grep '\.rs' | xargs genemichaels
     cargo fmt

@@ -15,7 +15,7 @@ impl MioClientState {
 
     pub async fn get_track_data(&self, id: Uuid) -> GlueResult<retstructs::Track> {
         Ok(self
-            .wrap_auth(self.agent.get(&format!("{}/api/query/track", self.url,)))
+            .wrap_auth(self.agent.get(&format!("{}/api/query/track", self.url)))
             .query(&msgstructs::IdInfoQuery { id })
             .send()
             .await?
@@ -25,7 +25,7 @@ impl MioClientState {
 
     pub async fn get_album_data(&self, id: Uuid) -> GlueResult<retstructs::Album> {
         Ok(self
-            .wrap_auth(self.agent.get(&format!("{}/api/query/album", self.url,)))
+            .wrap_auth(self.agent.get(&format!("{}/api/query/album", self.url)))
             .query(&msgstructs::IdInfoQuery { id })
             .send()
             .await?
@@ -35,7 +35,7 @@ impl MioClientState {
 
     pub async fn get_cover_art_data(&self, id: Uuid) -> GlueResult<retstructs::CoverArt> {
         Ok(self
-            .wrap_auth(self.agent.get(&format!("{}/api/query/coverart", self.url,)))
+            .wrap_auth(self.agent.get(&format!("{}/api/query/coverart", self.url)))
             .query(&msgstructs::IdInfoQuery { id })
             .send()
             .await?
@@ -45,7 +45,7 @@ impl MioClientState {
 
     pub async fn get_artist_data(&self, id: Uuid) -> GlueResult<retstructs::Artist> {
         Ok(self
-            .wrap_auth(self.agent.get(&format!("{}/api/query/artist", self.url,)))
+            .wrap_auth(self.agent.get(&format!("{}/api/query/artist", self.url)))
             .query(&msgstructs::IdInfoQuery { id })
             .send()
             .await?
@@ -68,11 +68,10 @@ impl MioClientState {
     }
 
     pub fn stream(&self, id: Uuid) -> GlueResult<reqwest::blocking::Response> {
-        Ok(reqwest::blocking::Client::new().get(
-            &format!("{}/api/track", self.url))
-                .bearer_auth(self.key.get().unwrap().to_string())
-                .query(&msgstructs::IdInfoQuery { id })
-                .send()?
-        )
+        Ok(reqwest::blocking::Client::new()
+            .get(&format!("{}/api/track", self.url))
+            .bearer_auth(self.key.get().unwrap().to_string())
+            .query(&msgstructs::IdInfoQuery { id })
+            .send()?)
     }
 }

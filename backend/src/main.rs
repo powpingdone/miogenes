@@ -63,7 +63,6 @@ async fn main() -> anyhow::Result<()> {
     // setup the router
     trace!("main: building router");
     let router = gen_public_router(state.clone());
-
     let addr = SocketAddr::new(*IP_ADDR.get().unwrap(), *PORT.get().unwrap());
     info!("main: starting server on {addr}");
     let socket = TcpListener::bind(addr)

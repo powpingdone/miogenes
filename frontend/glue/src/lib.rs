@@ -1,5 +1,5 @@
-use std::sync::OnceLock;
 use reqwest::Client;
+use std::sync::OnceLock;
 
 pub mod error;
 pub mod player;
@@ -33,7 +33,7 @@ impl MioClientState {
         Self {
             url: "".to_owned(),
             key: OnceLock::new(),
-            agent: Client::new()
+            agent: Client::new(),
         }
     }
 

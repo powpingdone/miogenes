@@ -4,19 +4,17 @@ use mio_glue::{
     MioClientState,
 };
 use slint::ComponentHandle;
+pub use slint::Weak as SlWeak;
+pub use std::sync::Weak as StdWeak;
 use std::{future::Future, process::exit, str::FromStr, sync::Arc};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-pub use slint::Weak as SlWeak;
-pub use std::sync::Weak as StdWeak;
-
 slint::include_modules!();
-
+mod albums;
 mod error;
 mod player;
 mod user;
-mod albums;
 
 impl From<Uuid> for SlintUUID {
     fn from(value: Uuid) -> Self {
@@ -28,7 +26,7 @@ impl From<Uuid> for SlintUUID {
 
 impl From<SlintUUID> for Uuid {
     fn from(value: SlintUUID) -> Self {
-        // This really should *not* fail. A slintUUID comes from a Uuid
+        // This really should _not_ fail. A slintUUID comes from a Uuid
         Uuid::from_str(&value.id).unwrap()
     }
 }
@@ -143,6 +141,7 @@ impl MioFrontendWeak {
         let w_app = self.app.clone();
         self.w_rt()?.spawn(async move {
             let ret = fut.await;
+
             // TODO: better error reporting, sorta like folke/noice.nvim
             if ret.is_err() {
                 drop(w_app.upgrade_in_event_loop(|app| {
@@ -164,11 +163,13 @@ fn main() {
         .build()
         .unwrap();
     let state = Arc::new(RwLock::new(MioClientState::new()));
+
     // TODO: make a more clear error message when the player cannot find a device
     let app = TopLevelWindow::new().unwrap();
     let (player_tx, player_rx) = player::start_player_hold_thread(state.clone(), &rt);
     let s_state = MioFrontendStrong::new(state, app, rt, player_tx, player_rx);
     let state = s_state.weak();
+
     // bg tasks
     state.start_player_poll_task();
     state.start_album_poll_task();
@@ -213,6 +214,7 @@ fn main() {
         })
     });
     s_state.run().unwrap();
+
     // TODO: actually cleanup devices
     exit(0);
 }

@@ -1,8 +1,7 @@
+use crate::*;
 use mio_glue::MioClientState;
 use slint::SharedString;
 use tokio::sync::RwLock;
-
-use crate::*;
 
 impl MioFrontendWeak {
     pub fn check_url(&self, url: SharedString) {

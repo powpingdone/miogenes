@@ -14,7 +14,7 @@ pub enum Error {
     SlintPlatformError(slint::PlatformError),
     // babe I don't think that the gui exists anyway
     //
-    // YES DO AS I SAY- *panics*
+    // YES DO AS I SAY- _panics_
     //
     // this seriously needs some fuckin unbraindamage
     SlintEventLoopError(slint::EventLoopError),

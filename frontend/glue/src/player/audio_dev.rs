@@ -3,8 +3,8 @@ use crate::player::decoder::ControllingDecoder;
 use crate::*;
 use log::*;
 use std::{sync::Arc, time::Duration};
-use uuid::Uuid;
 use tokio::sync::RwLock;
+use uuid::Uuid;
 
 pub struct Player {
     pub tx: crossbeam::channel::Sender<DecoderMsg>,
@@ -23,17 +23,15 @@ impl Player {
             at: Duration::new(0, 0),
             len: Duration::new(0, 0),
         });
-
         trace!("acqiring dev");
         let (_dev, s_handle) = find_dev()?;
         trace!("setting up decoder");
         let decoder = ControllingDecoder::new(client, tx_pstate, rx_player);
-
         Ok(Self {
             tx: tx_player,
             rx: rx_pstate,
-            // task does not get joined due to if tx_player gets dropped, then everything
-            // else will die as well
+            // task does not get joined due to if tx_player gets dropped, then everything else
+            // will die as well
             _dec_thread: tokio::task::spawn_blocking({
                 let s_handle = s_handle.clone();
                 move || {

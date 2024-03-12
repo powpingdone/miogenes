@@ -6,7 +6,7 @@ pub struct Interm(Option<HashMap<String, Interm>>);
 
 impl MioClientState {
     pub async fn make_dir(&self, name: String, path: String) -> GlueResult<()> {
-        self.wrap_auth(self.agent.put(&format!("{}/api/folder", self.url,)))
+        self.wrap_auth(self.agent.put(&format!("{}/api/folder", self.url)))
             .query(&msgstructs::FolderCreateDelete { name, path })
             .send()
             .await?;

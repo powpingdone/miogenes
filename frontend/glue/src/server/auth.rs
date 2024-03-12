@@ -34,10 +34,7 @@ impl MioClientState {
     // this function merely refreshes the api token to call the server
     pub async fn refresh_token(&mut self) -> GlueResult<()> {
         let new_jwt = self
-            .wrap_auth(
-                self.agent
-                    .patch(&format!("{}/user/refresh", self.url)),
-            )
+            .wrap_auth(self.agent.patch(&format!("{}/user/refresh", self.url)))
             .send()
             .await?
             .json::<auth::JWT>()
@@ -60,7 +57,6 @@ impl MioClientState {
             .await?
             .json::<auth::JWT>()
             .await?;
-
         if let Some(key) = self.key.get_mut() {
             *key = jwt;
         } else {
