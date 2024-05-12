@@ -1,8 +1,8 @@
-use reqwest::Client;
 use std::sync::OnceLock;
+use ureq::Agent;
 
-pub mod error;
-pub mod player;
+mod error;
+mod player;
 mod server;
 
 // https://github.com/RustAudio/cpal/issues/720#issuecomment-1311813294
@@ -20,9 +20,10 @@ pub extern "C" fn JNI_OnLoad(vm: jni::JavaVM, res: *mut std::os::raw::c_void) ->
 
 // The second half of the connections. This actually sends out the raw connections
 // to the server and also handles the state for connecting to it.
+#[derive(Debug)]
 pub struct MioClientState {
     url: String,
-    agent: Client,
+    agent: Agent,
     pub key: OnceLock<mio_common::auth::JWT>,
 }
 
@@ -32,14 +33,17 @@ impl MioClientState {
     pub fn new() -> Self {
         Self {
             url: "".to_owned(),
+            agent: ureq::agent(),
             key: OnceLock::new(),
-            agent: Client::new(),
         }
     }
 
     // wrapper function. adds the auth header to the current request
-    fn wrap_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        req.bearer_auth(self.key.get().unwrap().to_string())
+    fn wrap_auth(&self, req: ureq::Request) -> ureq::Request {
+        req.set(
+            "Authorization",
+            &format!("Bearer {}", self.key.get().unwrap().to_string()),
+        )
     }
 }
 

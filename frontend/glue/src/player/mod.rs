@@ -6,20 +6,18 @@ mod decoder;
 
 pub use audio_dev::*;
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub struct TrackDecoderMetaData {
+pub(self) struct TrackDecoderMetaData {
     pub id: Uuid,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub struct CurrentlyDecoding {
+pub(self) struct CurrentlyDecoding {
+    pub tracks: Vec<TrackDecoderMetaData>,
     pub curr: Uuid,
     pub at: Duration,
     pub len: Duration,
-    pub tracks: Vec<TrackDecoderMetaData>,
 }
 
-pub enum DecoderMsg {
+pub(self) enum DecoderMsg {
     SeekAbs(Duration),
     Enqueue(Uuid),
     Play,

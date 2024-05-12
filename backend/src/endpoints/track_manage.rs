@@ -3,7 +3,6 @@ use crate::endpoints::check_dir_in_data_dir;
 use crate::error::MioInnerError;
 use crate::MioState;
 use anyhow::anyhow;
-use axum::body::Body;
 use axum::extract::*;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -33,9 +32,8 @@ async fn track_upload(
     State(state): State<MioState>,
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::TrackUploadQuery { fname, dir }): Query<msgstructs::TrackUploadQuery>,
-    payload: Body,
+    mut payload: BodyStream,
 ) -> impl IntoResponse {
-    let mut payload = payload.into_data_stream();
     trace!("/track/upload acquiring directory lock");
     let _lock_hold = state.lock_files.clone();
     let _hold = _lock_hold.read().await;

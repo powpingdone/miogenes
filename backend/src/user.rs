@@ -3,13 +3,12 @@ use crate::{MioInnerError, MioState, MioStateRegen};
 use anyhow::anyhow;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::extract::{FromRequestParts, State};
+use axum::headers::authorization::{Basic, Bearer};
+use axum::headers::Authorization;
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::{async_trait, Extension, Json, RequestPartsExt};
-use axum_extra::headers::authorization::{Basic, Bearer};
-use axum_extra::headers::Authorization;
-use axum_extra::TypedHeader;
+use axum::{async_trait, Extension, Json, RequestPartsExt, TypedHeader};
 use chrono::Utc;
 use log::*;
 use mio_common::*;
@@ -291,8 +290,10 @@ pub async fn signup(
 #[cfg(test)]
 mod test {
     use crate::test::*;
-    use axum::http::{HeaderName, Method};
-    use axum_extra::headers::{authorization::Credentials, Authorization};
+    use axum::{
+        headers::{authorization::Credentials, Authorization},
+        http::{HeaderName, Method},
+    };
     use mio_common::*;
 
     #[tokio::test]
