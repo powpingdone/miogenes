@@ -1,16 +1,21 @@
 // Login ui part
 import { VerticalBox , LineEdit , HorizontalBox, Button } from "std-widgets.slint";
+import { ErrorInfo, GlobalError, TopLevelCB, TopLevelPage } from "common.slint";
 
-export global LoginBoxCB {
+// PLEASE HELP
+// I don't know if this is the best way to do this
+global LoginBoxCB {
+	in property <bool> url_is_valid: false;
 	callback check_url(string);
-	callback attempt_login(string, string, string);
+	callback attempt_login(string, string);
 }
 
-export component LoginBox inherits HorizontalBox{
-	in-out property <string> server_url: "";
-	in-out property <string> username: "";
-	in-out property <string> password: "";
-	in property <bool> url_is_valid: false;
+component LoginBox inherits HorizontalBox{
+	property url_is_valid <=> LoginBoxCB.url_is_valid;
+	property error <=> GlobalError.last_error;
+	out property <string> server_url: "";
+	out property <string> username: "";
+	out property <string> password: "";
 
 	alignment: LayoutAlignment.center;
 	
@@ -18,24 +23,22 @@ export component LoginBox inherits HorizontalBox{
 		alignment: LayoutAlignment.center;
 		min-width: 320px;
 
+		// credential input
 		LineEdit {
-			text: server_url;
 			placeholder-text: @tr("Server URL");
+			edited(x) => { server_url = x }
 		}
-		
-		if (url-is-valid): 
-		LineEdit {
-			text: username;
+		if (url-is-valid): LineEdit {
 			placeholder-text: @tr("Username");
+			edited(x) => { username = x }
 		}
-		
-		if (url-is-valid): 
-		LineEdit {
-			text: password;
+		if (url-is-valid): LineEdit {
 			placeholder-text: @tr("Password");
 			input-type: InputType.password;
+			edited(x) => { password = x }
 		}
 
+		// buttons for credential checking
 		HorizontalBox {
 			alignment: LayoutAlignment.center;
 
@@ -43,11 +46,26 @@ export component LoginBox inherits HorizontalBox{
 				text: @tr("Connect to URL");
 				clicked => { LoginBoxCB.check_url(server_url) } 
 			}
-			
-			if (url-is-valid):
-			Button {
-				clicked => { LoginBoxCB.attempt_login(server_url, username, password) }
+			if (LoginBoxCB.url-is-valid): Button {
+				text: @tr("Signup");
+				clicked => { TopLevelCB.page_t = TopLevelPage.Signup }
+			}
+			if (LoginBoxCB.url-is-valid): Button {
+				text: @tr("Login");
+				clicked => { LoginBoxCB.attempt_login(username, password) }
+			}
+		}
+
+		if (error.is-error): HorizontalBox {
+			Text {
+				text: @tr("error:");
+			}
+
+			Text {
+				text: error.error;
 			}
 		}
 	}
 }
+
+export { LoginBoxCB, LoginBox }

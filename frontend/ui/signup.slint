@@ -1,3 +1,58 @@
-import { VerticalBox } from "std-widgets.slint";
+import { TopLevelCB, TopLevelPage, ErrorInfo, GlobalError } from "common.slint";
+import { VerticalBox, LineEdit, HorizontalBox, Button } from "std-widgets.slint";
 
-export component SignupBox inherits VerticalBox {}
+export global SignupBoxCB {
+	callback attempt_signup(string, string, string);
+}
+
+export component SignupBox inherits HorizontalBox {
+	property <ErrorInfo> g_error <=> GlobalError.last_error;
+	out property <string> username: "";
+	out property <string> password: "";
+	out property <string> password2: "";
+
+	alignment: LayoutAlignment.center;
+	
+	VerticalBox {
+		alignment: LayoutAlignment.center;
+		min-width: 320px;
+
+		// credential creations
+		LineEdit {
+			placeholder-text: @tr("Username");
+			edited(x) => {username = x}
+		}
+		LineEdit {
+			placeholder-text: @tr("Password");
+			edited(x) => {password = x}
+		}
+		LineEdit {
+			placeholder-text: @tr("Retype Password");
+			edited(x) => {password2 = x}
+		}
+
+		// buttons 
+		HorizontalBox {
+			alignment: LayoutAlignment.center;
+
+			Button {
+				text: @tr("Sign Up");
+				clicked => { SignupBoxCB.attempt_signup(username, password, password2) }
+			}
+			Button {
+				text: @tr("Return to Login");
+				clicked => { TopLevelCB.page-t = TopLevelPage.Login }
+			}
+		}
+
+		if (g_error.is-error): HorizontalBox {
+			Text {
+				text: @tr("error:");
+			}
+
+			Text {
+				text: g_error.error;
+			}
+		}
+	}
+}

@@ -8,6 +8,7 @@ use sqlx::SqlitePool;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+use tokio::net::TcpListener;
 
 mod db;
 mod endpoints;
@@ -62,16 +63,16 @@ async fn main() -> anyhow::Result<()> {
     // setup the router
     trace!("main: building router");
     let router = gen_public_router(state.clone());
-
-    // TODO: bind to user settings
-    let socket = SocketAddr::new(*IP_ADDR.get().unwrap(), *PORT.get().unwrap());
+    let addr = SocketAddr::new(*IP_ADDR.get().unwrap(), *PORT.get().unwrap());
+    info!("main: starting server on {addr}");
+    let socket = TcpListener::bind(addr)
+        .await
+        .expect("failed to bind to addr : {}");
     let (tx_die, mut rx_die) = tokio::sync::mpsc::unbounded_channel();
     ctrlc::set_handler(move || tx_die.send(()).unwrap())
         .expect("failed to setup graceful shutdown: {}");
-    info!("main: starting server on {socket}");
-    Server::bind(&socket)
-        .serve(router.into_make_service())
-        .with_graceful_shutdown(async {
+    axum::serve(socket, router)
+        .with_graceful_shutdown(async move {
             rx_die.recv().await;
         })
         .await
@@ -165,10 +166,8 @@ fn gen_public_router(state: MioState) -> Router<()> {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use axum::{
-        headers::authorization::{Authorization, Credentials},
-        http::{HeaderName, Method},
-    };
+    use axum::http::{HeaderName, Method};
+    use axum_extra::headers::authorization::{Authorization, Credentials};
     use axum_test::{TestRequest, TestServer, TestServerConfig};
     use mio_common::auth;
     use once_cell::sync::Lazy;

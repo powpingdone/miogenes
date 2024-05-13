@@ -1,38 +1,40 @@
 use std::{error::Error, fmt::Display};
 
-pub(crate) type GlueResult<T> = Result<T, ErrorSplit>;
+pub(crate) type GlueResult<T> = Result<T, GlueError>;
 
 #[derive(Debug)]
-pub enum ErrorSplit {
-    Ureq(Box<ureq::Error>),
+pub enum GlueError {
+    Reqwest(reqwest::Error),
+    StdIO(std::io::Error),
     Other(anyhow::Error),
 }
 
-impl From<ureq::Error> for ErrorSplit {
-    fn from(value: ureq::Error) -> Self {
-        ErrorSplit::Ureq(Box::new(value))
+impl From<reqwest::Error> for GlueError {
+    fn from(value: reqwest::Error) -> Self {
+        GlueError::Reqwest(value)
     }
 }
 
-impl From<anyhow::Error> for ErrorSplit {
+impl From<anyhow::Error> for GlueError {
     fn from(value: anyhow::Error) -> Self {
-        ErrorSplit::Other(value)
+        GlueError::Other(value)
     }
 }
 
-impl From<std::io::Error> for ErrorSplit {
+impl From<std::io::Error> for GlueError {
     fn from(value: std::io::Error) -> Self {
-        ErrorSplit::Other(value.into())
+        GlueError::StdIO(value)
     }
 }
 
-impl Display for ErrorSplit {
+impl Display for GlueError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ErrorSplit::Ureq(err) => err.fmt(f),
-            ErrorSplit::Other(err) => err.fmt(f),
+            GlueError::Reqwest(err) => err.fmt(f),
+            GlueError::StdIO(err) => err.fmt(f),
+            GlueError::Other(err) => err.fmt(f),
         }
     }
 }
 
-impl Error for ErrorSplit {}
+impl Error for GlueError {}
