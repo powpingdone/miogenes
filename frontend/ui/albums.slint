@@ -1,4 +1,4 @@
-import { VerticalBox } from "std-widgets.slint";
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { SlintUUID } from "common.slint";
 
 export struct AlbumMetadata {
@@ -11,7 +11,37 @@ export struct AlbumMetadata {
 export global AlbumsCB {
 	in property <[AlbumMetadata]> all_albums: [];
 	in-out property <bool> albums_setup: false;
+	callback queue_track(AlbumMetadata);
 }
 
 export component Albums inherits VerticalBox {
+	for album in AlbumsCB.all_albums :
+	Rectangle {
+		height: 50px;
+		TouchArea {
+			height: parent.height;
+			width: parent.width;
+			clicked => { AlbumsCB.queue_track(album) }
+			HorizontalBox {
+				// image
+				if album.img_loaded: Image {
+					source: album.img;
+					height: 36px;
+					width: 36px;
+				}
+				// placeholder
+				if !album.img_loaded: Rectangle {
+					height: 36px;
+					width: 36px;
+				}
+				// title
+				VerticalBox {
+					Text {
+						font-weight: 600;
+						text: album.name;
+					}
+				}
+			}
+		}
+	}
 }

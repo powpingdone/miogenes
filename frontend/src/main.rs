@@ -15,6 +15,7 @@ mod albums;
 mod error;
 mod player;
 mod user;
+mod upload;
 
 impl From<Uuid> for SlintUUID {
     fn from(value: Uuid) -> Self {
@@ -211,6 +212,12 @@ fn main() {
         x.on_seek({
             let state = state.clone();
             move |pos| state.seek(pos)
+        })
+    });
+    s_state.scoped_global::<AlbumsCB, _, _>(|x| {
+        x.on_queue_track({
+            let state = state.clone();
+            move |album| state.queue(album.id.into())
         })
     });
     s_state.run().unwrap();

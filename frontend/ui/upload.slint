@@ -1,7 +1,12 @@
 import { VerticalBox } from "std-widgets.slint";
 
+export struct UploadTask {
+	fname: string,
+}
+
 export global UploadCB {
-    
+	in property <[UploadTask]> name;
+	callback open_file_select();
 }
 
 export component Upload inherits VerticalBox {}

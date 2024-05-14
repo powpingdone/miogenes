@@ -40,8 +40,6 @@ fn search_folder_inner(
     let path = path.as_ref().to_owned();
     Box::pin(async move {
         // TODO: add opus support
-        //
-        // TODO: this is not async
         const COMMON_EXTS: &[&str] = &["wav", "flac", "alac", "mp3", "ogg", "aac", "m4a"];
         let mut ret = vec![];
         let mut dir = tokio_stream::wrappers::ReadDirStream::new(read_dir(&path).await?);

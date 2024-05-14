@@ -12,6 +12,7 @@ tokio = { workspace = true, features = ["full"] }
 crossbeam = { workspace = true }
 uuid = { workspace = true }
 futures = { workspace = true }
+native-dialog = { workspace = true }
 
 [build-dependencies]
 slint-build = { workspace = true }

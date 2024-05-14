@@ -27,7 +27,7 @@ tokio-stream = { workspace = true, features = ["full"] }
 futures = { workspace = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-env_logger = "0.10"
+env_logger = "0.11"
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13"
