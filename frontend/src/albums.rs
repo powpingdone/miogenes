@@ -1,6 +1,8 @@
 use crate::*;
 use slint::{ComponentHandle, ModelExt, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, sync::OnceLock, time::Duration};
+
+pub static WAKE_UP: OnceLock<tokio::sync::watch::Sender<()>> = OnceLock::new();
 
 impl MioFrontendWeak {
     pub fn start_album_poll_task(&self) -> tokio::task::JoinHandle<()> {
@@ -8,17 +10,20 @@ impl MioFrontendWeak {
     }
 
     async fn album_poll_task(self) {
+        let (tx, mut rx) = tokio::sync::watch::channel(());
+        WAKE_UP.set(tx).unwrap();
         loop {
             // go to sleep, or wait for a wake up from the uploader
-            //
-            // TODO: do uploader wake
-            match tokio::time::timeout(Duration::from_millis(500), futures::future::pending::<()>())
+            match tokio::time::timeout(Duration::from_millis(500), rx.changed())
                 .await
             {
-                Ok(()) => {
+                Ok(Ok(_)) => {
                     drop(self.app.upgrade_in_event_loop(|app| {
                         app.global::<AlbumsCB>().set_albums_setup(false)
                     }))
+                },
+                Ok(Err(_)) => {
+                    return
                 }
                 Err(_) => {
                     if let Ok(app) = self.w_app() {
