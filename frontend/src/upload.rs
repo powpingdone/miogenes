@@ -1,5 +1,7 @@
 use std::{collections::HashSet, path::PathBuf};
 
+use native_dialog::FileDialog;
+
 use crate::MioFrontendWeak;
 
 impl MioFrontendWeak {
@@ -12,6 +14,14 @@ impl MioFrontendWeak {
                 this.upload_bg_task(path, at).await
             }
         })
+    }
+
+    pub fn file_dialog(&self) {
+        let files = FileDialog::new()
+            .set_title("Upload to Miogenes server")
+            .show_open_multiple_file()
+            .unwrap();
+        
     }
 
     async fn upload_dir(self, path: PathBuf, at: String) {
@@ -78,6 +88,8 @@ impl MioFrontendWeak {
 
     async fn upload_bg_task(self, path: PathBuf, at: String) {
         // TODO: EVEN MORE ERROR HANDLING
+        //
+        // TODO: update ui with progress
         let h_state = self.w_state().unwrap();
         let state = h_state.read().await;
         state

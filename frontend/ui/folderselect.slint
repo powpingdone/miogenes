@@ -1,0 +1,15 @@
+export struct DirItem {
+	is_dir: bool,
+	name: string,
+}
+
+export global FolderSelectCB {
+	in-out property <bool> loaded: false;
+	in-out property <[string]> at: [];
+	in property <[DirItem]> cwd: [];
+}
+
+
+export component UploadFolderSelect {
+	
+}

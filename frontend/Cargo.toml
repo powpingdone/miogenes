@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 image = { workspace = true }
-slint = { workspace = true, features = ["gettext", "log"] }
+slint = { workspace = true, features = ["gettext", "log", "raw-window-handle-06"] }
 mio-glue = { path = "glue" }
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

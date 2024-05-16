@@ -1,6 +1,7 @@
 // Top Level. The main window that contains all other ui components
 import { LoginBox, LoginBoxCB } from "login.slint";
 import { SignupBox, SignupBoxCB } from "signup.slint";
+import { UploadFolderSelect, FolderSelectCB } from "folderselect.slint";
 import { MainUIBox } from "mainui.slint";
 import { TopLevelCB } from "common.slint";
 import { PlayerCB } from "player.slint";
@@ -8,7 +9,7 @@ import { AlbumsCB } from "albums.slint";
 import { UploadCB } from "upload.slint";
 
 // callbacks/functions
-export { LoginBoxCB, SignupBoxCB, TopLevelCB, PlayerCB, AlbumsCB, UploadCB }
+export { LoginBoxCB, SignupBoxCB, TopLevelCB, PlayerCB, AlbumsCB, UploadCB, FolderSelectCB }
 
 // common
 import { ErrorInfo, GlobalError, TopLevelPage, SlintUUID } from "common.slint";
@@ -20,4 +21,5 @@ export component TopLevelWindow inherits Window {
 	if (page_t == TopLevelPage.Login) : LoginBox {}
 	if (page_t == TopLevelPage.Signup) : SignupBox {}
 	if (page_t == TopLevelPage.Ready) : MainUIBox {}
+	if (page_t == TopLevelPage.UploadFolders) : UploadFolderSelect {}
 }
