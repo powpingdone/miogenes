@@ -1,15 +1,51 @@
+import { ListView, HorizontalBox, Button } from "std-widgets.slint";
 export struct DirItem {
-	is_dir: bool,
-	name: string,
+    is_dir: bool,
+    name: string,
 }
 
 export global FolderSelectCB {
-	in-out property <bool> loaded: false;
-	in-out property <[string]> at: [];
-	in property <[DirItem]> cwd: [];
+    in-out property <bool> loaded: false;
+    in-out property <[string]> at: [];
+    in property <[DirItem]> cwd: [];
+
+    callback chdir(string);
+    callback up();
+    callback new_folder();
+    callback cancel();
+    callback upload([string]);
 }
 
-
 export component UploadFolderSelect {
-	
+    ListView {
+        for i in FolderSelectCB.cwd: TouchArea {
+            clicked => {
+                FolderSelectCB.chdir(i.name);
+            }
+            HorizontalBox {
+                Text {
+                    text: i.name;
+                }
+            }
+        }
+    }
+
+    HorizontalBox { 
+        Button {
+            text: "Upload";
+            clicked => {FolderSelectCB.upload(FolderSelectCB.at);}
+        }
+        Button {
+            text: "Go up dir";
+            clicked => {FolderSelectCB.up();}
+        }
+        Button {
+            text: "New Folder";
+            clicked => {FolderSelectCB.new_folder();}
+        }
+        Button {
+            text: "Cancel";
+            clicked => {FolderSelectCB.cancel();}
+        }
+    }
 }
