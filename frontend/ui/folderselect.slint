@@ -9,6 +9,7 @@ export global FolderSelectCB {
     in-out property <[string]> at: [];
     in property <[DirItem]> cwd: [];
 
+    callback setup();
     callback chdir(string);
     callback up();
     callback new_folder();
@@ -20,7 +21,9 @@ export component UploadFolderSelect {
     ListView {
         for i in FolderSelectCB.cwd: TouchArea {
             clicked => {
-                FolderSelectCB.chdir(i.name);
+                if i.is_dir {
+                    FolderSelectCB.chdir(i.name);
+                }
             }
             HorizontalBox {
                 Text {

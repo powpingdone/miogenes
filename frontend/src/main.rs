@@ -16,6 +16,7 @@ mod error;
 mod player;
 mod user;
 mod upload;
+mod folder_select;
 
 impl From<Uuid> for SlintUUID {
     fn from(value: Uuid) -> Self {
