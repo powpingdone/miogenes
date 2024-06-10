@@ -38,14 +38,28 @@ impl MioFrontendWeak {
 
     // create folder and update
     pub fn confirmed_create_folder(&self, name: String) {
+        let at = self
+            .w_app()
+            .unwrap()
+            .global::<FolderSelectCB>()
+            .get_at()
+            .as_any()
+            .downcast_ref::<VecModel<SharedString>>()
+            .unwrap()
+            .iter()
+            .map(|x| x.as_str().to_owned())
+            .collect::<Vec<String>>();
         let rt = self.w_rt().unwrap();
-        rt.spawn({let this = self.to_owned(); async move {
-            let s_state = this.w_state().unwrap();
-            let state = s_state.read().await;
-            // make folder
-            todo!();
-            this.to_owned().regenerate();
-        }});
+        rt.spawn({
+            let this = self.to_owned();
+            async move {
+                let s_state = this.w_state().unwrap();
+                let state = s_state.read().await;
+                // make folder
+                state.make_dir(name, at).await;
+                this.to_owned().regenerate().await;
+            }
+        });
     }
 
     // cancel upload

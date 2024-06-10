@@ -13,6 +13,7 @@ use futures::Future;
 use log::*;
 use mio_common::*;
 use path_absolutize::Absolutize;
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::pin::Pin;
 use tokio::fs::create_dir;
@@ -41,12 +42,14 @@ async fn folder_create(
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> impl IntoResponse {
-    debug!("PUT /api/folder creating folder {name} at {path}");
+    debug!("PUT /api/folder creating folder {name} at {path:?}");
     let name = sanitize_filename::sanitize(name);
+    let pbuf = path.into_iter().collect::<PathBuf>();
+    // wait for lock to start folder creation, also check dir is where it should be
     let (_hold, task) = tokio::join!(
         state.lock_files.write(),
         tokio::task::spawn_blocking({
-            let pbuf = [&path].iter().collect::<PathBuf>();
+            let pbuf = pbuf.clone();
             move || check_dir_in_data_dir(&pbuf, userid)
         })
     );
@@ -55,7 +58,7 @@ async fn folder_create(
         .get()
         .unwrap()
         .join(format!("{userid}"))
-        .join(&path)
+        .join(&pbuf)
         .join(&name);
     create_dir(pbuf).await.map_err(|err| match err.kind() {
         std::io::ErrorKind::AlreadyExists => MioInnerError::Conflict(anyhow!("{name}")),
@@ -69,13 +72,13 @@ async fn folder_rename(
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderRename { old_path, new_path }): Query<msgstructs::FolderRename>,
 ) -> impl IntoResponse {
-    debug!("PATCH /api/folder move from '{old_path}' -> '{new_path}'");
+    debug!("PATCH /api/folder move from '{old_path:?}' -> '{new_path:?}'");
     let (_hold, check_dir) = tokio::join!(
         state.lock_files.write(),
         // setup vars, majority of blocking code here
         tokio::task::spawn_blocking({
-            let old_path = old_path.clone();
-            let new_path = new_path.clone();
+            let old_path = old_path.clone().into_iter().collect::<PathBuf>();
+            let new_path = new_path.clone().into_iter().collect::<PathBuf>();
             move || -> Result<_, MioInnerError> {
                 check_dir_in_data_dir(&old_path, userid)?;
                 check_dir_in_data_dir(&new_path, userid)?;
@@ -101,7 +104,7 @@ async fn folder_rename(
 
     // make sure it exists
     if !try_exists(&old).await? {
-        return Err(MioInnerError::NotFound(anyhow!("{old_path}")));
+        return Err(MioInnerError::NotFound(anyhow!("{old_path:?}")));
     }
 
     // and make sure it's also a directory
@@ -114,7 +117,7 @@ async fn folder_rename(
 
     // and that we're not in conflict
     if try_exists(&new).await? {
-        return Err(MioInnerError::Conflict(anyhow!("{new_path}")));
+        return Err(MioInnerError::Conflict(anyhow!("{new_path:?}")));
     }
 
     // finally, rename
@@ -136,10 +139,12 @@ async fn folder_query(
     let top_level = crate::DATA_DIR.get().unwrap().join(format!("{userid}"));
     if let Some(Query(msgstructs::FolderQuery { path })) = path_query {
         debug!(
-            "GET /api/folder querying folder {}, {path}",
+            "GET /api/folder querying folder {}, {path:?}",
             top_level.display()
         );
-        let path = AsRef::<std::path::Path>::as_ref(&path).absolutize()?;
+        // list files of a folder
+        let path = path.into_iter().collect::<PathBuf>();
+        let path = path.absolutize()?.to_owned();
         check_dir_in_data_dir(&path, userid)?;
         let mut check = top_level.clone();
         check.push(path);
@@ -255,11 +260,12 @@ async fn folder_delete(
     Extension(auth::JWTInner { userid, .. }): Extension<auth::JWTInner>,
     Query(msgstructs::FolderCreateDelete { name, path }): Query<msgstructs::FolderCreateDelete>,
 ) -> Result<impl IntoResponse, MioInnerError> {
+    let inp_path = path.into_iter().collect::<PathBuf>();
     let real_path = crate::DATA_DIR
         .get()
         .unwrap()
         .join(format!("{userid}"))
-        .join(&path)
+        .join(&inp_path)
         .join(&name);
     debug!(
         "DELETE /api/folder attemping to delete folder {}",
@@ -268,7 +274,7 @@ async fn folder_delete(
     let (_hold, ret) = tokio::join!(
         state.lock_files.write(),
         tokio::task::spawn_blocking({
-            let path = path.clone();
+            let path = inp_path.clone();
             move || check_dir_in_data_dir(&path, userid)
         })
     );
@@ -279,7 +285,12 @@ async fn folder_delete(
         return Err(MioInnerError::ExtIoError(
             anyhow!(
                 "Directory {:?} has items, please remove them.",
-                [path, name].into_iter().collect::<PathBuf>()
+                inp_path
+                    .clone()
+                    .into_iter()
+                    .chain(std::iter::once(name.as_ref()))
+                    .collect::<PathBuf>()
+                    .display()
             ),
             StatusCode::BAD_REQUEST,
         ));
@@ -321,7 +332,7 @@ mod test {
                 "/api/folder?{}",
                 url_enc(msgstructs::FolderCreateDelete {
                     name: "a horse".to_string(),
-                    path: "".to_string(),
+                    path: vec!["".to_string()],
                 })
                 .unwrap()
             ),
@@ -335,7 +346,7 @@ mod test {
                 "/api/folder?{}",
                 url_enc(msgstructs::FolderCreateDelete {
                     name: "neigh".to_string(),
-                    path: "a horse/".to_string(),
+                    path: vec!["a horse".to_string(), "".to_string()],
                 })
                 .unwrap()
             ),
@@ -349,7 +360,7 @@ mod test {
                 "/api/folder?{}",
                 url_enc(msgstructs::FolderCreateDelete {
                     name: "bleh".to_string(),
-                    path: "a horse/neigh".to_string(),
+                    path: vec!["a horse".to_string(), "neigh".to_string()],
                 })
                 .unwrap()
             ),
@@ -374,8 +385,8 @@ mod test {
             &format!(
                 "/api/folder?{}",
                 url_enc(msgstructs::FolderRename {
-                    old_path: "a horse".to_string(),
-                    new_path: "merasmus".to_string(),
+                    old_path: vec!["a horse".to_string()],
+                    new_path: vec!["merasmus".to_string()],
                 })
                 .unwrap()
             ),
@@ -398,8 +409,12 @@ mod test {
             &format!(
                 "/api/folder?{}",
                 url_enc(msgstructs::FolderRename {
-                    old_path: "merasmus/neigh/bleh".to_string(),
-                    new_path: "merasmus/bleh".to_string(),
+                    old_path: vec![
+                        "merasmus".to_string(),
+                        "neigh".to_string(),
+                        "bleh".to_string()
+                    ],
+                    new_path: vec!["merasmus".to_string(), "bleh".to_string()],
                 })
                 .unwrap()
             ),
@@ -426,7 +441,16 @@ mod test {
     async fn folder_bad_path_checks() {
         let cli = client().await;
         let jwt = gen_user(&cli, "folder_bad_path_checks").await;
-        const TEST_PATHS: &[&str] = &["..", "../", "a/../..", "../../test_files"];
+        #[allow(non_snake_case)]
+        let TEST_PATHS: Vec<Vec<String>> = vec![
+            vec![".."],
+            vec!["..", ""],
+            vec!["a", "..", ".."],
+            vec!["..", "..", "test_files"],
+        ]
+        .into_iter()
+        .map(|x| x.into_iter().map(str::to_owned).collect())
+        .collect();
         let err = retstructs::ErrorMsg {
             error: crate::MioInnerError::ExtIoError(
                 anyhow::anyhow!("bad path"),
@@ -435,7 +459,7 @@ mod test {
             .msg(),
         };
         for path in TEST_PATHS {
-            for name in TEST_PATHS {
+            for name in path.iter() {
                 assert_eq!(
                     jwt_header(
                         &cli,
@@ -443,8 +467,8 @@ mod test {
                         &format!(
                             "/api/folder?{}",
                             url_enc(msgstructs::FolderCreateDelete {
-                                name: name.to_string(),
-                                path: path.to_string(),
+                                name: name.clone(),
+                                path: path.clone(),
                             })
                             .unwrap()
                         ),
@@ -462,7 +486,7 @@ mod test {
                         &format!(
                             "/api/folder?{}",
                             url_enc(msgstructs::FolderQuery {
-                                path: path.to_string()
+                                path:path.clone()
                             })
                             .unwrap()
                         ),
@@ -480,8 +504,8 @@ mod test {
                         &format!(
                             "/api/folder?{}",
                             url_enc(msgstructs::FolderRename {
-                                old_path: path.to_string(),
-                                new_path: name.to_string(),
+                                old_path: path.clone(),
+                                new_path: path.clone(),
                             })
                             .unwrap()
                         ),
@@ -499,8 +523,8 @@ mod test {
                         &format!(
                             "/api/folder?{}",
                             url_enc(msgstructs::FolderCreateDelete {
-                                name: name.to_string(),
-                                path: path.to_string(),
+                                name: name.clone(),
+                                path: path.clone(),
                             })
                             .unwrap()
                         ),

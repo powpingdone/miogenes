@@ -25,24 +25,24 @@ pub struct TrackUploadQuery {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct FolderCreateDelete {
     pub name: String,
-    pub path: String,
+    pub path: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct FolderQuery {
-    pub path: String,
+    pub path: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct FolderRename {
-    pub old_path: String,
-    pub new_path: String,
+    pub old_path: Vec<String>,
+    pub new_path: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct TrackMove {
     pub id: Uuid,
-    pub new_path: String,
+    pub new_path: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]

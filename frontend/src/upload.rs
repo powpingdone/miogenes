@@ -60,7 +60,8 @@ impl MioFrontendWeak {
                     let state = h_state.read().await;
                     for pt in folder {
                         let pt = pt.to_string_lossy().into_owned();
-                        state.make_dir(pt.clone(), pstack.join("/")).await.unwrap();
+                        // TODO: possibly not make this copy every single time
+                        state.make_dir(pt.clone(), pstack.clone()).await.unwrap();
                         pstack.push(pt);
                     }
                 }
