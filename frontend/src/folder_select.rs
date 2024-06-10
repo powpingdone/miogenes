@@ -1,10 +1,14 @@
-use slint::{Model, SharedString, VecModel};
+use std::rc::Rc;
+
+use slint::{Model, ModelRc, SharedString, VecModel};
 
 use crate::*;
 
 impl MioFrontendWeak {
+    // fetch folders
     pub fn setup_folders(&self) {}
 
+    // goto dir
     pub fn chdir(&self, at: String) {
         self.w_app()
             .unwrap()
@@ -17,21 +21,61 @@ impl MioFrontendWeak {
         self.w_rt().unwrap().spawn(self.to_owned().regenerate());
     }
 
+    // go up a dir
     pub fn up(&self) {
         let app = self.w_app().unwrap();
-        let at_hold = app.global::<FolderSelectCB>();
-        let dc_ref = at_hold.get_at();
-        let b_ee = dc_ref.as_any().downcast_ref::<VecModel<SharedString>>();
-        b_ee.unwrap().remove(b_ee.unwrap().row_count() - 1);
+        let global_hold = app.global::<FolderSelectCB>();
+        let at_hold = global_hold.get_at();
+        let at = at_hold.as_any().downcast_ref::<VecModel<SharedString>>();
+        at.unwrap().remove(at.unwrap().row_count() - 1);
         self.w_rt().unwrap().spawn(self.to_owned().regenerate());
     }
 
-    pub fn new_folder(&self) {}
+    // create dialog for text input for folder name
+    pub fn new_folder(&self) {
+        todo!()
+    }
 
-    pub fn cancel(&self) {}
+    // create folder and update
+    pub fn confirmed_create_folder(&self, name: String) {
+        let rt = self.w_rt().unwrap();
+        rt.spawn({let this = self.to_owned(); async move {
+            let s_state = this.w_state().unwrap();
+            let state = s_state.read().await;
+            // make folder
+            todo!();
+            this.to_owned().regenerate();
+        }});
+    }
 
-    pub fn upload(&self, at: Vec<String>) {}
+    // cancel upload
+    pub fn cancel(&self) {
+        self.unload_upload_page();
+    }
 
+    // begin upload
+    pub fn upload(&self, at: Vec<String>) {
+        // setup upload task
+        todo!();
+        self.unload_upload_page();
+    }
+
+    // change back to upload page
+    fn unload_upload_page(&self) {
+        self.app
+            .upgrade_in_event_loop(|app| {
+                // goto upload page
+                app.global::<TopLevelCB>().set_page_t(TopLevelPage::Ready);
+                app.global::<MainUICB>().set_page(MainUIPage::Upload);
+                // and reset upload
+                app.global::<FolderSelectCB>().set_loaded(false);
+                app.global::<FolderSelectCB>().set_at(ModelRc::default());
+                app.global::<FolderSelectCB>().set_cwd(ModelRc::default());
+            })
+            .unwrap();
+    }
+
+    // fetch dir contents
     async fn regenerate(self) {
         self.app
             .upgrade_in_event_loop(|app| {
