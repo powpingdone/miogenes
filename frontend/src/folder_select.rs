@@ -56,7 +56,7 @@ impl MioFrontendWeak {
                 let s_state = this.w_state().unwrap();
                 let state = s_state.read().await;
                 // make folder
-                state.make_dir(name, at).await;
+                state.make_dir(name, at).await.unwrap();
                 this.to_owned().regenerate().await;
             }
         });
