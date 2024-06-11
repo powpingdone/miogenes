@@ -58,9 +58,25 @@ pub struct Albums {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct FolderQuery {
-    // this is beyond dumb, as this can be either paths or uuids
-    pub ret: Vec<String>,
+    pub ret: FolderQueryItem,
 }
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FolderQueryItem {
+    // if Some, then this is the contents of the folder
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tree: Option<Vec<FolderQueryItem>>,
+    // name of the item
+    pub id: String,
+    // item is of type
+    pub item_type: FolderQueryItemType
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FolderQueryItemType {
+    Folder = 0, // id is name of folder
+    Audio = 1, // id is uuid of audio
+} 
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct ErrorMsg {

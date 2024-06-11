@@ -91,11 +91,13 @@ impl MioFrontendWeak {
 
     // fetch dir contents
     async fn regenerate(self) {
+        // unload
         self.app
             .upgrade_in_event_loop(|app| {
                 app.global::<FolderSelectCB>().set_loaded(false);
             })
             .unwrap();
+        // path to query
         let path = self
             .w_app()
             .unwrap()
@@ -107,7 +109,12 @@ impl MioFrontendWeak {
             .iter()
             .map(|x| x.as_str().to_owned())
             .collect::<Vec<String>>();
-        // TODO: query directory contents
+        // query directory contents
+        let h_state = self.w_state().unwrap();
+        let state = h_state.read().await;
+        let listing = state.get_folder_listing(path).await.unwrap();
+        // now update folders
+
         todo!();
     }
 }

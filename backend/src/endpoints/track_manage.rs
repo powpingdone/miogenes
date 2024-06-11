@@ -232,6 +232,7 @@ async fn track_move(
     trace!("/track/move locking write dir");
     let _hold = state.lock_files.write().await;
     let mut conn = state.db.acquire().await?;
+    let new_path = new_path.join("/");
     write_transaction(&mut conn, |txn| {
         Box::pin(async move {
             // preliminary checks

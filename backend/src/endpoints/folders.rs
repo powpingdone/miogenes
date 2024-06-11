@@ -11,9 +11,9 @@ use axum::Router;
 use futures::Future;
 #[allow(unused)]
 use log::*;
+use mio_common::retstructs::FolderQueryItem;
 use mio_common::*;
 use path_absolutize::Absolutize;
-use std::ffi::OsString;
 use std::path::PathBuf;
 use std::pin::Pin;
 use tokio::fs::create_dir;
@@ -136,46 +136,74 @@ async fn folder_query(
     path_query: Option<Query<msgstructs::FolderQuery>>,
 ) -> Result<impl IntoResponse, MioInnerError> {
     let _hold = state.lock_files.read().await;
-    let top_level = crate::DATA_DIR.get().unwrap().join(format!("{userid}"));
+    let top_level_dir = crate::DATA_DIR.get().unwrap().join(format!("{userid}"));
     if let Some(Query(msgstructs::FolderQuery { path })) = path_query {
+        let foldname = path.last().map(String::to_owned).unwrap_or_default();
         debug!(
             "GET /api/folder querying folder {}, {path:?}",
-            top_level.display()
+            top_level_dir.display()
         );
-        // list files of a folder
+        // check in dir
         let path = path.into_iter().collect::<PathBuf>();
         let path = path.absolutize()?.to_owned();
         check_dir_in_data_dir(&path, userid)?;
-        let mut check = top_level.clone();
+        let mut check = top_level_dir.clone();
         check.push(path);
-        let mut ret = vec![];
+        // list files of a folder
+        let mut ret: Vec<retstructs::FolderQueryItem> = vec![];
         let mut read_dir = read_dir(check).await?;
         while let Some(x) = read_dir.next_entry().await? {
             let loghold = x.file_name();
             let logfile = AsRef::<std::path::Path>::as_ref(&loghold).display();
             trace!("GET /api/folder checking branch {logfile}");
-            if x.file_type().await?.is_file() {
+            let ftype = x.file_type().await?;
+            if ftype.is_file() {
                 trace!("GET /api/folder branch is file {logfile}");
-                ret.push(
-                    Uuid::try_parse(x.file_name().into_string().map_err(|err| {
+                // check if fname is valid uuid
+                Uuid::try_parse(x.file_name().into_string().map_err(|err| {
                         MioInnerError::IntIoError(
-                            anyhow!("could not convert internal file name into string to become uuid: name is {err:?}"),
+                            anyhow!("could not convert internal file name into string to become uuid: name is {}", err.to_string_lossy()),
                         )
                     })?.as_str())
-                        .map(|x| x.to_string())
                         .map_err(
                             |err| MioInnerError::IntIoError(anyhow!("internal file name is not a uuid: {err}")),
-                        )?,
-                );
+                        )?;
+                ret.push(retstructs::FolderQueryItem {
+                    tree: None,
+                    id: x.file_name().into_string().unwrap(),
+                    item_type: retstructs::FolderQueryItemType::Audio,
+                });
+            } else if ftype.is_dir() {
+                trace!("GET /api/folder branch is folder {logfile}");
+                ret.push(retstructs::FolderQueryItem {
+                    tree: None,
+                    item_type: retstructs::FolderQueryItemType::Folder,
+                    id: x.file_name().into_string().map_err(|osstr| {
+                        MioInnerError::IntIoError(anyhow!(
+                            "could not convert internal folder name into string: dir name is {}",
+                            osstr.to_string_lossy()
+                        ))
+                    })?,
+                });
             }
         }
-        Ok(Json(retstructs::FolderQuery { ret }))
+        Ok(Json(retstructs::FolderQuery {
+            ret: retstructs::FolderQueryItem {
+                tree: Some(ret),
+                id: foldname,
+                item_type: retstructs::FolderQueryItemType::Folder,
+            },
+        }))
     } else {
         // query folder tree
         debug!("GET /api/folder querying folder tree");
         Ok(Json(retstructs::FolderQuery {
-            ret: folder_tree_inner(top_level.clone(), read_dir(top_level).await?, "".into())
-                .await?,
+            ret: folder_tree_inner(
+                top_level_dir.clone(),
+                read_dir(top_level_dir).await?,
+                "".into(),
+            )
+            .await?,
         }))
     }
 }
@@ -184,7 +212,7 @@ fn folder_tree_inner(
     base_dir: PathBuf,
     mut dir: ReadDir,
     curr_path: PathBuf,
-) -> Pin<Box<dyn Future<Output = Result<Vec<String>, MioInnerError>> + Send>> {
+) -> Pin<Box<dyn Future<Output = Result<FolderQueryItem, MioInnerError>> + Send>> {
     // The strange return type is due to recursion. I don't think that this could have
     // been impl'd reasonably any other way. Thanks rust async!
     Box::pin(async move {
@@ -211,7 +239,7 @@ fn folder_tree_inner(
             }
         }
 
-        // 2: for each dir, recurse into each and see if they have any dirs
+        // 2: for each dir, recurse
         let dir_futs = dirs
             .into_iter()
             .map(|next_dir| {
@@ -230,27 +258,27 @@ fn folder_tree_inner(
                 })
             })
             .collect::<Vec<_>>();
-        let mut dirs_finished = vec![];
-        let mut full_len: usize = 1;
-        for fut in dir_futs {
-            let ret = fut.await??;
-            full_len += ret.len();
-            dirs_finished.push(ret);
-        }
 
-        // 3: flatten. the current path is appended too if not blank
-        let mut ret = Vec::with_capacity(full_len);
-        if curr_path.to_string_lossy() != "" {
-            ret.push(
-                curr_path
-                    .clone()
-                    .to_str()
-                    .map(|x| x.to_owned())
-                    .ok_or_else(|| fail_to_utf8(curr_path))?,
-            )
+        // 3: collect, and then add to self
+        let mut dirs_finished = vec![];
+        for fut in dir_futs {
+            dirs_finished.push(fut.await??);
         }
-        ret.extend(dirs_finished.into_iter().flatten());
-        Ok(ret)
+        Ok(retstructs::FolderQueryItem {
+            // return none if there was no children
+            tree: if dirs_finished.is_empty() {
+                None
+            } else {
+                Some(dirs_finished)
+            },
+            item_type: retstructs::FolderQueryItemType::Folder,
+            id: curr_path
+                .file_name()
+                .unwrap_or_default()
+                .to_owned()
+                .into_string()
+                .map_err(fail_to_utf8)?,
+        })
     })
 }
 
@@ -315,8 +343,73 @@ mod test {
             .await
             .json::<retstructs::FolderQuery>()
             .ret;
-        let ret = ret.into_iter().collect::<HashSet<_>>();
-        dbg!(ret) == dbg!(HashSet::from_iter(dirs.iter().map(|x| x.to_string())))
+        let mut dirs_reconstruct: retstructs::FolderQueryItem = retstructs::FolderQueryItem {
+            tree: None,
+            id: "".to_owned(),
+            item_type: retstructs::FolderQueryItemType::Folder,
+        };
+        for dir in dirs {
+            push_recurse(&mut dirs_reconstruct, dir)
+        }
+        dbg!(ret) == dbg!(dirs_reconstruct)
+    }
+
+    // util function to reconstruct dirs
+    fn push_recurse(master: &mut retstructs::FolderQueryItem, path_slice: &str) {
+        if path_slice.is_empty() {
+            return;
+        }
+
+        let next_pt = path_slice.find('/');
+        if let Some(pt) = next_pt {
+            // not at end
+            let (this_dir, remaining_dirs) = path_slice.split_at(pt);
+            let remaining_dirs = remaining_dirs.trim_start_matches("/");
+            if master.tree.is_none() {
+                master.tree = Some(vec![]);
+            }
+            let tree = master.tree.as_mut().unwrap();
+            // find item
+            for i in tree.iter_mut() {
+                if i.id == this_dir {
+                    push_recurse(i, remaining_dirs);
+                    return;
+                }
+            }
+            // item not found
+            let mut new = retstructs::FolderQueryItem {
+                tree: None,
+                id: this_dir.to_owned(),
+                item_type: retstructs::FolderQueryItemType::Folder,
+            };
+            push_recurse(&mut new, remaining_dirs);
+            tree.push(new);
+        } else {
+            // at end
+            if master.tree.is_none() {
+                master.tree = Some(vec![retstructs::FolderQueryItem {
+                    tree: None,
+                    id: path_slice.to_owned(),
+                    item_type: retstructs::FolderQueryItemType::Folder,
+                }]);
+            } else {
+                // check for collisions
+                for i in master.tree.as_ref().unwrap().iter() {
+                    if i.id == path_slice {
+                        return;
+                    }
+                }
+                master
+                    .tree
+                    .as_mut()
+                    .unwrap()
+                    .push(retstructs::FolderQueryItem {
+                        tree: None,
+                        id: path_slice.to_owned(),
+                        item_type: retstructs::FolderQueryItemType::Folder,
+                    })
+            }
+        }
     }
 
     #[tokio::test]
@@ -485,10 +578,7 @@ mod test {
                         Method::GET,
                         &format!(
                             "/api/folder?{}",
-                            url_enc(msgstructs::FolderQuery {
-                                path:path.clone()
-                            })
-                            .unwrap()
+                            url_enc(msgstructs::FolderQuery { path: path.clone() }).unwrap()
                         ),
                         &jwt,
                     )
