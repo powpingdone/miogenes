@@ -259,16 +259,15 @@ async fn track_move(
                 .get()
                 .unwrap()
                 .join(format!("{userid}"))
-                .join(&new_path.iter().collect::<PathBuf>())
+                .join(&new_path)
                 .join(format!("{id}"));
             check_dir_in_data_dir(next_fname.clone(), userid)?;
 
             // note: no collision check is needed because every id is almost certainly
             // guaranteed to be unique. begin the actual meat of the transaction
-            let path_str = new_path.join("/");
             sqlx::query!(
                 "UPDATE track SET path = ? WHERE id = ? AND owner = ?;",
-                path_str,
+                new_path,
                 id,
                 userid
             )
