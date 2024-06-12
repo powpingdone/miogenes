@@ -1,3 +1,4 @@
+use mio_common::*;
 use std::rc::Rc;
 
 use slint::{Model, ModelRc, SharedString, VecModel};
@@ -6,7 +7,20 @@ use crate::*;
 
 impl MioFrontendWeak {
     // fetch folders
-    pub fn setup_folders(&self) {}
+    pub fn setup_folders(&self) {
+        self.app
+            .upgrade_in_event_loop(|app| {
+                // goto folders 
+                app.global::<TopLevelCB>()
+                    .set_page_t(TopLevelPage::UploadFolders);
+                // and then setup basic set 
+                app.global::<FolderSelectCB>().set_loaded(false);
+                app.global::<FolderSelectCB>().set_at(ModelRc::default());
+                app.global::<FolderSelectCB>().set_cwd(ModelRc::default());
+            })
+            .unwrap();
+        self.w_rt().unwrap().spawn(self.to_owned().regenerate_folders());
+    }
 
     // goto dir
     pub fn chdir(&self, at: String) {
@@ -18,7 +32,7 @@ impl MioFrontendWeak {
             .downcast_ref::<VecModel<SharedString>>()
             .unwrap()
             .push(at.into());
-        self.w_rt().unwrap().spawn(self.to_owned().regenerate());
+        self.w_rt().unwrap().spawn(self.to_owned().regenerate_folders());
     }
 
     // go up a dir
@@ -28,7 +42,7 @@ impl MioFrontendWeak {
         let at_hold = global_hold.get_at();
         let at = at_hold.as_any().downcast_ref::<VecModel<SharedString>>();
         at.unwrap().remove(at.unwrap().row_count() - 1);
-        self.w_rt().unwrap().spawn(self.to_owned().regenerate());
+        self.w_rt().unwrap().spawn(self.to_owned().regenerate_folders());
     }
 
     // create dialog for text input for folder name
@@ -57,7 +71,7 @@ impl MioFrontendWeak {
                 let state = s_state.read().await;
                 // make folder
                 state.make_dir(name, at).await.unwrap();
-                this.to_owned().regenerate().await;
+                this.to_owned().regenerate_folders().await;
             }
         });
     }
@@ -90,7 +104,7 @@ impl MioFrontendWeak {
     }
 
     // fetch dir contents
-    async fn regenerate(self) {
+    async fn regenerate_folders(self) {
         // unload
         self.app
             .upgrade_in_event_loop(|app| {
@@ -112,9 +126,29 @@ impl MioFrontendWeak {
         // query directory contents
         let h_state = self.w_state().unwrap();
         let state = h_state.read().await;
-        let listing = state.get_folder_listing(path).await.unwrap();
+        let listings = state.get_folder_listing(path).await.unwrap();
         // now update folders
-
-        todo!();
+        let listing_slint = ModelRc::from(Rc::new(VecModel::from(
+            tokio::task::spawn_blocking(move || {
+                listings
+                    .into_iter()
+                    .map(|x| DirItem {
+                        is_dir: x.item_type == retstructs::FolderQueryItemType::Folder,
+                        name: x.id.into(),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .await
+            .unwrap(),
+        )));
+        self.w_app()
+            .unwrap()
+            .global::<FolderSelectCB>()
+            .set_cwd(listing_slint);
+        self.app
+            .upgrade_in_event_loop(move |app| {
+                app.global::<FolderSelectCB>().set_loaded(true);
+            })
+            .unwrap();
     }
 }
