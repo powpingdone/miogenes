@@ -1,5 +1,3 @@
-use std::path::{Path, PathBuf};
-
 use crate::db::write_transaction;
 use crate::endpoints::check_dir_in_data_dir;
 use crate::error::MioInnerError;
@@ -14,6 +12,7 @@ use futures::StreamExt;
 #[allow(unused)]
 use log::*;
 use mio_common::*;
+use std::path::{Path, PathBuf};
 use tokio::fs::{remove_file, rename, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, ErrorKind};
 use tokio::time::timeout;

@@ -14,17 +14,13 @@ impl MioFrontendWeak {
         WAKE_UP.set(tx).unwrap();
         loop {
             // go to sleep, or wait for a wake up from the uploader
-            match tokio::time::timeout(Duration::from_millis(500), rx.changed())
-                .await
-            {
+            match tokio::time::timeout(Duration::from_millis(500), rx.changed()).await {
                 Ok(Ok(_)) => {
                     drop(self.app.upgrade_in_event_loop(|app| {
                         app.global::<AlbumsCB>().set_albums_setup(false)
                     }))
-                },
-                Ok(Err(_)) => {
-                    return
                 }
+                Ok(Err(_)) => return,
                 Err(_) => {
                     if let Ok(app) = self.w_app() {
                         let cb = app.global::<AlbumsCB>();

@@ -1,8 +1,6 @@
-use std::{collections::HashSet, path::PathBuf};
-
-use native_dialog::FileDialog;
-
 use crate::MioFrontendWeak;
+use native_dialog::FileDialog;
+use std::{collections::HashSet, path::PathBuf};
 
 impl MioFrontendWeak {
     pub fn send_upload(&self, path: PathBuf, at: String) -> tokio::task::JoinHandle<()> {
@@ -21,13 +19,13 @@ impl MioFrontendWeak {
             .set_title("Upload to Miogenes server")
             .show_open_multiple_file()
             .unwrap();
-        
     }
 
     async fn upload_dir(self, path: PathBuf, at: String) {
         let h_state = self.w_state().unwrap();
         let state = h_state.read().await;
         let files = state.search_folder(&path).await.unwrap();
+
         // get folders needed to be created
         let new_folders = tokio::task::block_in_place(|| {
             let mut new_folders = HashSet::new();
@@ -60,6 +58,7 @@ impl MioFrontendWeak {
                     let state = h_state.read().await;
                     for pt in folder {
                         let pt = pt.to_string_lossy().into_owned();
+
                         // TODO: possibly not make this copy every single time
                         state.make_dir(pt.clone(), pstack.clone()).await.unwrap();
                         pstack.push(pt);
@@ -103,6 +102,7 @@ impl MioFrontendWeak {
             )
             .await
             .unwrap();
+
         // wake up albums tab
         crate::albums::WAKE_UP.get().unwrap().send(()).unwrap();
     }

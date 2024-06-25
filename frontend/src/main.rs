@@ -13,10 +13,10 @@ use uuid::Uuid;
 slint::include_modules!();
 mod albums;
 mod error;
-mod player;
-mod user;
-mod upload;
 mod folder_select;
+mod player;
+mod upload;
+mod user;
 
 impl From<Uuid> for SlintUUID {
     fn from(value: Uuid) -> Self {

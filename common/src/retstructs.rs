@@ -69,14 +69,16 @@ pub struct FolderQueryItem {
     // name of the item
     pub id: String,
     // item is of type
-    pub item_type: FolderQueryItemType
+    pub item_type: FolderQueryItemType,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FolderQueryItemType {
-    Folder = 0, // id is name of folder
-    Audio = 1, // id is uuid of audio
-} 
+    // id is name of folder
+    Folder = 0,
+    // id is uuid of audio
+    Audio = 1,
+}
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct ErrorMsg {

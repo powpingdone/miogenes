@@ -1,25 +1,26 @@
-use mio_common::*;
-use std::rc::Rc;
-
-use slint::{Model, ModelRc, SharedString, VecModel};
-
 use crate::*;
+use mio_common::*;
+use slint::{Model, ModelRc, SharedString, VecModel};
+use std::rc::Rc;
 
 impl MioFrontendWeak {
     // fetch folders
     pub fn setup_folders(&self) {
         self.app
             .upgrade_in_event_loop(|app| {
-                // goto folders 
+                // goto folders
                 app.global::<TopLevelCB>()
                     .set_page_t(TopLevelPage::UploadFolders);
-                // and then setup basic set 
+
+                // and then setup basic set
                 app.global::<FolderSelectCB>().set_loaded(false);
                 app.global::<FolderSelectCB>().set_at(ModelRc::default());
                 app.global::<FolderSelectCB>().set_cwd(ModelRc::default());
             })
             .unwrap();
-        self.w_rt().unwrap().spawn(self.to_owned().regenerate_folders());
+        self.w_rt()
+            .unwrap()
+            .spawn(self.to_owned().regenerate_folders());
     }
 
     // goto dir
@@ -32,7 +33,9 @@ impl MioFrontendWeak {
             .downcast_ref::<VecModel<SharedString>>()
             .unwrap()
             .push(at.into());
-        self.w_rt().unwrap().spawn(self.to_owned().regenerate_folders());
+        self.w_rt()
+            .unwrap()
+            .spawn(self.to_owned().regenerate_folders());
     }
 
     // go up a dir
@@ -42,7 +45,9 @@ impl MioFrontendWeak {
         let at_hold = global_hold.get_at();
         let at = at_hold.as_any().downcast_ref::<VecModel<SharedString>>();
         at.unwrap().remove(at.unwrap().row_count() - 1);
-        self.w_rt().unwrap().spawn(self.to_owned().regenerate_folders());
+        self.w_rt()
+            .unwrap()
+            .spawn(self.to_owned().regenerate_folders());
     }
 
     // create dialog for text input for folder name
@@ -69,6 +74,7 @@ impl MioFrontendWeak {
             async move {
                 let s_state = this.w_state().unwrap();
                 let state = s_state.read().await;
+
                 // make folder
                 state.make_dir(name, at).await.unwrap();
                 this.to_owned().regenerate_folders().await;
@@ -95,6 +101,7 @@ impl MioFrontendWeak {
                 // goto upload page
                 app.global::<TopLevelCB>().set_page_t(TopLevelPage::Ready);
                 app.global::<MainUICB>().set_page(MainUIPage::Upload);
+
                 // and reset upload
                 app.global::<FolderSelectCB>().set_loaded(false);
                 app.global::<FolderSelectCB>().set_at(ModelRc::default());
@@ -111,6 +118,7 @@ impl MioFrontendWeak {
                 app.global::<FolderSelectCB>().set_loaded(false);
             })
             .unwrap();
+
         // path to query
         let path = self
             .w_app()
@@ -123,10 +131,12 @@ impl MioFrontendWeak {
             .iter()
             .map(|x| x.as_str().to_owned())
             .collect::<Vec<String>>();
+
         // query directory contents
         let h_state = self.w_state().unwrap();
         let state = h_state.read().await;
         let listings = state.get_folder_listing(path).await.unwrap();
+
         // now update folders
         let listing_slint = ModelRc::from(Rc::new(VecModel::from(
             tokio::task::spawn_blocking(move || {

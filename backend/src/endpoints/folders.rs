@@ -45,6 +45,7 @@ async fn folder_create(
     debug!("PUT /api/folder creating folder {name} at {path:?}");
     let name = sanitize_filename::sanitize(name);
     let pbuf = path.into_iter().collect::<PathBuf>();
+
     // wait for lock to start folder creation, also check dir is where it should be
     let (_hold, task) = tokio::join!(
         state.lock_files.write(),
@@ -143,12 +144,14 @@ async fn folder_query(
             "GET /api/folder querying folder {}, {path:?}",
             top_level_dir.display()
         );
+
         // check in dir
         let path = path.into_iter().collect::<PathBuf>();
         let path = path.absolutize()?.to_owned();
         check_dir_in_data_dir(&path, userid)?;
         let mut check = top_level_dir.clone();
         check.push(path);
+
         // list files of a folder
         let mut ret: Vec<retstructs::FolderQueryItem> = vec![];
         let mut read_dir = read_dir(check).await?;
@@ -159,15 +162,18 @@ async fn folder_query(
             let ftype = x.file_type().await?;
             if ftype.is_file() {
                 trace!("GET /api/folder branch is file {logfile}");
+
                 // check if fname is valid uuid
-                Uuid::try_parse(x.file_name().into_string().map_err(|err| {
+                Uuid::try_parse(
+                    x.file_name().into_string().map_err(|err| {
                         MioInnerError::IntIoError(
-                            anyhow!("could not convert internal file name into string to become uuid: name is {}", err.to_string_lossy()),
+                            anyhow!(
+                                "could not convert internal file name into string to become uuid: name is {}",
+                                err.to_string_lossy()
+                            ),
                         )
-                    })?.as_str())
-                        .map_err(
-                            |err| MioInnerError::IntIoError(anyhow!("internal file name is not a uuid: {err}")),
-                        )?;
+                    })?.as_str(),
+                ).map_err(|err| MioInnerError::IntIoError(anyhow!("internal file name is not a uuid: {err}")))?;
                 ret.push(retstructs::FolderQueryItem {
                     tree: None,
                     id: x.file_name().into_string().unwrap(),
@@ -359,7 +365,6 @@ mod test {
         if path_slice.is_empty() {
             return;
         }
-
         let next_pt = path_slice.find('/');
         if let Some(pt) = next_pt {
             // not at end
@@ -369,6 +374,7 @@ mod test {
                 master.tree = Some(vec![]);
             }
             let tree = master.tree.as_mut().unwrap();
+
             // find item
             for i in tree.iter_mut() {
                 if i.id == this_dir {
@@ -376,6 +382,7 @@ mod test {
                     return;
                 }
             }
+
             // item not found
             let mut new = retstructs::FolderQueryItem {
                 tree: None,
