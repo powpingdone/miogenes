@@ -1,4 +1,4 @@
-import { ListView, HorizontalBox, Button } from "std-widgets.slint";
+import { ListView, HorizontalBox, Button, VerticalBox } from "std-widgets.slint";
 export struct DirItem {
     is_dir: bool,
     name: string,
@@ -8,11 +8,13 @@ export global FolderSelectCB {
     in-out property <bool> loaded: false;
     in-out property <[string]> at: [];
     in property <[DirItem]> cwd: [];
+    in-out property <string> create_folder_name: "";
 
     callback setup();
     callback chdir(string);
     callback up();
-    callback new_folder();
+    callback new_folder(string);
+    callback cancel_new_folder();
     callback cancel();
     callback upload([string]);
 }
@@ -33,22 +35,62 @@ export component UploadFolderSelect {
         }
     }
 
-    HorizontalBox { 
+    HorizontalBox {
         Button {
             text: "Upload";
-            clicked => {FolderSelectCB.upload(FolderSelectCB.at);}
+            clicked => {
+                FolderSelectCB.upload(FolderSelectCB.at);
+            }
         }
+
         Button {
             text: "Go up dir";
-            clicked => {FolderSelectCB.up();}
+            clicked => {
+                FolderSelectCB.up();
+            }
         }
+
         Button {
             text: "New Folder";
-            clicked => {FolderSelectCB.new_folder();}
+            clicked => {
+                new_folder_name.show();
+            }
         }
+
         Button {
             text: "Cancel";
-            clicked => {FolderSelectCB.cancel();}
+            clicked => {
+                FolderSelectCB.cancel();
+            }
+        }
+    }
+
+    new_folder_name := PopupWindow {
+        close_on_click: false;
+        max-width: min(parent.max-width, 128px);
+        max-height: min(parent.max-height, 64px);
+        x: (parent.width / 2) - self.max-width;
+        y: (parent.height / 2) - self.max-height;
+
+        VerticalBox {
+            TextInput {
+                text <=> FolderSelectCB.create_folder_name;
+            }
+            
+            HorizontalBox {
+                Button {
+                    text: @tr("Cancel");
+                    clicked => {
+                        FolderSelectCB.cancel_new_folder();
+                    }
+                }
+                Button {
+                    text: @tr("Cancel");
+                    clicked => {
+                        FolderSelectCB.new_folder(FolderSelectCB.create_folder_name);
+                    }
+                }
+            }
         }
     }
 }
