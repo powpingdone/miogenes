@@ -67,10 +67,8 @@ export component UploadFolderSelect {
 
     new_folder_name := PopupWindow {
         close_on_click: false;
-        max-width: min(parent.max-width, 128px);
-        max-height: min(parent.max-height, 64px);
-        x: (parent.width / 2) - self.max-width;
-        y: (parent.height / 2) - self.max-height;
+        max-width:  128px;
+        max-height: 64px;
 
         VerticalBox {
             TextInput {
