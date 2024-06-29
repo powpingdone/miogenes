@@ -43,7 +43,7 @@ pub async fn get_version() -> impl IntoResponse {
     use konst::primitive::parse_u16;
     use konst::result::unwrap_ctx;
 
-    const VSTR: mio_common::Vers = mio_common::Vers::new(
+    const VSTR: mio_protocol::Vers = mio_protocol::Vers::new(
         unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_MAJOR"))),
         unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_MINOR"))),
         unwrap_ctx!(parse_u16(env!("CARGO_PKG_VERSION_PATCH"))),
@@ -169,7 +169,7 @@ pub mod test {
     use axum::http::{HeaderName, Method};
     use axum_extra::headers::authorization::{Authorization, Credentials};
     use axum_test::{TestRequest, TestServer, TestServerConfig};
-    use mio_common::auth;
+    use mio_protocol::auth;
     use once_cell::sync::Lazy;
 
     pub static STATE: Lazy<MioState> = Lazy::new(|| futures::executor::block_on(gen_state()));

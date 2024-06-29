@@ -12,7 +12,7 @@ use axum_extra::headers::Authorization;
 use axum_extra::TypedHeader;
 use chrono::Utc;
 use log::*;
-use mio_common::*;
+use mio_protocol::*;
 use sqlx::SqliteConnection;
 use std::fmt::Debug;
 use uuid::Uuid;
@@ -293,7 +293,7 @@ mod test {
     use crate::test::*;
     use axum::http::{HeaderName, Method};
     use axum_extra::headers::{authorization::Credentials, Authorization};
-    use mio_common::*;
+    use mio_protocol::*;
 
     #[tokio::test]
     async fn user_auth_good() {

@@ -40,6 +40,11 @@ struct Metadata {
     disk_track: (Option<i32>, Option<i32>),
 }
 
+struct AudioDesc {
+    channels: u32,
+    sample_rate: u32
+}
+
 // TODO: upload process time limits
 //
 // TODO: size limits
@@ -78,11 +83,9 @@ pub async fn track_upload_process(
 
                 // conv into Quite Ok Audio
                 let encoded = s.spawn(|| {
-                    mio_qoa_impl::encode(&waveform, &desc).map_err(|err| {
-                        MioInnerError::TrackProcessingError(err.into(), StatusCode::BAD_REQUEST)
-                    })
+                    todo!()
                 });
-                Ok((mdata, track_vec.join().unwrap()?, encoded.join().unwrap()?))
+                Ok((mdata, track_vec.join().unwrap()?, encoded.join().unwrap()))
             })
         }
     })
@@ -102,7 +105,7 @@ pub async fn track_upload_process(
         .truncate(true)
         .open(path)
         .await?;
-    file.write_all(&encoded.raw_file).await?;
+    file.write_all(todo!()).await?;
     file.sync_all().await?;
     drop(file);
 
@@ -289,7 +292,7 @@ fn proc_tag(data: SendValue) -> Option<String> {
 fn extract_waveform(
     file: PathBuf,
     fn_dis: String,
-) -> anyhow::Result<(mio_qoa_impl::QOADesc, Vec<i16>)> {
+) -> anyhow::Result<(AudioDesc, Vec<i16>)> {
     use symphonia::core::errors::Error;
 
     info!("{fn_dis}: extracting waveforms");
@@ -327,10 +330,9 @@ fn extract_waveform(
                 if err.kind() == std::io::ErrorKind::UnexpectedEof {
                     trace!("{fn_dis}: finishing up, sample totals is {}", ret.len());
                     break Ok((
-                        mio_qoa_impl::QOADesc {
+                        AudioDesc {
                             channels: channel_num.unwrap(),
                             sample_rate: rate.unwrap(),
-                            compute_error: false,
                         },
                         ret,
                     ));
@@ -477,7 +479,7 @@ fn create_vec(
             trace!("creating session");
 
             // the majority of the binary size actually comes from this
-            let model = include_bytes!("deejai.onnx");
+            let model = todo!();
             let env = Environment::builder()
                 .with_name("deej_ai")
                 .with_log_level(LoggingLevel::Info)

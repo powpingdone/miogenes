@@ -1,6 +1,6 @@
 use crate::{db::uuid_serialize, *};
 use axum::extract::State;
-use mio_common::*;
+use mio_protocol::*;
 
 pub fn routes() -> Router<MioState> {
     Router::new()
