@@ -42,7 +42,7 @@ struct Metadata {
 
 struct AudioDesc {
     channels: u32,
-    sample_rate: u32
+    sample_rate: u32,
 }
 
 // TODO: upload process time limits
@@ -82,9 +82,7 @@ pub async fn track_upload_process(
                 });
 
                 // conv into Quite Ok Audio
-                let encoded = s.spawn(|| {
-                    todo!()
-                });
+                let encoded = s.spawn(|| todo!());
                 Ok((mdata, track_vec.join().unwrap()?, encoded.join().unwrap()))
             })
         }
@@ -289,10 +287,7 @@ fn proc_tag(data: SendValue) -> Option<String> {
 }
 
 #[tracing::instrument]
-fn extract_waveform(
-    file: PathBuf,
-    fn_dis: String,
-) -> anyhow::Result<(AudioDesc, Vec<i16>)> {
+fn extract_waveform(file: PathBuf, fn_dis: String) -> anyhow::Result<(AudioDesc, Vec<i16>)> {
     use symphonia::core::errors::Error;
 
     info!("{fn_dis}: extracting waveforms");

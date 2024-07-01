@@ -4,7 +4,7 @@ update:
     cargo update
 
 spin: 
-    false
+    
 
 drun: 
     DATA_DIR="./files" IP_ADDR="127.0.0.1" PORT=8081 SIGNUP_ENABLED=1 cargo run -p mio-backend 
