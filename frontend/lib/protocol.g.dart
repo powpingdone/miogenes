@@ -7,11 +7,11 @@ part of 'protocol.dart';
 // **************************************************************************
 
 Vers _$VersFromJson(Map<String, dynamic> json) => Vers(
-      const UuidSerde().fromJson(json['special_key0'] as String),
-      const UuidSerde().fromJson(json['special_key1'] as String),
-      (json['major'] as num).toInt(),
-      (json['minor'] as num).toInt(),
-      (json['patch'] as num).toInt(),
+      specialKey0: const UuidSerde().fromJson(json['special_key0'] as String),
+      specialKey1: const UuidSerde().fromJson(json['special_key1'] as String),
+      major: (json['major'] as num).toInt(),
+      minor: (json['minor'] as num).toInt(),
+      patch: (json['patch'] as num).toInt(),
     );
 
 Map<String, dynamic> _$VersToJson(Vers instance) => <String, dynamic>{

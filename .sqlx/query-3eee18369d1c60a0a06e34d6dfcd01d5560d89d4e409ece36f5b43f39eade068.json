@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT artist_name, artist.sort_name FROM artist \n                JOIN track ON track.artist = artist.id \n                WHERE artist.id = ? AND track.owner = ?;",
+  "describe": {
+    "columns": [
+      {
+        "name": "artist_name",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "sort_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "3eee18369d1c60a0a06e34d6dfcd01d5560d89d4e409ece36f5b43f39eade068"
+}

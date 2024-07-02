@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT track_vec, id FROM track\n                    WHERE owner = ?;",
+  "describe": {
+    "columns": [
+      {
+        "name": "track_vec",
+        "ordinal": 0,
+        "type_info": "Blob"
+      },
+      {
+        "name": "id",
+        "ordinal": 1,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f54fa9932da914d8e9f9d94eb3d28ff98694ed52374de80331ecf98fe017b125"
+}

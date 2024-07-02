@@ -24,8 +24,8 @@ image = "0.25"
 jsonwebtoken = "9.3"
 konst = "0.3"
 log = "0.4"
-mel_spec = "0.2"
-mel_spec_pipeline = "0.2"
+mel_spec = "=0.2.2"
+mel_spec_pipeline = "=0.2.2"
 ndarray = "0.15"
 num_cpus = "1"
 once_cell = "1"
@@ -52,5 +52,5 @@ lto = true
 codegen-units = 1
 opt-level = 3
 
-[profile.dev.package.sqlx-macros]
-opt-level = 3
+[profile.dev.build-override]
+opt-level = 1

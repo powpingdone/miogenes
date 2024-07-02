@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO auth_keys (id, expiry, secret) VALUES (?,?,?);",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "22f49f47e8328a49c703a2fa3441d96ad0388154e2a443ee6e3ea850f03a51f0"
+}

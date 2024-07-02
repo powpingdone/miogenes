@@ -53,7 +53,8 @@ TARGETS = {
     "setup": Target(
         [
             Cmd("cargo install --locked genemichaels sqlx-cli"),
-            Cmd("cargo sqlx prepare"),
+            Cmd("sqlx migrate run --source backend/migrations"),
+            Cmd("cargo sqlx prepare --workspace"),
             InDir(
                 "frontend",
                 [
@@ -80,7 +81,7 @@ TARGETS = {
                 ],
             ),
             Cmd("cargo build"),
-            InDir("frontend", [Cmd("flutter build")]),
+            # InDir("frontend", [Cmd("flutter build")]),
         ],
         desc="Build programs in debug mode",
     ),

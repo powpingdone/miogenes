@@ -32,6 +32,17 @@ class MioRPC {
     serverUri = url;
   }
 
+  // login to server
+  static Future<void> login(
+      {required String username, required String password}) async {
+    http.Response httpResp = await _nsClient.get("/user/login",
+        authString: "Basic ${base64.encode('$username:$password'.codeUnits)}");
+    if (httpResp.statusCode != 200) {
+      throw "Failed to login, got ${httpResp.statusCode}: ${httpResp.body}";
+    }
+    userToken = httpResp.body;
+  }
+
   // Setters for internal parameters
   static set serverUri(Uri? serverUri) {
     _nsClient.serverUri = serverUri;
@@ -57,62 +68,60 @@ class _MiogenesHttpClient {
     String path, {
     Map<String, dynamic>? query,
     Uint8List? body,
-    bool addAuth = true,
+    String? authString,
   }) async =>
-      _send("DELETE", path, query: query, body: body, addAuth: addAuth);
+      _send("DELETE", path, query: query, body: body, authString: authString);
 
   Future<http.Response> get(
     String path, {
     Map<String, dynamic>? query,
-    bool addAuth = true,
+    String? authString,
   }) async =>
-      _send("GET", path, query: query, addAuth: addAuth);
+      _send("GET", path, query: query, authString: authString);
 
   Future<http.Response> head(
     String path, {
     Map<String, dynamic>? query,
-    bool addAuth = true,
+    String? authString,
   }) async =>
-      _send("HEAD", path, query: query, addAuth: addAuth);
+      _send("HEAD", path, query: query, authString: authString);
 
   Future<http.Response> patch(
     String path, {
     Map<String, dynamic>? query,
     Uint8List? body,
-    bool addAuth = true,
+    String? authString,
   }) async =>
-      _send("PATCH", path, query: query, body: body, addAuth: addAuth);
+      _send("PATCH", path, query: query, body: body, authString: authString);
 
   Future<http.Response> post(
     String path, {
     Map<String, dynamic>? query,
     Uint8List? body,
-    bool addAuth = true,
+    String? authString,
   }) async =>
-      _send("POST", path, query: query, body: body, addAuth: addAuth);
+      _send("POST", path, query: query, body: body, authString: authString);
 
   Future<http.Response> put(
     String path, {
     Map<String, dynamic>? query,
     Uint8List? body,
-    bool addAuth = true,
+    String? authString,
   }) async =>
-      _send("PUT", path, query: query, body: body, addAuth: addAuth);
+      _send("PUT", path, query: query, body: body, authString: authString);
 
-  // non-streaming send request function. this expects _serverUri to be set and _userToken to be set on addAuth
+  // non-streaming send request function. this expects _serverUri to be set and _userToken to be set on null authString
   Future<http.Response> _send(
     String method,
     String path, {
-    required bool addAuth,
+    String? authString,
     Map<String, dynamic>? query,
     Uint8List? body,
   }) async {
     // do the request
     Uri uri = pushUri(serverUri!, path: path, query: query);
     http.Request req = http.Request(method, uri);
-    if (addAuth) {
-      req.headers["Authorization"] = "Bearer $userToken";
-    }
+    req.headers["Authorization"] = authString ?? "Bearer $userToken";
     req.bodyBytes = body ?? Uint8List(0);
     return http.Response.fromStream(await req.send());
   }

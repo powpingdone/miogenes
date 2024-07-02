@@ -1,11 +1,5 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:frontend/main.dart';
-import 'package:frontend/protocol.dart';
 import 'package:frontend/server_rpc.dart';
-import 'package:http/http.dart' as http;
-import 'package:uuid/uuid.dart';
 
 class ServerUrlPage extends StatefulWidget {
   const ServerUrlPage({super.key});
