@@ -4,7 +4,7 @@ import os
 import sys
 import subprocess as sp
 import multiprocessing as mp
-
+from copy import deepcopy
 
 class InDir:
     def __init__(self, dir, cmds):
@@ -26,14 +26,31 @@ class Cmd:
         sp.run(self.cmd, shell=True, check=True)
 
 
+class Fn:
+    def __init__(self, fn):
+        self.fn = fn
+
+    def run(self):
+        self.fn()
+
+
 class Spawn:
-    def __init__(self, cmds):
-        self.int_target = Target(cmds)
+    def __init__(self, target):
+        self.int_target = target
 
     def run(self):
         proc = mp.Process(target=self.int_target.begin)
         proc.start()
         return proc
+
+
+class Exec:
+    def __init__(self, exec, args=[]):
+        self.exec = exec
+        self.args = [exec] + args
+
+    def run(self):
+        os.execvp(self.exec, self.args)
 
 
 class Target:
@@ -49,10 +66,17 @@ class Target:
         [x.join() for x in handles if x is not None]
 
 
+def clean_files_dir():
+    from glob import iglob
+
+    for finp in iglob("./files/*"):
+        if finp.split('/')[-1][0] != '.':
+            os.remove(finp)
+
 TARGETS = {
     "setup": Target(
         [
-            Cmd("cargo install --locked genemichaels sqlx-cli"),
+            Cmd("cargo install --locked genemichaels sqlx-cli tokio-console"),
             Cmd("sqlx migrate run --source backend/migrations"),
             Cmd("cargo sqlx prepare --workspace"),
             InDir(
@@ -81,7 +105,6 @@ TARGETS = {
                 ],
             ),
             Cmd("cargo build"),
-            # InDir("frontend", [Cmd("flutter build")]),
         ],
         desc="Build programs in debug mode",
     ),
@@ -91,6 +114,30 @@ TARGETS = {
         ],
         desc="Run debug mode server"
     ),
+    "client": Target(
+        [
+            InDir(
+                "frontend",
+                [
+                    Exec("flutter", ['run'])
+                ],
+            )
+        ],
+        desc="Run debug mode client"
+    ),
+    "clean": Target(
+        [
+            Cmd("cargo clean"),
+            Fn(clean_files_dir),
+            InDir(
+                "frontend",
+                [
+                    Cmd("flutter clean")
+                ]
+            )
+        ],
+        desc="cleanup all build/runtime dirs"
+    ),
 }
 
 
@@ -98,6 +145,8 @@ def print_targets():
     print("Currently configured targets:")
     for k, v in TARGETS.items():
         print(f"\t{k}: {v.desc}")
+    print("Postfix any target with a '!' to run that target in parallel with the next target.")
+    print("For example, running target 'a' and 'b': `a! b`")
     sys.exit(0)
 
 
@@ -105,11 +154,22 @@ def main():
     if len(sys.argv) < 2:
         print(f"usage: {sys.argv[0]} <targets>")
         print_targets()
+    # check for target
     for target in sys.argv[1:]:
+        if target[-1] == '!':
+            target = deepcopy(target[:-1])
         if target not in TARGETS:
             print(f"selected target '{target}' not in list of targets.")
             print_targets()
+    # runner
+    queue = []
     for target in sys.argv[1:]:
+        if target[-1] == '!':
+            queue += [target[:-1]]
+            continue
+        elif len(queue) != 0:
+            Target([Spawn(x) for x in (queue + [target])]).begin()
+            continue
         TARGETS[target].begin()
 
 
