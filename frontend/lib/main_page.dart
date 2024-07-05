@@ -9,4 +9,3 @@ class MainPage extends StatelessWidget {
     throw UnimplementedError();
   }
 }
-

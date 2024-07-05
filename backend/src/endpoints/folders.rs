@@ -110,7 +110,7 @@ async fn folder_rename(
 
     // and make sure it's also a directory
     if !metadata(&old).await?.is_dir() {
-        return Err(MioInnerError::ExtIoError(
+        return Err(MioInnerError::ExternalIoError(
             anyhow!("the directory specified is not a directory"),
             StatusCode::BAD_REQUEST,
         ));
@@ -166,14 +166,16 @@ async fn folder_query(
                 // check if fname is valid uuid
                 Uuid::try_parse(
                     x.file_name().into_string().map_err(|err| {
-                        MioInnerError::IntIoError(
+                        MioInnerError::InternalIoError(
                             anyhow!(
                                 "could not convert internal file name into string to become uuid: name is {}",
                                 err.to_string_lossy()
                             ),
                         )
                     })?.as_str(),
-                ).map_err(|err| MioInnerError::IntIoError(anyhow!("internal file name is not a uuid: {err}")))?;
+                ).map_err(
+                    |err| MioInnerError::InternalIoError(anyhow!("internal file name is not a uuid: {err}")),
+                )?;
                 ret.push(retstructs::FolderQueryItem {
                     tree: None,
                     id: x.file_name().into_string().unwrap(),
@@ -185,7 +187,7 @@ async fn folder_query(
                     tree: None,
                     item_type: retstructs::FolderQueryItemType::Folder,
                     id: x.file_name().into_string().map_err(|osstr| {
-                        MioInnerError::IntIoError(anyhow!(
+                        MioInnerError::InternalIoError(anyhow!(
                             "could not convert internal folder name into string: dir name is {}",
                             osstr.to_string_lossy()
                         ))
@@ -225,7 +227,7 @@ fn folder_tree_inner(
         debug!("FTI call to ({base_dir:?}, {curr_path:?})");
 
         fn fail_to_utf8(file: impl AsRef<std::path::Path>) -> MioInnerError {
-            MioInnerError::IntIoError(anyhow!(
+            MioInnerError::InternalIoError(anyhow!(
                 "the file \"{}\" could not be converted to a string",
                 file.as_ref().display()
             ))
@@ -316,7 +318,7 @@ async fn folder_delete(
 
     // check if dir has contents https://github.com/rust-lang/rust/issues/86442
     if read_dir(&real_path).await?.next_entry().await?.is_some() {
-        return Err(MioInnerError::ExtIoError(
+        return Err(MioInnerError::ExternalIoError(
             anyhow!(
                 "Directory {:?} has items, please remove them.",
                 inp_path
@@ -552,7 +554,7 @@ mod test {
         .map(|x| x.into_iter().map(str::to_owned).collect())
         .collect();
         let err = retstructs::ErrorMsg {
-            error: crate::MioInnerError::ExtIoError(
+            error: crate::MioInnerError::ExternalIoError(
                 anyhow::anyhow!("bad path"),
                 StatusCode::BAD_REQUEST,
             )

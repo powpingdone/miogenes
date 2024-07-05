@@ -277,7 +277,7 @@ pub async fn signup(
             } {
                 if err.kind() != std::io::ErrorKind::AlreadyExists {
                     error!("POST /user/signup failed to create user directory: {err}");
-                    return Err(MioInnerError::IntIoError(anyhow!(
+                    return Err(MioInnerError::InternalIoError(anyhow!(
                         "Failed to create user dir: {err}"
                     )));
                 }

@@ -30,7 +30,7 @@ fn check_dir_in_data_dir(path: impl AsRef<Path>, userid: Uuid) -> Result<(), Mio
     let ask_path = match ask_path.absolutize() {
         Ok(ok) => ok,
         Err(err) => {
-            return Err(MioInnerError::ExtIoError(
+            return Err(MioInnerError::ExternalIoError(
                 anyhow!("the path supplied could not be absolutize'd: {err}"),
                 StatusCode::BAD_REQUEST,
             ));
@@ -54,7 +54,10 @@ fn check_dir_in_data_dir(path: impl AsRef<Path>, userid: Uuid) -> Result<(), Mio
     // loop does not run out and produce an Ok when the ask path is shorter than the
     // real path.
     if ask_path.len() < real_path.len() {
-        return Err(MioInnerError::ExtIoError(ret_err, StatusCode::BAD_REQUEST));
+        return Err(MioInnerError::ExternalIoError(
+            ret_err,
+            StatusCode::BAD_REQUEST,
+        ));
     }
 
     // if the first components in real match the first components in ask, then it's
@@ -62,7 +65,10 @@ fn check_dir_in_data_dir(path: impl AsRef<Path>, userid: Uuid) -> Result<(), Mio
     // absolutized, they will not resolve to anywhere else past that
     for (real, ask) in real_path.iter().zip(ask_path.iter()) {
         if real != ask {
-            return Err(MioInnerError::ExtIoError(ret_err, StatusCode::BAD_REQUEST));
+            return Err(MioInnerError::ExternalIoError(
+                ret_err,
+                StatusCode::BAD_REQUEST,
+            ));
         }
     }
     Ok(())

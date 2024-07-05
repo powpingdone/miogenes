@@ -5,7 +5,38 @@ import 'package:frontend/protocol.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
-// Class for all the calls to the server
+// error class for any specific server errors
+class MioError implements Exception {
+  late int _statusCode;
+  late String _message;
+
+  MioError({required http.Response resp}) {
+    _message = jsonDecode(resp.body)["error"] as String;
+    _statusCode = resp.statusCode;
+  }
+
+  MioError.custom({required int statusCode, required String message})
+      : _message = message,
+        _statusCode = statusCode;
+
+  get statusCode => _statusCode;
+  get message => _message;
+
+  // wrapper for checking on error
+  static http.Response check(http.Response resp) {
+    if (resp.statusCode != 200) {
+      throw MioError(resp: resp);
+    }
+    return resp;
+  }
+
+  @override
+  String toString() {
+    return message;
+  }
+}
+
+// Static class for all the calls to the server
 class MioRPC {
   MioRPC._();
 
@@ -40,11 +71,16 @@ class MioRPC {
   // login to server
   static Future<void> login(
       {required String username, required String password}) async {
-    http.Response httpResp = await _nsClient.get("/user/login",
-        authString: "Basic ${base64.encode('$username:$password'.codeUnits)}");
-    if (httpResp.statusCode != 200) {
-      throw "Failed to login, got ${httpResp.statusCode}: ${httpResp.body}";
-    }
+    http.Response httpResp = MioError.check(await _nsClient.get("/user/login",
+        authString: "Basic ${base64.encode('$username:$password'.codeUnits)}"));
+    userToken = httpResp.body;
+  }
+
+  // do signup. signup always returns a token
+  static Future<void> signup(
+      {required String username, required String password}) async {
+    http.Response httpResp = MioError.check(await _nsClient.get("/user/signup",
+        authString: "Basic ${base64.encode('$username:$password'.codeUnits)}"));
     userToken = httpResp.body;
   }
 
@@ -132,12 +168,12 @@ class _MiogenesHttpClient {
   }
 }
 
+// append to server uri. maybe there should have been a "append/overwrite" constructor
 Uri pushUri(
   Uri orig, {
   String path = "",
   Map<String, dynamic>? query,
 }) {
-  // append to server uri. maybe there should have been a "append/overwrite" constructor
   return Uri(
     scheme: orig.scheme,
     userInfo: orig.userInfo,

@@ -21,9 +21,9 @@ pub enum MioInnerError {
     #[error("track processing error: `{0}`. \nTRACE:\n{}", .0.backtrace())]
     TrackProcessingError(anyhow::Error, StatusCode),
     #[error("external io error: `{0}`. \nTRACE:\n{}", .0.backtrace())]
-    ExtIoError(anyhow::Error, StatusCode),
+    ExternalIoError(anyhow::Error, StatusCode),
     #[error("internal io error: `{0}`. \nTRACE:\n{}", .0.backtrace())]
-    IntIoError(anyhow::Error),
+    InternalIoError(anyhow::Error),
     #[error("conflict found: `{0}`. \nTRACE:\n{}", .0.backtrace())]
     Conflict(anyhow::Error),
 }
@@ -39,9 +39,9 @@ impl MioInnerError {
                 | UserChallengedFail(e, _)
                 | UserCreationFail(e, _)
                 | TrackProcessingError(e, _)
-                | ExtIoError(e, _) => e,
+                | ExternalIoError(e, _) => e,
                 // these errors are not put into the error field as they could leak information
-                IntIoError(_) => {
+                InternalIoError(_) => {
                     anyhow!("The server encountered an filesystem io error. Please check the server log.")
                 }
                 Panicked(_) => {
@@ -70,7 +70,7 @@ impl From<sqlx::Error> for MioInnerError {
 
 impl From<std::io::Error> for MioInnerError {
     fn from(value: std::io::Error) -> Self {
-        IntIoError(anyhow::Error::from(value))
+        InternalIoError(anyhow::Error::from(value))
     }
 }
 
@@ -78,13 +78,13 @@ impl IntoResponse for MioInnerError {
     fn into_response(self) -> axum::response::Response {
         log::log!(
             match self {
-                NotFound(_) | Conflict(_) | ExtIoError(_, _) => Level::Debug,
+                NotFound(_) | Conflict(_) | ExternalIoError(_, _) => Level::Debug,
                 UserChallengedFail(_, _) => Level::Info,
                 TrackProcessingError(_, _) => Level::Warn,
-                DbError(_) | UserCreationFail(_, _) | IntIoError(_) | Panicked(_) => Level::Error,
+                DbError(_) | UserCreationFail(_, _) | InternalIoError(_) | Panicked(_) =>
+                    Level::Error,
             },
-            "{}",
-            self
+            "{self}"
         );
 
         // return
@@ -92,11 +92,11 @@ impl IntoResponse for MioInnerError {
             match self {
                 NotFound(_) => StatusCode::NOT_FOUND,
                 Conflict(_) => StatusCode::CONFLICT,
-                IntIoError(_) | DbError(_) | Panicked(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                InternalIoError(_) | DbError(_) | Panicked(_) => StatusCode::INTERNAL_SERVER_ERROR,
                 UserChallengedFail(_, c)
                 | UserCreationFail(_, c)
                 | TrackProcessingError(_, c)
-                | ExtIoError(_, c) => c,
+                | ExternalIoError(_, c) => c,
             },
             Json(retstructs::ErrorMsg { error: self.msg() }),
         )

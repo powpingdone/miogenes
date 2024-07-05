@@ -34,6 +34,7 @@ class _ServerUrlPageState extends State<ServerUrlPage> {
         child: Column(
           children: [
             TextField(
+              autofocus: true,
               controller: _urlField,
               onSubmitted: _checkUrl,
               decoration: InputDecoration(
@@ -88,6 +89,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   late TextEditingController _username, _password;
+  late FocusNode _fn;
   bool _checking = false;
   String? _errorText;
 
@@ -96,84 +98,181 @@ class _LoginPageState extends State<LoginPage> {
     super.initState();
     _username = TextEditingController();
     _password = TextEditingController();
+    _fn = FocusNode();
   }
 
   @override
   void dispose() {
+    _fn.dispose();
     _password.dispose();
     _username.dispose();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Login")),
       body: Column(children: [
-            TextField(
-              controller: _username,
-              onSubmitted: (_) async => _login,
-              decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: "Username",
-                  ),
+        TextField(
+          autofocus: true,
+          controller: _username,
+          onSubmitted: (_) => _fn.requestFocus(),
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: "Username",
+          ),
+        ),
+        TextField(
+          controller: _password,
+          onSubmitted: (_) => _login(_username.text, _password.text),
+          obscureText: true,
+          focusNode: _fn,
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            labelText: "Password",
+            errorText: _errorText,
+          ),
+        ),
+        Row(
+          children: [
+            ElevatedButton(
+              child: const Text("Login"),
+              onPressed: () => _login(_username.text, _password.text),
             ),
-            TextField(
-              controller: _password,
-              onSubmitted: (_) async => _login,
-              decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: "Password",
-                  errorText: _errorText),
+            ElevatedButton(
+              child: const Text("Signup"),
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => _SignupPage())),
             ),
-            Row(
-              children: [
-                ElevatedButton(
-                    onPressed: _login,
-                    child: const Text("Login")),
-                ElevatedButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => _SignupPage())),
-                    child: const Text("Signup")
-                ),
-              ],
-            ),
-
-            _checking
-                ? const CircularProgressIndicator.adaptive()
-                : Container(),
+          ],
+        ),
+        _checking ? const CircularProgressIndicator.adaptive() : Container(),
       ]),
     );
   }
 
-  Future<void> _login() async {
+  Future<void> _login(String username, String password) async {
     final nav = Navigator.of(context);
     setState(() {
-      _checking = true;      
+      _checking = true;
     });
     try {
-      MioRPC.login(username: _username.text, password: _password.text);
+      await MioRPC.login(username: username, password: password);
       _errorText = null;
     } catch (e) {
       _errorText = e.toString();
     }
-    if(_errorText == null) {
-      nav.pushReplacement(MaterialPageRoute(builder: (context) => const MainPage()));
+    if (_errorText == null) {
+      nav.pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainPage()));
     }
     setState(() {
-      _checking = false;      
+      _checking = false;
     });
   }
 }
 
-class _SignupPage extends StatefulWidget{
+class _SignupPage extends StatefulWidget {
   @override
   State<_SignupPage> createState() => _SignupPageState();
 }
 
 class _SignupPageState extends State<_SignupPage> {
+  late TextEditingController _username, _password, _chkPass;
+  late FocusNode _passFN, _chkPFN;
+  bool _checking = false;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _username = TextEditingController();
+    _password = TextEditingController();
+    _chkPass = TextEditingController();
+    _passFN = FocusNode();
+    _chkPFN = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _passFN.dispose();
+    _password.dispose();
+    _username.dispose();
+    _chkPass.dispose();
+    _chkPFN.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
-    throw UnimplementedError();
+    return Scaffold(
+      appBar: AppBar(title: const Text("Login")),
+      body: Column(children: [
+        TextField(
+          autofocus: true,
+          controller: _username,
+          onSubmitted: (_) => _passFN.requestFocus(),
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: "Username",
+          ),
+        ),
+        TextField(
+            controller: _password,
+            onSubmitted: (_) => _chkPFN.requestFocus(),
+            obscureText: true,
+            focusNode: _passFN,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: "Password",
+            )),
+        TextField(
+          controller: _chkPass,
+          onSubmitted: (_) =>
+              _signup(_username.text, _password.text, _chkPass.text),
+          obscureText: true,
+          focusNode: _chkPFN,
+          decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: "Retype Password",
+              errorText: _errorText),
+        ),
+        Row(
+          children: [
+            ElevatedButton(
+                onPressed: () =>
+                    _signup(_username.text, _password.text, _chkPass.text),
+                child: const Text("Login")),
+            ElevatedButton(
+                onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (context) => _SignupPage())),
+                child: const Text("Signup")),
+          ],
+        ),
+        _checking ? const CircularProgressIndicator.adaptive() : Container(),
+      ]),
+    );
+  }
+
+  Future<void> _signup(String username, String password, String cmpPass) async {
+    final nav = Navigator.of(context);
+    setState(() {
+      _checking = true;
+    });
+    try {
+      if (password != cmpPass) {
+        throw "The passwords do not match.";
+      }
+      await MioRPC.signup(username: username, password: password);
+      nav.pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainPage()));
+      _errorText = null;
+    } catch (e) {
+      _errorText = e.toString();
+    }
+    setState(() {
+      _checking = false;
+    });
   }
 }
