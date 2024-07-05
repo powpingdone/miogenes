@@ -168,7 +168,7 @@ def main():
             queue += [target[:-1]]
             continue
         elif len(queue) != 0:
-            Target([Spawn(x) for x in (queue + [target])]).begin()
+            Target([Spawn(TARGETS[x]) for x in (queue + [target])]).begin()
             continue
         TARGETS[target].begin()
 

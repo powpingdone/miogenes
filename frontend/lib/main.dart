@@ -23,28 +23,32 @@ class MiogenesFrontend extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightBlue),
         useMaterial3: true,
       ),
-      home: StartupHandler(),
+      home: const StartupHandler(),
     );
   }
 }
 
 // Loader. Immediately switches to serverurlpage if cached login credentials do not exist
-class StartupHandler extends StatelessWidget {
-  StartupHandler({super.key});
+class StartupHandler extends StatefulWidget {
+  const StartupHandler({super.key});
 
-  // TODO: check for (working) cached login creds
-  final fut = Future(() => {});
+  @override
+  State<StartupHandler> createState() => _StartupHandlerState();
+}
+
+class _StartupHandlerState extends State<StartupHandler> {
+  Future<void>? fut;
+
+  Future<void> loadState(NavigatorState nav) async {
+    // TODO: check for (working) cached login creds
+    nav.pushReplacement(
+        MaterialPageRoute(builder: (context) => const ServerUrlPage()));
+  }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-        future: fut,
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            Navigator.pushReplacement(context,
-                MaterialPageRoute(builder: (context) => const ServerUrlPage()));
-          }
-          return const CircularProgressIndicator.adaptive();
-        });
+    fut = fut ?? Future(() async => await loadState(Navigator.of(context)));
+    return const Scaffold(
+        body: SizedBox(child: CircularProgressIndicator.adaptive()));
   }
 }

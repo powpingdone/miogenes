@@ -11,8 +11,13 @@ class MioRPC {
 
   // test uri for server, and then set it if it's good. throw otherwise.
   static Future<void> testSetUri(Uri url) async {
-    http.Response httpResp = await http.get(pushUri(url, path: "/ver"));
-    Vers resp = Vers.fromJson(jsonDecode(httpResp.body));
+    Vers resp;
+    try {
+      http.Response httpResp = await http.get(pushUri(url, path: "/ver"));
+      resp = Vers.fromJson(jsonDecode(httpResp.body));
+    } catch (e) {
+      throw "Failed to connect to server: $e";
+    }
     // check if this is "acting" like a miogenes server
     if (!(resp.specialKey0 ==
             UuidValue.fromString("ddf6b403-6a16-4b65-92e0-8342cad3c3e1") &&
