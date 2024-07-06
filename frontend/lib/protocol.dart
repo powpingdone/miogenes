@@ -34,3 +34,13 @@ class Vers {
 
   factory Vers.fromJson(Map<String, dynamic> json) => _$VersFromJson(json);
 }
+
+@JsonSerializable(fieldRename: FieldRename.snake)
+@UuidSerde()
+class Albums {
+  final List<UuidValue> album;
+
+  Albums ({required this.album});
+
+  factory Albums.fromJson(Map<String, dynamic> json) => _$AlbumsFromJson(json);
+}

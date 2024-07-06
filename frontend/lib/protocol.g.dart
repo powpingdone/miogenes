@@ -21,3 +21,13 @@ Map<String, dynamic> _$VersToJson(Vers instance) => <String, dynamic>{
       'minor': instance.minor,
       'patch': instance.patch,
     };
+
+Albums _$AlbumsFromJson(Map<String, dynamic> json) => Albums(
+      album: (json['album'] as List<dynamic>)
+          .map((e) => const UuidSerde().fromJson(e as String))
+          .toList(),
+    );
+
+Map<String, dynamic> _$AlbumsToJson(Albums instance) => <String, dynamic>{
+      'album': instance.album.map(const UuidSerde().toJson).toList(),
+    };

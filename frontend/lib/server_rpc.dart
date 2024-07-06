@@ -84,6 +84,11 @@ class MioRPC {
     userToken = httpResp.body;
   }
 
+  static Future<Albums> getAlbums() async {
+    http.Response httpResp = MioError.check(await _nsClient.get("/load/albums"));
+    return Albums.fromJson(jsonDecode(httpResp.body));
+  }
+
   // Setters for internal parameters
   static set serverUri(Uri? serverUri) {
     _nsClient.serverUri = serverUri;
