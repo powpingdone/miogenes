@@ -165,7 +165,7 @@ class _LoginPageState extends State<LoginPage> {
     }
     if (_errorText == null) {
       nav.pushReplacement(
-          MaterialPageRoute(builder: (context) => const MainPage()));
+          MaterialPageRoute(builder: (context) => const MainPageScaffold()));
     }
     setState(() {
       _checking = false;
@@ -266,7 +266,7 @@ class _SignupPageState extends State<_SignupPage> {
       }
       await MioRPC.signup(username: username, password: password);
       nav.pushReplacement(
-          MaterialPageRoute(builder: (context) => const MainPage()));
+          MaterialPageRoute(builder: (context) => const MainPageScaffold()));
       _errorText = null;
     } catch (e) {
       _errorText = e.toString();
