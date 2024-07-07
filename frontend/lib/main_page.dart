@@ -1,9 +1,13 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/mio_albums_page.dart';
 import 'package:frontend/mio_player_page.dart';
 import 'package:frontend/mio_upload_page.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 // Holder for providers
 class MainPageProviders extends StatefulWidget {
@@ -22,8 +26,12 @@ class _MainPageProvidersState extends State<MainPageProviders> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => PageAt(_initPages),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => PageAt(_initPages),
+        )
+      ],
       child: const MainPageScaffold(),
     );
   }
@@ -69,6 +77,30 @@ class PageAt with ChangeNotifier, DiagnosticableTreeMixin {
     super.debugFillProperties(properties);
     properties.add(StringProperty("page", _page));
     properties.add(DiagnosticsProperty("pages", _pageOrder));
+  }
+}
+
+class PlayerIntState with ChangeNotifier, DiagnosticableTreeMixin {
+  Queue<Uuid> _queue = ListQueue(16);
+  int? _playingId = 0;
+  final _player = AudioPlayer();
+
+  Future<void> play() async {}
+
+  Future<void> pause() async {}
+
+  Future<void> next() async {}
+
+  Future<void> prev() async {}
+
+  Future<void> clear() async {}
+
+  Future<void> enqueue(Uuid uuid) async {}
+
+  /// devtools
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
   }
 }
 
