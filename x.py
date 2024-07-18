@@ -78,11 +78,11 @@ TARGETS = {
         [
             Cmd("cargo install --locked genemichaels sqlx-cli tokio-console"),
             Cmd("sqlx migrate run --source backend/migrations"),
-            Cmd("cargo sqlx prepare --workspace"),
             InDir(
                 "frontend",
                 [
                     Cmd("flutter precache"),
+                    Cmd("flutter pub get"),
                 ],
             ),
         ],

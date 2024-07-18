@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:frontend/mio_albums_page.dart';
 import 'package:frontend/mio_player_page.dart';
 import 'package:frontend/mio_upload_page.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -83,7 +82,7 @@ class PageAt with ChangeNotifier, DiagnosticableTreeMixin {
 class PlayerIntState with ChangeNotifier, DiagnosticableTreeMixin {
   Queue<Uuid> _queue = ListQueue(16);
   int? _playingId = 0;
-  final _player = AudioPlayer();
+  //final _player = AudioPlayer();
 
   Future<void> play() async {}
 
