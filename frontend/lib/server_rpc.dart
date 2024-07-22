@@ -85,7 +85,8 @@ class MioRPC {
   }
 
   static Future<Albums> getAlbums() async {
-    http.Response httpResp = MioError.check(await _nsClient.get("/load/albums"));
+    http.Response httpResp =
+        MioError.check(await _nsClient.get("/load/albums"));
     return Albums.fromJson(jsonDecode(httpResp.body));
   }
 

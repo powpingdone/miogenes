@@ -1,5 +1,5 @@
 [workspace]
-members = ["protocol", "backend"]
+members = ["protocol", "backend", "frontend/rust"]
 resolver = "2"
 
 [workspace.dependencies]

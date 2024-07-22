@@ -76,7 +76,7 @@ def clean_files_dir():
 TARGETS = {
     "setup": Target(
         [
-            Cmd("cargo install --locked genemichaels sqlx-cli tokio-console"),
+            Cmd("cargo install --locked genemichaels sqlx-cli tokio-console flutter_rust_bridge_codegen"),
             Cmd("sqlx migrate run --source backend/migrations"),
             InDir(
                 "frontend",
@@ -102,6 +102,7 @@ TARGETS = {
                 "frontend",
                 [
                     Cmd("dart run build_runner build --delete-conflicting-outputs"),
+                    Cmd("flutter_rust_bridge_codegen generate")
                 ],
             ),
             Cmd("cargo build"),

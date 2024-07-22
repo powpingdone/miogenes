@@ -1,11 +1,15 @@
+// The original content is temporarily commented out to allow generating a self-contained demo - feel free to uncomment later.
+
 import 'package:flutter/material.dart';
 import 'package:frontend/url_login.dart';
+import 'package:frontend/src/rust/frb_generated.dart';
 
 const mioMAJOR = 0;
 const mioMINOR = 1;
 const mioPATCH = 0;
 
-void main() {
+void main() async {
+  await RustLib.init();
   runApp(const MiogenesFrontend());
 }
 

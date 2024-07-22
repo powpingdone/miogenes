@@ -40,7 +40,7 @@ class Vers {
 class Albums {
   final List<UuidValue> album;
 
-  Albums ({required this.album});
+  Albums({required this.album});
 
   factory Albums.fromJson(Map<String, dynamic> json) => _$AlbumsFromJson(json);
 }

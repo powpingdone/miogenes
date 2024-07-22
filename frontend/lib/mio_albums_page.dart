@@ -9,4 +9,3 @@ class MioAlbumsPage extends StatelessWidget {
     throw UnimplementedError();
   }
 }
-
