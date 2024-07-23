@@ -16,10 +16,11 @@ ctrlc = "3.4"
 dotenvy = "0.15"
 env_logger = "0.11"
 futures = "0.3"
-gstreamer = "0.22"
-gstreamer-app = "0.22"
-gstreamer-audio = "0.22"
-gstreamer-pbutils = "0.22"
+flutter_rust_bridge = "=2.1.0"
+gstreamer = "0.23"
+gstreamer-app = "0.23"
+gstreamer-audio = "0.23"
+gstreamer-pbutils = "0.23"
 image = "0.25"
 jsonwebtoken = "9.3"
 konst = "0.3"
@@ -52,5 +53,6 @@ lto = true
 codegen-units = 1
 opt-level = 3
 
+# proc macros
 [profile.dev.build-override]
 opt-level = 1

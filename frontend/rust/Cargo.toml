@@ -7,6 +7,10 @@ edition = "2021"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-flutter_rust_bridge = "=2.1.0"
-gstreamer-audio = "0.23"
-gstreamer = "0.23"
+anyhow = { workspace = true }
+flutter_rust_bridge = { workspace = true } 
+gstreamer = { workspace = true, features = ["v1_20"] }
+gstreamer-app = { workspace = true, features = ["v1_20"] }
+gstreamer-audio = { workspace = true, features = ["v1_20"] }
+gstreamer-pbutils = { workspace = true, features = ["v1_20"] }
+uuid = { workspace = true, features = ["v4", "serde"] }
