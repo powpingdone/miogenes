@@ -1,53 +1,69 @@
-use gstreamer::{self as gst, prelude::GstBinExtManual};
+use gstreamer::{self as gst, prelude::*, SampleRef};
 use std::collections::{HashMap, VecDeque};
 use uuid::Uuid;
 
-pub struct NoQueueLeft;
+use crate::{GlueError, GlueResult};
 
 // frontend interaction with audio player
 pub struct AudioPlayer {
     order: VecDeque<Uuid>,
     now_playing: usize,
-    decoder_pipelines: HashMap<Uuid, gst::Pipeline>,
     limit: usize,
+    pipeline: gst::Pipeline,
+    souphttp: gst::Element,
 }
 
 impl AudioPlayer {
-    pub fn new(limit: usize) -> Result<Self, anyhow::Error> {
-        gst::init()?;
+    pub fn new(limit: usize) -> GlueResult<Self> {
+        // setup pipeline
+        let pipeline = gst::Pipeline::new();
+        let souphttp = gst::ElementFactory::make("souphttpsrc").build()?;
+        let decodebin = gst::ElementFactory::make("decodebin3").build()?;
+        let audioconv = gst::ElementFactory::make("audioconvert").build()?;
+        let audiorsam = gst::ElementFactory::make("audioresample").build()?;
+        let audiosink = gst::ElementFactory::make("autoaudiosink").build()?;
+        pipeline.add_many([&souphttp, &decodebin, &audioconv, &audiorsam, &audiosink])?;
+        gst::Element::link_many([&souphttp, &decodebin, &audioconv, &audiorsam, &audiosink])?;
+        souphttp.set_property("location", None::<&str>);
+        souphttp.set_property("extra-headers", None::<&gst::Structure>);
+        pipeline.set_state(gst::State::Null)?;
+        // return
         Ok(Self {
             order: VecDeque::with_capacity(limit),
             now_playing: 0,
-            decoder_pipelines: HashMap::new(),
             limit,
+            pipeline,
+            souphttp,
         })
     }
 
-    pub fn queue(&mut self, id: Uuid) -> Result<Option<Uuid>, NoQueueLeft> {
-        let new_id = if self.limit >= self.order.len() {
+    pub fn queue(&mut self, id: Uuid) -> GlueResult<Option<Uuid>> {
+        let old_id = if self.limit >= self.order.len() {
             if self.now_playing == 0 {
-                return Err(NoQueueLeft);
+                return Err(GlueError::NoSpaceLeftInQueue);
             }
+            self.now_playing -= 1;
             self.order.pop_front()
         } else {
             None
         };
-        new_id.and_then(|x| self.decoder_pipelines.remove(&x));
-        self.add_pipeline(id);
-        return Ok(new_id);
+        if self.pipeline.current_state() == gst::State::Null {
+            self.pipepline_play();
+        }
+        return Ok(old_id);
     }
 
-    fn add_pipeline(&mut self, id: Uuid) {
-        todo!()
+    pub fn reset(&mut self) {
+        self.order.clear();
+        self.now_playing = 0;
+        self.souphttp.set_property("location", None::<&str>);
+        self.souphttp.set_property("extra-headers", None::<&gst::Structure>);
+        self.pipeline.set_state(gst::State::Null).unwrap();
     }
-}
 
-fn make_sink() -> anyhow::Result<gst::Pipeline> {
-    let audio_sink = gst::Pipeline::builder().name("audio_sink").build();
-    let conv = gst::ElementFactory::make("audioconvert").build()?;
-    let samp = gst::ElementFactory::make("audioresample").build()?;
-    let sink = gst::ElementFactory::make("autoaudiosink").build()?;
-    audio_sink.add_many([&conv, &samp, &sink])?;
-    gst::Element::link_many([&conv, &samp, &sink])?;
-    Ok(audio_sink)
+    fn pipepline_play(&self) {
+        todo!();
+        // set location, extra-headers, and pipeline state
+    }
+    
 }
