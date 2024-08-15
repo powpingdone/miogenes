@@ -1,0 +1,13 @@
+[workspace]
+members = ["backend"]
+resolver = "2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+
+# proc macros
+[profile.dev.build-override]
+opt-level = 1
+
