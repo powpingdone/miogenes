@@ -1,0 +1,86 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT * FROM track WHERE id = ? AND owner = ?;",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Blob"
+      },
+      {
+        "name": "title",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "path",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "owner",
+        "ordinal": 3,
+        "type_info": "Blob"
+      },
+      {
+        "name": "orig_fname",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "disk",
+        "ordinal": 5,
+        "type_info": "Int64"
+      },
+      {
+        "name": "track",
+        "ordinal": 6,
+        "type_info": "Int64"
+      },
+      {
+        "name": "tags",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "album",
+        "ordinal": 8,
+        "type_info": "Blob"
+      },
+      {
+        "name": "artist",
+        "ordinal": 9,
+        "type_info": "Blob"
+      },
+      {
+        "name": "cover_art",
+        "ordinal": 10,
+        "type_info": "Blob"
+      },
+      {
+        "name": "track_vec",
+        "ordinal": 11,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "5ce5e382c0ecbe8e91afd5fb61f916d5339cf6f5dd992e70a5e932db3da24916"
+}

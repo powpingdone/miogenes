@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE track SET path = ? WHERE id = ? AND owner = ?;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "6e6d71aaac65bf8860a6244f25b8afe056052355c6f3ce8057947a9a9061aa7c"
+}

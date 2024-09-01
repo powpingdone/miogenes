@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM track WHERE id = ? AND owner = ?;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "0836ff979415ac70c2d1a6858e87f280c2e2b53260ca92aa1a1d110f46039f78"
+}

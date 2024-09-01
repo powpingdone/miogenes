@@ -76,8 +76,15 @@ def clean_files_dir():
 TARGETS = {
     "setup": Target(
         [
-            Cmd("cargo install --locked genemichaels sqlx-cli"),
+            Cmd("cargo install --locked genemichaels sqlx-cli tokio-console flutter_rust_bridge_codegen"),
             Cmd("sqlx migrate run --source backend/migrations"),
+            InDir(
+                "frontend",
+                [
+                    Cmd("flutter precache"),
+                    Cmd("flutter pub get"),
+                ],
+            ),
         ],
         desc="Setup the environment for developing/building in",
     ),
@@ -85,11 +92,19 @@ TARGETS = {
         [
             Cmd("genemichaels"),
             Cmd("cargo fmt"),
+            InDir("frontend", [Cmd("dart format .")]),
         ],
         desc="Format all code files",
     ),
     "build": Target(
         [
+            InDir(
+                "frontend",
+                [
+                    Cmd("dart run build_runner build --delete-conflicting-outputs"),
+                    Cmd("flutter_rust_bridge_codegen generate")
+                ],
+            ),
             Cmd("cargo build"),
         ],
         desc="Build programs in debug mode",
@@ -100,10 +115,27 @@ TARGETS = {
         ],
         desc="Run debug mode server"
     ),
+    "client": Target(
+        [
+            InDir(
+                "frontend",
+                [
+                    Exec("flutter", ['run'])
+                ],
+            )
+        ],
+        desc="Run debug mode client"
+    ),
     "clean": Target(
         [
             Cmd("cargo clean"),
             Fn(clean_files_dir),
+            InDir(
+                "frontend",
+                [
+                    Cmd("flutter clean")
+                ]
+            )
         ],
         desc="cleanup all build/runtime dirs"
     ),

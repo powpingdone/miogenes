@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT track.id FROM track\n                                JOIN album ON track.album = album.id\n                                WHERE album.id = ? AND track.owner = ?;",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b464bd8d9bc97d711a69e2ce2a9226fa198d1fa7f807ae2a3e50f9f3b6ef0722"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO cover_art\n                                (id, webm_blob, img_hash)\n                                VALUES (?, ?, ?);",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "6dfdbc3ee7404ee977ccc6d653b420344494df42b3c5b74cdaa6205252a86f8c"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO album\n                                (id, title, sort_title)\n                                VALUES (?, ?, ?);",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "e825316230f5e512b570650859905286c608558ba9fce0adda119f17d1e2e989"
+}

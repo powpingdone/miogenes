@@ -1,0 +1,16 @@
+[package]
+name = "mio-audio"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+anyhow = { workspace = true }
+flutter_rust_bridge = { workspace = true } 
+gstreamer = { workspace = true, features = ["v1_20"] }
+gstreamer-app = { workspace = true, features = ["v1_20"] }
+gstreamer-audio = { workspace = true, features = ["v1_20"] }
+gstreamer-pbutils = { workspace = true, features = ["v1_20"] }
+uuid = { workspace = true, features = ["v4", "serde"] }

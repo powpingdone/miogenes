@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT secret \n            FROM auth_keys \n            WHERE id = ? AND expiry > ? \n            ORDER BY expiry ASC;",
+  "describe": {
+    "columns": [
+      {
+        "name": "secret",
+        "ordinal": 0,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "55562fc6b4eb1a436826b6c9ddad025d15f8642e9732956d866a839b15cc0f77"
+}

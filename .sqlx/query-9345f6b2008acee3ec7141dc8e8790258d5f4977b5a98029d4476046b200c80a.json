@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT webm_blob FROM cover_art \n                JOIN track ON track.cover_art = cover_art.id \n                WHERE cover_art.id = ? AND track.owner = ?;",
+  "describe": {
+    "columns": [
+      {
+        "name": "webm_blob",
+        "ordinal": 0,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9345f6b2008acee3ec7141dc8e8790258d5f4977b5a98029d4476046b200c80a"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT album.id FROM album \n                    JOIN track ON track.album = album.id \n                    WHERE track.owner = ?;",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e81824ebe88d55436fb6a12a4e10f639ff1fb1dcfe11baa816fc522ad53d3d10"
+}

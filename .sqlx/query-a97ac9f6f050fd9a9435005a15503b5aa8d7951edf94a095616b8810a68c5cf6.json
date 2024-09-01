@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT track FROM JOIN_playlist_track\n                                JOIN playlist ON playlist.id = JOIN_playlist_track.playlist \n                                WHERE playlist = ? AND owner = ?;",
+  "describe": {
+    "columns": [
+      {
+        "name": "track",
+        "ordinal": 0,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a97ac9f6f050fd9a9435005a15503b5aa8d7951edf94a095616b8810a68c5cf6"
+}
