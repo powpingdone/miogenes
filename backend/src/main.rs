@@ -55,7 +55,6 @@ pub async fn get_version() -> impl IntoResponse {
 async fn main() -> anyhow::Result<()> {
     init_from_env().await;
     console_subscriber::init();
-    gstreamer::init()?;
 
     // create the main passing state
     let state = gen_state().await;

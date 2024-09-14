@@ -171,7 +171,7 @@ async fn cover_art(
         Json({
             let mut conn = state.db.acquire().await?;
             let x = sqlx::query!(
-                "SELECT webm_blob FROM cover_art 
+                "SELECT img_blob FROM cover_art 
                 JOIN track ON track.cover_art = cover_art.id 
                 WHERE cover_art.id = ? AND track.owner = ?;",
                 id,
@@ -182,7 +182,7 @@ async fn cover_art(
             .ok_or_else(|| MioInnerError::NotFound(anyhow!("could not find cover art {id}")))?;
             retstructs::CoverArt {
                 id,
-                webm_blob: x.webm_blob,
+                img_blob: x.img_blob,
             }
         }),
     ))
@@ -228,31 +228,19 @@ async fn closest_track(
 ) -> Result<impl IntoResponse, MioInnerError> {
     use futures::TryStreamExt;
 
+    todo!();
     debug!("/query/closest finding closest for id {id}");
     state.db.acquire().await?.transaction(|txn| {
         Box::pin(async move {
             // fetch initial track_vec
-            let cmp_track_vec =
-                sqlx::query!(
-                    "SELECT track_vec FROM track 
-                    WHERE owner = ? AND id = ?;",
-                    userid,
-                    id
-                )
-                    .fetch_optional(txn.as_mut())
-                    .await?
-                    .ok_or_else(|| MioInnerError::NotFound(anyhow!("No track corresponds to id {id}")))?
-                    .track_vec
-                    .chunks_exact(4)
-                    .map(|x| f32::from_le_bytes(x.try_into().unwrap()))
-                    .collect::<Vec<_>>();
+            let cmp_track_vec = vec![0f32];
 
             // setup loop vars
             ignore_tracks.push(id);
             let ignore_tracks = ignore_tracks.into_iter().collect::<HashSet<_>>();
             let mut stream =
                 sqlx::query!(
-                    "SELECT track_vec, id FROM track
+                    "SELECT id FROM track
                     WHERE owner = ?;",
                     userid
                 ).fetch(txn.as_mut());
@@ -267,12 +255,7 @@ async fn closest_track(
                 if ignore_tracks.contains(&id) {
                     continue;
                 }
-                let track_vec =
-                    query
-                        .track_vec
-                        .chunks_exact(4)
-                        .map(|x| f32::from_le_bytes(x.try_into().unwrap()))
-                        .collect::<Vec<_>>();
+                let track_vec = vec![0f32];
 
                 // compute cosine sim
                 let cosim_comp =

@@ -31,7 +31,7 @@ pub struct Playlist {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct CoverArt {
     pub id: Uuid,
-    pub webm_blob: Vec<u8>,
+    pub img_blob: Vec<u8>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]

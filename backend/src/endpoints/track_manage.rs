@@ -148,13 +148,13 @@ async fn track_upload(
     }
     trace!("/track/upload out of chunks, final flushing {track_id}");
     file.shutdown().await?;
+    drop(file);
 
     // set off task to process files
     crate::subtasks::track_upload::track_upload_process(
         state,
         track_id,
         real_fname,
-        dir,
         userid,
         orig_filename,
     )

@@ -17,13 +17,10 @@ ctrlc = { workspace = true }
 dotenvy = { workspace = true }
 env_logger = { workspace = true }
 futures = { workspace = true }
-gstreamer = { workspace = true, features = ["v1_20"] }
-gstreamer-app = { workspace = true, features = ["v1_20"] }
-gstreamer-audio = { workspace = true, features = ["v1_20"] }
-gstreamer-pbutils = { workspace = true, features = ["v1_20"] }
 image = { workspace = true }
 jsonwebtoken = { workspace = true }
 konst = { workspace = true }
+lofty = { workspace = true }
 log = { workspace = true }
 mel_spec = { workspace = true }
 mel_spec_pipeline = { workspace = true }
